@@ -137,6 +137,18 @@ dev=`groomhaus-dev` / prod=`groomhaus-prod`。Stripe は当面未使用。
 
 ---
 
+## 2.5 動作確認（E2E / エミュレータ）
+
+- Firebase エミュレータ(Auth/Firestore/Functions)で予約ライフサイクル全体を検証済み。
+  - 実行: `firebase emulators:start --project demo-groomhaus --only auth,firestore,functions`
+    （Java 必須。なければ `brew install openjdk` → PATH に `/opt/homebrew/opt/openjdk/bin`）
+  - E2E スクリプト: `functions/e2e.mjs`（`node functions/e2e.mjs`）→ **25/25 パス**
+  - 範囲: §3 find-or-link / §6 空きスロット(50→可,80→不可,シャンプー固定→可) /
+    §8 自動割当 / §7 施術完了(トランザクション・確定値更新) /
+    §10 onBookingDone トリガ→pointEvents(pending) / §9 リマインド callable
+  - クライアント連携: `VITE_USE_EMULATORS=true` で `src/firebase.ts` がエミュレータ接続。
+- 未検証（実サービス要）: 実 LINE 送信/LIFF、Cloud Scheduler 定時起動、CRM Webhook 実配信、Firestore Rules（admin SDK はバイパスするため別途 rules-unit-testing が必要）。
+
 ## 3. ディレクトリ構成（現時点）
 ```
 .
