@@ -12,3 +12,8 @@ export const setStaffRole = httpsCallable<
   { tenantId: string; targetUid: string; name: string; role: StaffRole },
   { tenantId: string; targetUid: string; role: StaffRole }
 >(functions, 'setStaffRole');
+
+export const completeBooking = httpsCallable<
+  { tenantId: string; bookingId: string; finalDurationMin: number; finalPrice: number; notes?: string },
+  { bookingId: string; status: 'done' }
+>(functions, 'completeBooking');

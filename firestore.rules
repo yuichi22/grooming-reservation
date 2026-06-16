@@ -73,6 +73,13 @@ service cloud.firestore {
       match /bookings/{bookingId} {
         allow read, write: if isSuperAdmin() || isStaff(tenantId);
       }
+
+      // 中央台帳イベントのアウトボックス (§10)。
+      // 生成・配信は Cloud Functions(admin SDK)のみ。クライアントは admin が閲覧のみ可。
+      match /pointEvents/{eventId} {
+        allow read: if isSuperAdmin() || isAdmin(tenantId);
+        allow write: if false;
+      }
     }
   }
 }

@@ -1,0 +1,69 @@
+// 中央 CRM / ポイント台帳へのイベント連携 (§10)。
+// SaaS は「投げる側」。CRM 未構築でも取りこぼさないよう、イベントを
+// アウトボックス(tenants/{tenantId}/pointEvents/{bookingId})に冪等キー付きで保持し、
+// Webhook URL が設定されていれば配信、無ければ pending のまま貯める。
+
+export type PointEventStatus = 'pending' | 'sent' | 'failed';
+
+/** §10 のペイロード。memberId 未確定(識別子未連携)時の解決用に lineUserId も載せる。 */
+export interface PointEventPayload {
+  bookingId: string;
+  memberId: string | null;
+  lineUserId: string | null;
+  tenantId: string;
+  brand: string;
+  type: 'trimming';
+  amount: number;
+  at: string; // ISO8601
+}
+
+export interface BuildPointEventInput {
+  bookingId: string;
+  tenantId: string;
+  brand: string;
+  amount: number;
+  at: string;
+  memberId?: string | null;
+  lineUserId?: string | null;
+}
+
+/** §10 ペイロードを組み立てる（純粋関数）。 */
+export function buildPointEvent(input: BuildPointEventInput): PointEventPayload {
+  return {
+    bookingId: input.bookingId,
+    memberId: input.memberId ?? null,
+    lineUserId: input.lineUserId ?? null,
+    tenantId: input.tenantId,
+    brand: input.brand,
+    type: 'trimming',
+    amount: input.amount,
+    at: input.at,
+  };
+}
+
+/** 配信先 Webhook URL（CRM 完成後に設定）。未設定なら null。 */
+export function crmWebhookUrl(): string | null {
+  return process.env.CRM_WEBHOOK_URL || null;
+}
+
+/**
+ * Webhook へ POST 配信。冪等性のため Idempotency-Key に bookingId を入れる。
+ * URL 未設定なら未配信(false)。
+ */
+export async function deliverPointEvent(payload: PointEventPayload): Promise<boolean> {
+  const url = crmWebhookUrl();
+  if (!url) return false;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': payload.bookingId,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`CRM webhook responded ${res.status}`);
+  }
+  return true;
+}

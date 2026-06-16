@@ -116,8 +116,11 @@ dev=`groomhaus-dev` / prod=`groomhaus-prod`。Stripe は当面未使用。
   `slots.test.ts` でクライアントとの parity を担保。LIFF は `VITE_LIFF_ID` 未設定時に dev モード。
 
 ### M4 — 施術完了・台帳連携
-- [ ] 施術後の確定時間/料金入力 → booking done / records 追記
-- [ ] 中央 CRM/POS へのイベント送出 Function（冪等性・リトライ）(§10)
+- [x] 施術後の確定時間/料金入力 → booking done / records 追記 — `completeBooking`(トランザクション, §7 で dog 確定値更新), `src/pages/BookingsPage.tsx`
+- [x] 中央 CRM/POS へのイベント送出 Function（冪等性・リトライ）(§10) — アウトボックス方式
+  - `onBookingDone` トリガが §10 ペイロードを `tenants/{tid}/pointEvents/{bookingId}` に冪等生成
+  - Webhook 未設定なら pending で貯め、`retryPointEvents`(30分毎)が CRM 完成後に自動配信
+  - `functions/src/crm.ts`(buildPointEvent + 配信) + テスト, Rules に pointEvents 追加(client は admin 閲覧のみ)
 
 ### M5 — リマインド通知
 - [ ] Cloud Scheduler + Function で前日通知（LINE Messaging API）(§9)

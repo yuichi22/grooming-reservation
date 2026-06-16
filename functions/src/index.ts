@@ -2,11 +2,15 @@
 // 認証は custom claims に基づく (§2)。
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, type DocumentReference } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { logger } from 'firebase-functions/v2';
 import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
 import { verifyLineAccessToken } from './line.js';
 import { availability, effectiveDuration, toMinutes, toTimeStr, unionStarts } from './slots.js';
+import { buildPointEvent, deliverPointEvent, type PointEventStatus } from './crm.js';
 
 initializeApp();
 const db = getFirestore();
@@ -428,4 +432,150 @@ export const registerDog = onCall<{
       confirmedDurationMin: null,
     });
   return { dogId: ref.id };
+});
+
+// ===== M4: 施術完了 (§7) と 中央台帳イベント連携 (§10) =====
+
+/**
+ * 施術完了 (§7)。スタッフ(admin/trimmer)が確定作業時間・確定料金を入力。
+ * トランザクションで: booking を done に / records に追記 / dog の確定値を更新。
+ * record id = bookingId とし、再実行に対して冪等。
+ */
+export const completeBooking = onCall<{
+  tenantId: string;
+  bookingId: string;
+  finalDurationMin: number;
+  finalPrice: number;
+  notes?: string;
+}>(async (request) => {
+  const caller = request.auth?.token;
+  const { tenantId, bookingId, finalDurationMin, finalPrice, notes } = request.data;
+  if (!tenantId || !bookingId || !(finalDurationMin > 0) || !(finalPrice >= 0)) {
+    throw new HttpsError('invalid-argument', 'tenantId, bookingId, finalDurationMin, finalPrice required');
+  }
+  const isSuper = caller?.superAdmin === true;
+  const isStaff = caller?.tenantId === tenantId && (caller?.role === 'admin' || caller?.role === 'trimmer');
+  if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
+
+  const base = db.collection('tenants').doc(tenantId);
+  const bookingRef = base.collection('bookings').doc(bookingId);
+
+  await db.runTransaction(async (tx) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (!bookingSnap.exists) throw new HttpsError('not-found', 'booking not found');
+    const booking = bookingSnap.data() as {
+      dogId: string;
+      menuId: string;
+      staffId: string | null;
+      date: string;
+      status: string;
+    };
+    if (booking.status === 'canceled') throw new HttpsError('failed-precondition', 'booking is canceled');
+
+    const dogRef = base.collection('dogs').doc(booking.dogId);
+    const recordRef = dogRef.collection('records').doc(bookingId);
+    const nowIso = new Date().toISOString();
+
+    tx.update(bookingRef, { status: 'done', finalDurationMin, finalPrice });
+    tx.set(recordRef, {
+      bookingId,
+      date: booking.date,
+      menuId: booking.menuId,
+      staffId: booking.staffId ?? '',
+      durationMin: finalDurationMin,
+      price: finalPrice,
+      ...(notes ? { notes } : {}),
+    });
+    // §7: 次回予約に自動適用される確定値を更新
+    tx.update(dogRef, {
+      confirmedDurationMin: finalDurationMin,
+      confirmedPrice: finalPrice,
+      lastServiceAt: nowIso,
+    });
+  });
+
+  return { bookingId, status: 'done' };
+});
+
+/** イベントをアウトボックスに書き、可能なら配信して状態を更新する。 */
+async function persistAndDeliver(
+  eventRef: DocumentReference,
+  payload: ReturnType<typeof buildPointEvent>,
+): Promise<void> {
+  // bookingId をドキュメント ID にしているため、create で重複生成を防ぐ（冪等 §11）
+  try {
+    await eventRef.create({ ...payload, status: 'pending' as PointEventStatus, attempts: 0, createdAt: FieldValue.serverTimestamp() });
+  } catch {
+    return; // 既に生成済み（トリガの at-least-once 再発火）
+  }
+  await tryDeliver(eventRef, payload);
+}
+
+async function tryDeliver(
+  eventRef: DocumentReference,
+  payload: ReturnType<typeof buildPointEvent>,
+): Promise<void> {
+  try {
+    const sent = await deliverPointEvent(payload);
+    if (sent) {
+      await eventRef.update({ status: 'sent', deliveredAt: FieldValue.serverTimestamp(), attempts: FieldValue.increment(1) });
+    } else {
+      // Webhook 未設定: pending のまま貯める（CRM 完成後にリトライで配信）
+      await eventRef.update({ attempts: FieldValue.increment(1) });
+    }
+  } catch (e) {
+    logger.warn('point event delivery failed', { bookingId: payload.bookingId, error: String(e) });
+    await eventRef.update({ status: 'failed', attempts: FieldValue.increment(1) });
+  }
+}
+
+/**
+ * booking が done かつ finalPrice 確定になった時に §10 イベントを生成・配信。
+ * Firestore トリガは at-least-once のため、bookingId キーで冪等化。
+ */
+export const onBookingDone = onDocumentUpdated('tenants/{tenantId}/bookings/{bookingId}', async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (!after) return;
+  const becameDone = before?.status !== 'done' && after.status === 'done';
+  if (!becameDone || after.finalPrice == null) return;
+
+  const { tenantId, bookingId } = event.params;
+  const base = db.collection('tenants').doc(tenantId);
+
+  const [tenantSnap, custSnap] = await Promise.all([
+    base.get(),
+    base.collection('customers').doc(after.customerId).get(),
+  ]);
+  const brand = (tenantSnap.data()?.name as string) ?? tenantId;
+  const cust = custSnap.data() ?? {};
+
+  const payload = buildPointEvent({
+    bookingId,
+    tenantId,
+    brand,
+    amount: after.finalPrice as number,
+    at: new Date().toISOString(),
+    memberId: (cust.memberId ?? null) as string | null,
+    lineUserId: (cust.lineUserId ?? null) as string | null,
+  });
+
+  await persistAndDeliver(base.collection('pointEvents').doc(bookingId), payload);
+});
+
+/** pending/failed のイベントを定期再送（§11 リトライ）。CRM 完成後の取りこぼし回収にも使う。 */
+export const retryPointEvents = onSchedule('every 30 minutes', async () => {
+  const MAX_ATTEMPTS = 24;
+  const snap = await db
+    .collectionGroup('pointEvents')
+    .where('status', 'in', ['pending', 'failed'])
+    .limit(100)
+    .get();
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    if ((data.attempts ?? 0) >= MAX_ATTEMPTS) continue;
+    const { status: _status, attempts: _a, createdAt: _c, deliveredAt: _d, ...payload } = data;
+    await tryDeliver(doc.ref, payload as ReturnType<typeof buildPointEvent>);
+  }
 });

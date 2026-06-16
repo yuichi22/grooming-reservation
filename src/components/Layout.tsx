@@ -25,6 +25,7 @@ export default function Layout() {
       <div className="app-body">
         <nav className="sidenav">
           <NavLink to="/">ダッシュボード</NavLink>
+          <NavLink to="/bookings">予約</NavLink>
           <NavLink to="/karte">カルテ</NavLink>
           {isAdmin && <NavLink to="/menus">メニュー</NavLink>}
           {isAdmin && <NavLink to="/staff">スタッフ</NavLink>}
