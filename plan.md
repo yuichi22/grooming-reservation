@@ -108,9 +108,12 @@ dev=`groomhaus-dev` / prod=`groomhaus-prod`。Stripe は当面未使用。
 - 補助: `src/lib/`（firestore 型付き参照 / functions ラッパ / useCollection / useDocument）, ルーティング(react-router-dom)
 
 ### M3 — 顧客予約フロー（LIFF）
-- [ ] LIFF 初期化・LINE ログイン・初回電話番号取得 → find-or-link(§3)
-- [ ] メニュー選択・指名(§8)・§6 空きスロット表示・予約確定
-- [ ] confirmedDurationMin オーバーライド・フロー(§7)
+- [x] LIFF 初期化・LINE ログイン・初回電話番号取得 → find-or-link(§3) — `src/liff/`, `functions` `customerSession`（`resolveLink` 純粋ロジック + テスト）
+- [x] メニュー選択・指名(§8)・§6 空きスロット表示・予約確定 — `functions` `getBookingOptions`/`getAvailability`/`createBooking`, `src/liff/BookingPage.tsx`
+- [x] confirmedDurationMin オーバーライド・フロー(§7) — サーバ `effectiveDuration` で予約時に適用
+- 設計判断: 顧客は Firebase Auth を持たないため、予約系の読み書きは LINE アクセストークンを
+  検証する Cloud Functions 経由（サーバ権威）。`functions/src/slots.ts` は §6 を再実装し、
+  `slots.test.ts` でクライアントとの parity を担保。LIFF は `VITE_LIFF_ID` 未設定時に dev モード。
 
 ### M4 — 施術完了・台帳連携
 - [ ] 施術後の確定時間/料金入力 → booking done / records 追記

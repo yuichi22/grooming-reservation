@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import BookingPage from './liff/BookingPage';
 import LoginPage from './auth/LoginPage';
 import { RequireAuth } from './auth/RequireAuth';
 import Layout from './components/Layout';
@@ -12,6 +13,8 @@ import DogDetailPage from './pages/DogDetailPage';
 export default function App() {
   return (
     <Routes>
+      {/* 顧客向け LIFF（公開ルート, §2 LINE 認証） */}
+      <Route path="/book" element={<BookingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         element={
