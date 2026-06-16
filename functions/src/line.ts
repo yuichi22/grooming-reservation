@@ -43,3 +43,31 @@ export async function verifyLineAccessToken(accessToken: string): Promise<LineId
   }
   return { lineUserId: profile.userId };
 }
+
+export type PushResult = 'sent' | 'skipped';
+
+/**
+ * LINE Messaging API でプッシュ送信 (§9)。
+ * チャネルアクセストークンが未設定/開発トークンの場合は送信せず 'skipped'。
+ */
+export async function pushLineMessage(
+  channelAccessToken: string | null,
+  to: string,
+  text: string,
+): Promise<PushResult> {
+  if (!channelAccessToken || channelAccessToken.startsWith('dev:')) {
+    return 'skipped';
+  }
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${channelAccessToken}`,
+    },
+    body: JSON.stringify({ to, messages: [{ type: 'text', text }] }),
+  });
+  if (!res.ok) {
+    throw new Error(`LINE push responded ${res.status}`);
+  }
+  return 'sent';
+}

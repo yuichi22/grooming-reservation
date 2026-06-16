@@ -8,9 +8,10 @@ import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
-import { verifyLineAccessToken } from './line.js';
+import { verifyLineAccessToken, pushLineMessage } from './line.js';
 import { availability, effectiveDuration, toMinutes, toTimeStr, unionStarts } from './slots.js';
 import { buildPointEvent, deliverPointEvent, type PointEventStatus } from './crm.js';
+import { buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
 
 initializeApp();
 const db = getFirestore();
@@ -578,4 +579,86 @@ export const retryPointEvents = onSchedule('every 30 minutes', async () => {
     const { status: _status, attempts: _a, createdAt: _c, deliveredAt: _d, ...payload } = data;
     await tryDeliver(doc.ref, payload as ReturnType<typeof buildPointEvent>);
   }
+});
+
+// ===== M5: 前日リマインド (§9) =====
+
+/** テナントの Messaging API チャネルアクセストークンを解決。 */
+function reminderChannelToken(lineConfig: Record<string, unknown> | undefined): string | null {
+  const fromTenant = (lineConfig?.messagingChannelAccessToken as string) || null;
+  return fromTenant ?? process.env.LINE_CHANNEL_ACCESS_TOKEN ?? null;
+}
+
+/**
+ * 指定テナント・対象日の reserved 予約にリマインドを送る。
+ * lineUserId を持つ顧客のみ対象 (§9)。reminderSentAt で冪等化（再実行で二重送信しない）。
+ */
+async function runReminders(tenantId: string, date: string): Promise<{ sent: number; skipped: number }> {
+  const base = db.collection('tenants').doc(tenantId);
+  const tenantSnap = await base.get();
+  const tenant = tenantSnap.data();
+  if (!tenant || tenant.status !== 'active') return { sent: 0, skipped: 0 };
+
+  const tenantName = (tenant.name as string) ?? tenantId;
+  const token = reminderChannelToken(tenant.lineConfig);
+
+  const bookings = await base.collection('bookings').where('date', '==', date).get();
+  let sent = 0;
+  let skipped = 0;
+
+  for (const bookingDoc of bookings.docs) {
+    const b = bookingDoc.data();
+    if (b.status !== 'reserved' || b.reminderSentAt) {
+      skipped++;
+      continue;
+    }
+    const [custSnap, dogSnap] = await Promise.all([
+      base.collection('customers').doc(b.customerId).get(),
+      base.collection('dogs').doc(b.dogId).get(),
+    ]);
+    const lineUserId = custSnap.data()?.lineUserId as string | undefined;
+    if (!lineUserId) {
+      skipped++; // LINE 未連携は対象外 (§9)
+      continue;
+    }
+    const message = buildReminderMessage({
+      tenantName,
+      dogName: (dogSnap.data()?.name as string) ?? 'ワンちゃん',
+      date,
+      startTime: b.startTime as string,
+    });
+    const result = await pushLineMessage(token, lineUserId, message);
+    if (result === 'sent') {
+      await bookingDoc.ref.update({ reminderSentAt: FieldValue.serverTimestamp() });
+      sent++;
+    } else {
+      skipped++;
+    }
+  }
+
+  logger.info('reminders run', { tenantId, date, sent, skipped });
+  return { sent, skipped };
+}
+
+/**
+ * 前日リマインド (§9)。毎日 18:00 (Asia/Tokyo) に全アクティブテナントの翌日分を送る。
+ * 翌日判定は各テナントの settings.timezone に従う。送信時刻は §11 で要調整。
+ */
+export const sendReminders = onSchedule({ schedule: 'every day 18:00', timeZone: 'Asia/Tokyo' }, async () => {
+  const tenants = await db.collection('tenants').where('status', '==', 'active').get();
+  for (const t of tenants.docs) {
+    const tz = (t.data().settings?.timezone as string) ?? 'Asia/Tokyo';
+    const date = tomorrowInTimeZone(new Date(), tz);
+    await runReminders(t.id, date);
+  }
+});
+
+/** リマインドの手動実行（テスト用）。superAdmin または対象テナント admin。 */
+export const sendRemindersNow = onCall<{ tenantId: string; date: string }>(async (request) => {
+  const caller = request.auth?.token;
+  const { tenantId, date } = request.data;
+  if (!tenantId || !date) throw new HttpsError('invalid-argument', 'tenantId, date required');
+  const ok = caller?.superAdmin === true || (caller?.tenantId === tenantId && caller?.role === 'admin');
+  if (!ok) throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
+  return runReminders(tenantId, date);
 });

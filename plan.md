@@ -123,7 +123,12 @@ dev=`groomhaus-dev` / prod=`groomhaus-prod`。Stripe は当面未使用。
   - `functions/src/crm.ts`(buildPointEvent + 配信) + テスト, Rules に pointEvents 追加(client は admin 閲覧のみ)
 
 ### M5 — リマインド通知
-- [ ] Cloud Scheduler + Function で前日通知（LINE Messaging API）(§9)
+- [x] Cloud Scheduler + Function で前日通知（LINE Messaging API）(§9)
+  - `sendReminders`(毎日18:00 Asia/Tokyo): 全アクティブテナントの翌日分 reserved を抽出し送信
+  - 翌日判定は各テナント settings.timezone 準拠 / lineUserId を持つ顧客のみ対象
+  - `reminderSentAt` で冪等化 / `sendRemindersNow`(callable) で手動テスト可
+  - `functions/src/reminders.ts`(日付計算・文面) + テスト, `pushLineMessage`(Messaging API)
+  - 未確定: 文面・送信時刻(§11), チャネルアクセストークンの保持方法
 
 ### M6 — 運用・外販対応
 - [ ] dev/prod デプロイパイプライン(§12)

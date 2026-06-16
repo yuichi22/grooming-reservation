@@ -24,6 +24,8 @@ export interface LineConfig {
   providerId: string;
   miniAppChannelId: string;
   messagingApiChannelId: string;
+  /** リマインド送信用のチャネルアクセストークン (§9)。未設定なら env フォールバック */
+  messagingChannelAccessToken?: string;
   liffId: string;
 }
 
@@ -132,5 +134,7 @@ export interface Booking {
   status: BookingStatus;
   finalDurationMin?: number | null;
   finalPrice?: number | null;
+  /** 前日リマインド送信済みの印（冪等化, §9）。未送信なら未設定 */
+  reminderSentAt?: IsoStr | null;
   createdAt: IsoStr;
 }
