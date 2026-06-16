@@ -1,11 +1,53 @@
+import { Route, Routes } from 'react-router-dom';
+import LoginPage from './auth/LoginPage';
+import { RequireAuth } from './auth/RequireAuth';
+import Layout from './components/Layout';
+import DashboardPage from './pages/DashboardPage';
+import MenusPage from './pages/MenusPage';
+import StaffPage from './pages/StaffPage';
+import SettingsPage from './pages/SettingsPage';
+import KartePage from './pages/KartePage';
+import DogDetailPage from './pages/DogDetailPage';
+
 export default function App() {
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: 720, margin: '0 auto' }}>
-      <h1>GROOM HAUS 予約</h1>
-      <p>ペットトリミング予約 SaaS — 雛形 (M0)。</p>
-      <p style={{ color: '#666' }}>
-        次のマイルストーンで LIFF ログイン・予約フロー (§3/§6/§7/§8) を実装します。詳細は <code>plan.md</code> を参照。
-      </p>
-    </main>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        element={
+          <RequireAuth>
+            <Layout />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<DashboardPage />} />
+        <Route path="karte" element={<KartePage />} />
+        <Route path="karte/:dogId" element={<DogDetailPage />} />
+        <Route
+          path="menus"
+          element={
+            <RequireAuth adminOnly>
+              <MenusPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="staff"
+          element={
+            <RequireAuth adminOnly>
+              <StaffPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="settings"
+          element={
+            <RequireAuth adminOnly>
+              <SettingsPage />
+            </RequireAuth>
+          }
+        />
+      </Route>
+    </Routes>
   );
 }

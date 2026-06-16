@@ -102,9 +102,10 @@ dev=`groomhaus-dev` / prod=`groomhaus-prod`。Stripe は当面未使用。
 - [x] スーパーアドミンによるテナント発行 Function — `functions/src/index.ts` `createTenant` / `setStaffRole`
 
 ### M2 — スタッフ/管理者 認証・管理画面
-- [ ] Firebase Auth + custom claims(tenantId / role)
-- [ ] メニュー・スタッフ・営業時間設定 UI（admin）
-- [ ] カルテ（dogs / records）閲覧・編集（trimmer 可）
+- [x] Firebase Auth + custom claims(tenantId / role) — `src/auth/`（AuthContext / RequireAuth / LoginPage）
+- [x] メニュー・スタッフ・営業時間設定 UI（admin） — `src/pages/`（Menus / Staff / Settings, adminOnly ガード）
+- [x] カルテ（dogs / records）閲覧・編集（trimmer 可） — `src/pages/`（Karte / DogDetail）
+- 補助: `src/lib/`（firestore 型付き参照 / functions ラッパ / useCollection / useDocument）, ルーティング(react-router-dom)
 
 ### M3 — 顧客予約フロー（LIFF）
 - [ ] LIFF 初期化・LINE ログイン・初回電話番号取得 → find-or-link(§3)
