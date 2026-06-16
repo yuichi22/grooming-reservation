@@ -1,0 +1,42 @@
+rules_version = '2';
+
+// テナント完全分離 (§2 セキュリティ / §4)。
+// custom claims: tenantId, role('admin'|'trimmer'), superAdmin。
+// 注: これは M0 の雛形。コレクションごとの細則は M1 で本実装する。
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isSuperAdmin() {
+      return isSignedIn() && request.auth.token.superAdmin == true;
+    }
+    // このテナントに属するか
+    function inTenant(tenantId) {
+      return isSignedIn() && request.auth.token.tenantId == tenantId;
+    }
+    function hasRole(role) {
+      return isSignedIn() && request.auth.token.role == role;
+    }
+
+    // スーパーアドミンのみ
+    match /superAdmins/{uid} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    // テナント本体: 発行・プラン/状態変更は superAdmin。所属スタッフは閲覧可。
+    match /tenants/{tenantId} {
+      allow read: if isSuperAdmin() || inTenant(tenantId);
+      allow create, delete: if isSuperAdmin();
+      // 設定変更は admin のみ (§2)
+      allow update: if isSuperAdmin() || (inTenant(tenantId) && hasRole('admin'));
+
+      // テナント配下の全サブコレクション: 同一テナントのスタッフのみ。
+      // trimmer はカルテ編集可、設定系は admin のみ → 各 match で M1 に細則化。
+      match /{document=**} {
+        allow read, write: if isSuperAdmin() || inTenant(tenantId);
+      }
+    }
+  }
+}

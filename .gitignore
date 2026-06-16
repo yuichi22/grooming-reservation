@@ -1,0 +1,25 @@
+node_modules
+.npm-cache
+dist
+dist-ssr
+*.local
+
+# env
+.env
+.env.*
+!.env.example
+
+# firebase
+.firebase
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# claude code local settings
+.claude/settings.local.json
+
+# editor / os
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
