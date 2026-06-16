@@ -1,41 +1,77 @@
 rules_version = '2';
 
-// テナント完全分離 (§2 セキュリティ / §4)。
-// custom claims: tenantId, role('admin'|'trimmer'), superAdmin。
-// 注: これは M0 の雛形。コレクションごとの細則は M1 で本実装する。
+// テナント完全分離 + ロールベース制御 (§2 / §4)。
+// custom claims: tenantId(string), role('admin'|'trimmer'), superAdmin(bool)。
+// 方針:
+//   - テナントをまたぐアクセスは superAdmin 以外不可（token.tenantId スコープ）。
+//   - 設定系（tenant 本体 / staff / menus）の変更は admin のみ。
+//   - カルテ系（dogs / records）と予約・顧客は trimmer も編集可 (§2「trimmer はカルテ編集可」)。
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function isSignedIn() {
       return request.auth != null;
     }
+    function claims() {
+      return request.auth.token;
+    }
     function isSuperAdmin() {
-      return isSignedIn() && request.auth.token.superAdmin == true;
+      return isSignedIn() && claims().superAdmin == true;
     }
-    // このテナントに属するか
+    /** サインイン済みで、指定テナントに所属しているか */
     function inTenant(tenantId) {
-      return isSignedIn() && request.auth.token.tenantId == tenantId;
+      return isSignedIn() && claims().tenantId == tenantId;
     }
-    function hasRole(role) {
-      return isSignedIn() && request.auth.token.role == role;
+    function isAdmin(tenantId) {
+      return inTenant(tenantId) && claims().role == 'admin';
+    }
+    /** admin または trimmer（= このテナントのスタッフ） */
+    function isStaff(tenantId) {
+      return inTenant(tenantId) && (claims().role == 'admin' || claims().role == 'trimmer');
     }
 
-    // スーパーアドミンのみ
+    // スーパーアドミン名簿: superAdmin のみ
     match /superAdmins/{uid} {
       allow read, write: if isSuperAdmin();
     }
 
-    // テナント本体: 発行・プラン/状態変更は superAdmin。所属スタッフは閲覧可。
     match /tenants/{tenantId} {
-      allow read: if isSuperAdmin() || inTenant(tenantId);
+      // 本体の閲覧は所属スタッフ + superAdmin
+      allow read: if isSuperAdmin() || isStaff(tenantId);
+      // 発行・削除は superAdmin（テナント発行 Function 経由が原則）
       allow create, delete: if isSuperAdmin();
-      // 設定変更は admin のみ (§2)
-      allow update: if isSuperAdmin() || (inTenant(tenantId) && hasRole('admin'));
+      // 設定変更(settings / lineConfig 等)は admin のみ (§2)
+      allow update: if isSuperAdmin() || isAdmin(tenantId);
 
-      // テナント配下の全サブコレクション: 同一テナントのスタッフのみ。
-      // trimmer はカルテ編集可、設定系は admin のみ → 各 match で M1 に細則化。
-      match /{document=**} {
-        allow read, write: if isSuperAdmin() || inTenant(tenantId);
+      // スタッフ名簿: 閲覧は所属スタッフ、変更は admin のみ
+      match /staff/{staffId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+
+      // メニュー: 閲覧は所属スタッフ、変更は admin のみ
+      match /menus/{menuId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+
+      // 顧客: 所属スタッフが読み書き可（予約受付・find-or-link §3）
+      match /customers/{customerId} {
+        allow read, write: if isSuperAdmin() || isStaff(tenantId);
+      }
+
+      // 犬・カルテ: trimmer も編集可 (§2 / §7)
+      match /dogs/{dogId} {
+        allow read, write: if isSuperAdmin() || isStaff(tenantId);
+
+        match /records/{recordId} {
+          allow read, write: if isSuperAdmin() || isStaff(tenantId);
+        }
+      }
+
+      // 予約: 所属スタッフが読み書き可
+      match /bookings/{bookingId} {
+        allow read, write: if isSuperAdmin() || isStaff(tenantId);
       }
     }
   }

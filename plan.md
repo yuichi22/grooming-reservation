@@ -97,9 +97,9 @@ dev=`groomhaus-dev` / prod=`groomhaus-prod`。Stripe は当面未使用。
 - [x] §6 スロット計算ロジック + 単体テスト（Vitest）
 
 ### M1 — データモデルとテナント基盤
-- [ ] Firestore コレクション型定義の整備（§5）
-- [ ] テナント別 tenantId スコープの Rules を本実装＋ロールベース制御
-- [ ] スーパーアドミンによるテナント発行 Function
+- [x] Firestore コレクション型定義の整備（§5）— `src/lib/types.ts` 全コレクション + `src/lib/firestore.ts` 型付き参照
+- [x] テナント別 tenantId スコープの Rules を本実装＋ロールベース制御 — `firestore.rules`（設定系=admin / カルテ=trimmer 可）
+- [x] スーパーアドミンによるテナント発行 Function — `functions/src/index.ts` `createTenant` / `setStaffRole`
 
 ### M2 — スタッフ/管理者 認証・管理画面
 - [ ] Firebase Auth + custom claims(tenantId / role)
