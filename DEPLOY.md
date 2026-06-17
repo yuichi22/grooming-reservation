@@ -58,10 +58,21 @@ npm run deploy:prod        # 本番
 
 > ⚠ **`ALLOW_DEV_LINE_TOKEN` は本番では必ず未設定（無効）にすること。**
 > `true` にすると誰でも `dev:<任意の userId>` を送るだけで任意の LINE ユーザに
-> 成りすませる認証バイパスになる。**prod デプロイでは絶対に設定しない。**
-> 一方で **dev (groomhaus-dev) の Functions デプロイ時は `ALLOW_DEV_LINE_TOKEN=true` を
-> 設定しないと dev モードの `/book` や E2E が動かなくなる**ので、dev では設定する。
-> ローカルは `functions/.env`（`ALLOW_DEV_LINE_TOKEN=true`）で有効化済み。
+> 成りすませる認証バイパスになる。
+>
+> firebase-tools の env ファイルは **`.env`（全プロジェクトに乗る＝prod にも乗る）**、
+> **`.env.<projectId>`（特定プロジェクトのみ）**、**`.env.local`（エミュレータ専用・デプロイ非対象）**
+> の順に解決される。そのため **このフラグは絶対に `.env` には書かない**（prod に漏れる）。設置先:
+>
+> | 環境 | ファイル | 値 |
+> |---|---|---|
+> | ローカル/エミュレータ/E2E | `functions/.env.local` | `ALLOW_DEV_LINE_TOKEN=true` |
+> | dev デプロイ (groomhaus-dev) | `functions/.env.groomhaus-dev` | `ALLOW_DEV_LINE_TOKEN=true` |
+> | **prod (groomhaus-prod)** | **作らない（未設定）** | **無効** |
+>
+> ⚠ **dev の Functions を再デプロイするときは `functions/.env.groomhaus-dev` が必要。**
+> これが無いと dev モードの `/book` や E2E が `dev token not allowed` で動かなくなる。
+> いずれも git 管理外（`.env*` は ignore、`.env.example` のみ追跡）。
 
 ## スケジュール関数
 
