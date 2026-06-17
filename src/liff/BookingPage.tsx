@@ -161,23 +161,27 @@ export default function BookingPage() {
       <h2>{displayName ? `${displayName} さんの予約` : 'ご予約'}</h2>
       {isDevMode && <p className="muted">（開発モード: モックの LINE ユーザで動作中）</p>}
 
-      <label>
-        ワンちゃん
-        <select value={dogId} onChange={(e) => setDogId(e.target.value)}>
-          <option value="">選択してください</option>
-          {options?.dogs.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-              {d.confirmedDurationMin != null ? `（確定 ${d.confirmedDurationMin}分）` : '（初回）'}
-            </option>
-          ))}
-        </select>
-      </label>
-      <details>
-        <summary className="muted">ワンちゃんを登録</summary>
+      {(options?.dogs.length ?? 0) === 0 ? (
+        <p className="muted">まず予約するワンちゃんを登録してください。</p>
+      ) : (
+        <label>
+          ワンちゃん
+          <select value={dogId} onChange={(e) => setDogId(e.target.value)}>
+            <option value="">選択してください</option>
+            {options?.dogs.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {d.confirmedDurationMin != null ? `（確定 ${d.confirmedDurationMin}分）` : '（初回）'}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <details open={(options?.dogs.length ?? 0) === 0}>
+        <summary className="muted">＋ ワンちゃんを登録</summary>
         <form className="row-form" onSubmit={addDog}>
-          <input name="dogName" placeholder="名前" />
-          <input name="breed" placeholder="犬種" />
+          <input name="dogName" placeholder="名前" required />
+          <input name="breed" placeholder="犬種（任意）" />
           <button type="submit">登録</button>
         </form>
       </details>
