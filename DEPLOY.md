@@ -70,6 +70,25 @@ npm run deploy:prod        # 本番
 2. `tenants/{tenantId}.lineConfig` に providerId / miniAppChannelId / messagingApiChannelId / liffId を設定。
 3. `setStaffRole` でスタッフの Firebase Auth uid に custom claims（tenantId / role）を付与。
 
+## 初回データ投入（dev）
+
+新規 Firebase プロジェクトは **Authentication を初回だけ Console で初期化が必要**
+（API/Admin SDK では `configuration-not-found` になる）:
+
+1. Console → Authentication →「始める」→ Sign-in method で **メール/パスワード**を有効化。
+2. シード（superAdmin / テナント / スタッフ / メニュー）を Admin SDK で投入:
+   ```bash
+   gcloud iam service-accounts keys create /tmp/sa.json \
+     --iam-account=firebase-adminsdk-fbsvc@groomhaus-dev.iam.gserviceaccount.com --project groomhaus-dev
+   SEED_PASSWORD='<dev用パスワード>' GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json \
+     node functions/seed-dev.mjs
+   # 後始末（重要・長期鍵を残さない）:
+   gcloud iam service-accounts keys delete <KEY_ID> \
+     --iam-account=firebase-adminsdk-fbsvc@groomhaus-dev.iam.gserviceaccount.com --project groomhaus-dev -q
+   rm -f /tmp/sa.json
+   ```
+   作成アカウント: `super@ / admin@ / trimmer@groomhaus.dev`（パスワードは `SEED_PASSWORD`）。
+
 ## 未確定（§11 要決定）
 
 - 初回電話番号の本人確認（入力のみ / SMS OTP）— 現状は **入力のみ**。
