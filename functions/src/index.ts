@@ -12,6 +12,7 @@ import { verifyLineAccessToken, pushLineMessage } from './line.js';
 import { availability, effectiveDuration, toMinutes, toTimeStr, unionStarts } from './slots.js';
 import { buildPointEvent, deliverPointEvent, type PointEventStatus } from './crm.js';
 import { buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
+import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
 
 initializeApp();
 const db = getFirestore();
@@ -24,6 +25,7 @@ const DEFAULT_SETTINGS = {
   businessHours: [{ start: '09:00', end: '19:00' }],
   bufferMin: 10,
   workTimeOptions: [50, 80, 110],
+  cancelDeadlineHours: 24, // §11 キャンセル締切（既定: 前日同時刻）
 };
 
 const EMPTY_LINE_CONFIG = {
@@ -127,13 +129,26 @@ interface BusinessHours {
 interface SettingsLike {
   businessHours: BusinessHours[];
   bufferMin: number;
+  timezone: string;
+  cancelDeadlineHours: number;
 }
 
 async function loadSettings(tenantId: string): Promise<SettingsLike> {
   const snap = await db.collection('tenants').doc(tenantId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'tenant not found');
   const s = (snap.data()?.settings ?? {}) as Partial<SettingsLike>;
-  return { businessHours: s.businessHours ?? [], bufferMin: s.bufferMin ?? 0 };
+  return {
+    businessHours: s.businessHours ?? [],
+    bufferMin: s.bufferMin ?? 0,
+    timezone: s.timezone ?? 'Asia/Tokyo',
+    cancelDeadlineHours: s.cancelDeadlineHours ?? 24,
+  };
+}
+
+/** その日が臨時休業/祝日で終日クローズか (§11 営業時間の例外)。 */
+async function isClosedDate(tenantId: string, date: string): Promise<boolean> {
+  const snap = await db.collection('tenants').doc(tenantId).collection('closures').doc(date).get();
+  return snap.exists && snap.data()?.fullDay !== false;
 }
 
 async function loadMenu(tenantId: string, menuId: string): Promise<MenuLike> {
@@ -248,6 +263,12 @@ export const getAvailability = onCall<{
     loadDogDuration(tenantId, dogId),
   ]);
   const durationMin = effectiveDuration(confirmed, menu);
+
+  // 臨時休業/祝日は空きなし (§11)
+  if (await isClosedDate(tenantId, date)) {
+    return { slots: [], durationMin, bufferMin: settings.bufferMin, closed: true };
+  }
+
   const bookings = await loadDayBookings(tenantId, date);
 
   let slots: string[];
@@ -307,6 +328,10 @@ export const createBooking = onCall<{
   const custSnap = await db.collection('tenants').doc(tenantId).collection('customers').doc(customerId).get();
   if (!custSnap.exists || custSnap.data()?.lineUserId !== lineUserId) {
     throw new HttpsError('permission-denied', 'customer does not belong to this LINE user');
+  }
+
+  if (await isClosedDate(tenantId, date)) {
+    throw new HttpsError('failed-precondition', 'the salon is closed on this date');
   }
 
   const [settings, menu, confirmed] = await Promise.all([
@@ -662,3 +687,77 @@ export const sendRemindersNow = onCall<{ tenantId: string; date: string }>(async
   if (!ok) throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
   return runReminders(tenantId, date);
 });
+
+// ===== M6: キャンセル (§11) / 顧客マージ (§11) =====
+
+/** 顧客が自分の予約をキャンセル (§11)。締切(cancelDeadlineHours)前のみ可。 */
+export const cancelBookingByCustomer = onCall<{ tenantId: string; accessToken: string; bookingId: string }>(
+  async (request) => {
+    const { tenantId, accessToken, bookingId } = request.data;
+    if (!tenantId || !bookingId) throw new HttpsError('invalid-argument', 'tenantId, bookingId required');
+    const { lineUserId } = await verifyLineAccessToken(accessToken);
+
+    const base = db.collection('tenants').doc(tenantId);
+    const bookingRef = base.collection('bookings').doc(bookingId);
+    const bookingSnap = await bookingRef.get();
+    if (!bookingSnap.exists) throw new HttpsError('not-found', 'booking not found');
+    const b = bookingSnap.data() as { customerId: string; date: string; startTime: string; status: string };
+    if (b.status !== 'reserved') throw new HttpsError('failed-precondition', 'only reserved bookings can be canceled');
+
+    const custSnap = await base.collection('customers').doc(b.customerId).get();
+    if (custSnap.data()?.lineUserId !== lineUserId) {
+      throw new HttpsError('permission-denied', 'booking does not belong to this LINE user');
+    }
+
+    const settings = await loadSettings(tenantId);
+    if (!isCancellableNow(Date.now(), b.date, b.startTime, settings.timezone, settings.cancelDeadlineHours)) {
+      throw new HttpsError('failed-precondition', `キャンセル期限（${settings.cancelDeadlineHours}時間前）を過ぎています`);
+    }
+
+    await bookingRef.update({ status: 'canceled', canceledAt: FieldValue.serverTimestamp() });
+    return { bookingId, status: 'canceled' as const };
+  },
+);
+
+/**
+ * 顧客の手動マージ (§11 任意・CRM 完全性向上)。admin/superAdmin のみ。
+ * source の識別子で target の欠けを補完し、source の犬・予約を target へ付け替え、
+ * source に mergedInto を記録（監査のため削除はしない）。
+ */
+export const mergeCustomers = onCall<{ tenantId: string; sourceCustomerId: string; targetCustomerId: string }>(
+  async (request) => {
+    const caller = request.auth?.token;
+    const { tenantId, sourceCustomerId, targetCustomerId } = request.data;
+    if (!tenantId || !sourceCustomerId || !targetCustomerId || sourceCustomerId === targetCustomerId) {
+      throw new HttpsError('invalid-argument', 'distinct tenantId, sourceCustomerId, targetCustomerId required');
+    }
+    const ok = caller?.superAdmin === true || (caller?.tenantId === tenantId && caller?.role === 'admin');
+    if (!ok) throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
+
+    const base = db.collection('tenants').doc(tenantId);
+    const [srcSnap, tgtSnap] = await Promise.all([
+      base.collection('customers').doc(sourceCustomerId).get(),
+      base.collection('customers').doc(targetCustomerId).get(),
+    ]);
+    if (!srcSnap.exists || !tgtSnap.exists) throw new HttpsError('not-found', 'customer not found');
+
+    const patch = mergeIdentifiers(tgtSnap.data() as Identifiers, srcSnap.data() as Identifiers);
+
+    const [dogs, bookings] = await Promise.all([
+      base.collection('dogs').where('customerId', '==', sourceCustomerId).get(),
+      base.collection('bookings').where('customerId', '==', sourceCustomerId).get(),
+    ]);
+
+    const batch = db.batch();
+    if (Object.keys(patch).length > 0) batch.update(base.collection('customers').doc(targetCustomerId), patch);
+    dogs.forEach((d) => batch.update(d.ref, { customerId: targetCustomerId }));
+    bookings.forEach((bk) => batch.update(bk.ref, { customerId: targetCustomerId }));
+    batch.update(base.collection('customers').doc(sourceCustomerId), {
+      mergedInto: targetCustomerId,
+      mergedAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    return { targetCustomerId, movedDogs: dogs.size, movedBookings: bookings.size, patch };
+  },
+);

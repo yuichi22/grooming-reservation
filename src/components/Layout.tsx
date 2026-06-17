@@ -29,6 +29,7 @@ export default function Layout() {
           <NavLink to="/karte">カルテ</NavLink>
           {isAdmin && <NavLink to="/menus">メニュー</NavLink>}
           {isAdmin && <NavLink to="/staff">スタッフ</NavLink>}
+          {isAdmin && <NavLink to="/customers">顧客</NavLink>}
           {isAdmin && <NavLink to="/settings">設定</NavLink>}
         </nav>
         <main className="content">

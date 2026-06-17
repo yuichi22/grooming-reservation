@@ -131,9 +131,14 @@ dev=`groomhaus-dev` / prod=`groomhaus-prod`。Stripe は当面未使用。
   - 未確定: 文面・送信時刻(§11), チャネルアクセストークンの保持方法
 
 ### M6 — 運用・外販対応
-- [ ] dev/prod デプロイパイプライン(§12)
-- [ ] テナント別 LINE プロバイダー設定の運用フロー(§4/§11)
-- [ ] 手動マージ UI・キャンセルポリシー等(§11)
+- [x] dev/prod デプロイパイプライン(§12) — `DEPLOY.md` + `deploy:dev`/`deploy:prod`/`emulators`/`e2e` scripts
+- [x] テナント別 LINE プロバイダー設定の運用フロー(§4/§11) — `DEPLOY.md` に手順（createTenant→lineConfig→setStaffRole）
+- [x] 手動マージ・キャンセルポリシー等(§11)
+  - キャンセル: `cancelBookingByCustomer`(締切 `cancelDeadlineHours` 前のみ) + スタッフの canceled/noshow、`policy.ts`(締切判定) + テスト
+  - 営業時間の例外: `closures` コレクション → §6 空き計算・予約で休業日を除外、設定 UI
+  - 手動マージ: `mergeCustomers`(識別子補完+犬/予約付替+mergedInto) + `CustomersPage`、`mergeIdentifiers` テスト
+- 据え置き(§11 要決定): 初回電話番号の OTP（現状=入力のみ）, リマインド文面/時刻
+- E2E: 休業日/キャンセル/マージ を含め **32/32 パス**（`functions/e2e.mjs`）
 
 ---
 
@@ -142,10 +147,11 @@ dev=`groomhaus-dev` / prod=`groomhaus-prod`。Stripe は当面未使用。
 - Firebase エミュレータ(Auth/Firestore/Functions)で予約ライフサイクル全体を検証済み。
   - 実行: `firebase emulators:start --project demo-groomhaus --only auth,firestore,functions`
     （Java 必須。なければ `brew install openjdk` → PATH に `/opt/homebrew/opt/openjdk/bin`）
-  - E2E スクリプト: `functions/e2e.mjs`（`node functions/e2e.mjs`）→ **25/25 パス**
+  - E2E スクリプト: `functions/e2e.mjs`（`npm run e2e`）→ **32/32 パス**
   - 範囲: §3 find-or-link / §6 空きスロット(50→可,80→不可,シャンプー固定→可) /
     §8 自動割当 / §7 施術完了(トランザクション・確定値更新) /
-    §10 onBookingDone トリガ→pointEvents(pending) / §9 リマインド callable
+    §10 onBookingDone トリガ→pointEvents(pending) / §9 リマインド callable /
+    §11 休業日(closed)・顧客キャンセル・手動マージ
   - クライアント連携: `VITE_USE_EMULATORS=true` で `src/firebase.ts` がエミュレータ接続。
 - 未検証（実サービス要）: 実 LINE 送信/LIFF、Cloud Scheduler 定時起動、CRM Webhook 実配信、Firestore Rules（admin SDK はバイパスするため別途 rules-unit-testing が必要）。
 

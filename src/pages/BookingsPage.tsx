@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { query, where } from 'firebase/firestore';
+import { doc, query, updateDoc, where } from 'firebase/firestore';
 import { useAuth } from '../auth/AuthContext';
 import { bookingsCol, dogsCol } from '../lib/firestore';
 import { completeBooking } from '../lib/functions';
@@ -60,7 +60,13 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
                 <td>{statusLabel(b.status)}</td>
                 <td>
                   {b.status === 'reserved' ? (
-                    <CompleteForm tenantId={tenantId} booking={b} />
+                    <>
+                      <CompleteForm tenantId={tenantId} booking={b} />
+                      <div className="row-form" style={{ margin: '4px 0 0' }}>
+                        <button onClick={() => setStatus(tenantId, b.id, 'canceled')}>キャンセル</button>
+                        <button onClick={() => setStatus(tenantId, b.id, 'noshow')}>無断欠席</button>
+                      </div>
+                    </>
                   ) : b.status === 'done' ? (
                     <span className="muted">
                       {b.finalDurationMin}分 / ¥{(b.finalPrice ?? 0).toLocaleString()}
@@ -87,6 +93,14 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
 
 function statusLabel(s: Booking['status']): string {
   return { reserved: '予約', done: '完了', canceled: 'キャンセル', noshow: '無断欠席' }[s];
+}
+
+// スタッフはルール上 bookings を直接更新できる（§2）
+async function setStatus(tenantId: string, bookingId: string, status: Booking['status']) {
+  const label = status === 'canceled' ? 'キャンセル' : '無断欠席';
+  if (confirm(`この予約を「${label}」にしますか？`)) {
+    await updateDoc(doc(bookingsCol(tenantId), bookingId), { status });
+  }
 }
 
 function CompleteForm({ tenantId, booking }: { tenantId: string; booking: Booking }) {

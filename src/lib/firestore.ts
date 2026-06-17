@@ -11,6 +11,7 @@ import {
 import { db } from '../firebase';
 import type {
   Booking,
+  Closure,
   Customer,
   Dog,
   Menu,
@@ -35,6 +36,7 @@ function converter<T extends { id: string }>(): FirestoreDataConverter<T> {
 }
 
 const tenantConverter = converter<Tenant>();
+const closureConverter = converter<Closure>();
 const staffConverter = converter<Staff>();
 const menuConverter = converter<Menu>();
 const customerConverter = converter<Customer>();
@@ -67,3 +69,6 @@ export const recordsCol = (
 
 export const bookingsCol = (tenantId: string): CollectionReference<Booking> =>
   collection(db, 'tenants', tenantId, 'bookings').withConverter(bookingConverter);
+
+export const closuresCol = (tenantId: string): CollectionReference<Closure> =>
+  collection(db, 'tenants', tenantId, 'closures').withConverter(closureConverter);

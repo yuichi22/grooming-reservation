@@ -17,3 +17,8 @@ export const completeBooking = httpsCallable<
   { tenantId: string; bookingId: string; finalDurationMin: number; finalPrice: number; notes?: string },
   { bookingId: string; status: 'done' }
 >(functions, 'completeBooking');
+
+export const mergeCustomers = httpsCallable<
+  { tenantId: string; sourceCustomerId: string; targetCustomerId: string },
+  { targetCustomerId: string; movedDogs: number; movedBookings: number; patch: Record<string, unknown> }
+>(functions, 'mergeCustomers');

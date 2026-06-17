@@ -42,6 +42,16 @@ export interface TenantSettings {
   bufferMin: number;
   /** 作業時間の選択肢。フリー入力不可 (§6) */
   workTimeOptions: number[];
+  /** キャンセル締切（予約開始の何時間前まで可）(§11) */
+  cancelDeadlineHours?: number;
+}
+
+/** tenants/{tenantId}/closures/{YYYY-MM-DD} — 臨時休業/祝日 (§11) */
+export interface Closure {
+  id: string; // = YYYY-MM-DD
+  reason?: string;
+  /** false で半日など将来拡張用。省略/true は終日休業 */
+  fullDay?: boolean;
 }
 
 /** tenants/{tenantId} (§5) */
@@ -87,6 +97,8 @@ export interface Customer {
   ownerName: string;
   phone?: string | null;
   lineUserId?: string | null;
+  /** 手動マージで統合された場合の統合先 (§11)。設定済みなら無効レコード */
+  mergedInto?: string | null;
   createdAt: IsoStr;
 }
 
@@ -136,5 +148,7 @@ export interface Booking {
   finalPrice?: number | null;
   /** 前日リマインド送信済みの印（冪等化, §9）。未送信なら未設定 */
   reminderSentAt?: IsoStr | null;
+  /** キャンセル日時 (§11) */
+  canceledAt?: IsoStr | null;
   createdAt: IsoStr;
 }

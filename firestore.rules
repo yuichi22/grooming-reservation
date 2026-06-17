@@ -74,6 +74,12 @@ service cloud.firestore {
         allow read, write: if isSuperAdmin() || isStaff(tenantId);
       }
 
+      // 臨時休業/祝日 (§11)。設定系のため変更は admin、閲覧は所属スタッフ。
+      match /closures/{date} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+
       // 中央台帳イベントのアウトボックス (§10)。
       // 生成・配信は Cloud Functions(admin SDK)のみ。クライアントは admin が閲覧のみ可。
       match /pointEvents/{eventId} {

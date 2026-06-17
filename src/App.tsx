@@ -10,6 +10,7 @@ import StaffPage from './pages/StaffPage';
 import SettingsPage from './pages/SettingsPage';
 import KartePage from './pages/KartePage';
 import DogDetailPage from './pages/DogDetailPage';
+import CustomersPage from './pages/CustomersPage';
 
 export default function App() {
   return (
@@ -41,6 +42,14 @@ export default function App() {
           element={
             <RequireAuth adminOnly>
               <StaffPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="customers"
+          element={
+            <RequireAuth adminOnly>
+              <CustomersPage />
             </RequireAuth>
           }
         />

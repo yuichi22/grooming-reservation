@@ -28,6 +28,11 @@ export const getAvailability = httpsCallable<
   { slots: string[]; durationMin: number; bufferMin: number }
 >(functions, 'getAvailability');
 
+export const cancelBookingByCustomer = httpsCallable<
+  { tenantId: string; accessToken: string; bookingId: string },
+  { bookingId: string; status: 'canceled' }
+>(functions, 'cancelBookingByCustomer');
+
 export const createBooking = httpsCallable<
   {
     tenantId: string;

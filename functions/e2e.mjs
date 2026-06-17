@@ -166,6 +166,37 @@ async function main() {
   check('リマインド処理が実行され件数を返す', typeof rem.sent === 'number' && typeof rem.skipped === 'number', JSON.stringify(rem));
   console.log(`    → sent=${rem.sent}, skipped=${rem.skipped} (LINEトークン未設定のため送信はskip)`);
 
+  console.log('\n# §11 営業時間の例外（休業日）');
+  const CLOSED = '2026-06-25';
+  await db.collection('tenants').doc(TENANT).collection('closures').doc(CLOSED).set({ reason: '臨時休業', fullDay: true });
+  const avClosed = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: CLOSED, menuId: 'shampoo', dogId });
+  check('休業日は closed=true で空きなし', avClosed.closed === true && eq(avClosed.slots, []), JSON.stringify(avClosed));
+  let closedBookingRejected = false;
+  try {
+    await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, menuId: 'shampoo', date: CLOSED, startTime: '09:00' });
+  } catch {
+    closedBookingRejected = true;
+  }
+  check('休業日は予約も拒否される', closedBookingRejected);
+
+  console.log('\n# §11 キャンセル（締切前は顧客が取消可）');
+  const FREE = '2026-06-24'; // 空き日（十分先＝締切前）
+  const bk2 = await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, menuId: 'shampoo', date: FREE, startTime: '09:00' });
+  const cancelRes = await call('cancelBookingByCustomer', { tenantId: TENANT, accessToken: token, bookingId: bk2.bookingId });
+  check('顧客キャンセルで status=canceled', cancelRes.status === 'canceled');
+  const avFree = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: FREE, menuId: 'shampoo', dogId });
+  check('キャンセル後は 09:00 が空きに戻る', avFree.slots.includes('09:00'), JSON.stringify(avFree.slots));
+
+  console.log('\n# §11 手動マージ（重複顧客の統合）');
+  const bob = await call('customerSession', { tenantId: TENANT, accessToken: 'dev:Ubob', phone: '09022223333', ownerName: 'Bob' });
+  const bobDog = await call('registerDog', { tenantId: TENANT, accessToken: 'dev:Ubob', customerId: bob.customerId, name: 'ハチ' });
+  const mg = await call('mergeCustomers', { tenantId: TENANT, sourceCustomerId: bob.customerId, targetCustomerId: customerId }, idToken);
+  check('犬1頭が統合先へ移動', mg.movedDogs === 1, JSON.stringify(mg));
+  const movedDog = await db.collection('tenants').doc(TENANT).collection('dogs').doc(bobDog.dogId).get();
+  check('ハチの customerId が統合先に', movedDog.data()?.customerId === customerId);
+  const bobAfter = await db.collection('tenants').doc(TENANT).collection('customers').doc(bob.customerId).get();
+  check('統合元に mergedInto が記録される', bobAfter.data()?.mergedInto === customerId);
+
   console.log(`\n==== RESULT: ${pass} passed, ${fail} failed ====`);
   process.exit(fail === 0 ? 0 : 1);
 }

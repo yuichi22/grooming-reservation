@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "emulators": "firebase emulators:start --only auth,firestore,functions",
+    "e2e": "node functions/e2e.mjs",
+    "deploy:dev": "npm run build && firebase deploy --project dev",
+    "deploy:prod": "npm run build && firebase deploy --project prod"
   },
   "dependencies": {
     "@line/liff": "^2.24.0",
