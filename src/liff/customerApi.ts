@@ -2,16 +2,17 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
 
-export const customerSession = httpsCallable<
-  { tenantId: string; accessToken: string; ownerName?: string; phone?: string },
-  { customerId: string; lineUserId: string; needsPhone: boolean }
->(functions, 'customerSession');
-
 export interface BookingOptions {
   menus: { id: string; name: string; defaultDurationMin: number; fixedDuration: boolean; price: number }[];
   staff: { id: string; name: string }[];
   dogs: { id: string; name: string; confirmedDurationMin: number | null }[];
 }
+
+export const customerSession = httpsCallable<
+  { tenantId: string; accessToken: string; ownerName?: string; phone?: string },
+  // options は電話登録済みのとき同梱（起動時の getBookingOptions 呼び出しを省く B）
+  { customerId: string; lineUserId: string; needsPhone: boolean; options: BookingOptions | null }
+>(functions, 'customerSession');
 
 export const getBookingOptions = httpsCallable<
   { tenantId: string; accessToken: string; customerId: string },

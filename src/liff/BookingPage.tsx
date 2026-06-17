@@ -52,7 +52,9 @@ export default function BookingPage() {
         if (res.data.needsPhone) {
           setPhase('needPhone');
         } else {
-          await loadOptions(res.data.customerId);
+          // B: customerSession が options も返すので追加呼び出し不要
+          if (res.data.options) setOptions(res.data.options);
+          else await loadOptions(res.data.customerId);
           setPhase('ready');
         }
       } catch (e) {
@@ -71,7 +73,8 @@ export default function BookingPage() {
     try {
       const res = await customerSession({ tenantId, accessToken: getAccessToken(), phone, ownerName });
       setCustomerId(res.data.customerId);
-      await loadOptions(res.data.customerId);
+      if (res.data.options) setOptions(res.data.options);
+      else await loadOptions(res.data.customerId);
       setPhase('ready');
     } catch (e) {
       setError(e instanceof Error ? e.message : '登録に失敗しました');

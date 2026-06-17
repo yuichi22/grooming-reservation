@@ -12,7 +12,7 @@ import {
   signOut,
   type User,
 } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth } from '../firebaseStaff';
 import type { StaffRole } from '../lib/types';
 
 /** custom claims から取り出すアプリ権限 (§2) */

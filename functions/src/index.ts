@@ -241,7 +241,10 @@ export const customerSession = onCall<{
 
   const finalSnap = await customersRef.doc(customerId).get();
   const finalPhone = (finalSnap.data()?.phone ?? null) as string | null;
-  return { customerId, lineUserId, needsPhone: !finalPhone };
+  const needsPhone = !finalPhone;
+  // 起動時の往復削減 (B): 電話登録済みなら予約オプションも同梱して返す（追加の getBookingOptions 呼び出しを省く）
+  const options = needsPhone ? null : await fetchBookingOptions(tenantId, customerId);
+  return { customerId, lineUserId, needsPhone, options };
 });
 
 /** 空きスロット取得 (§6 + §8 指名スコープ)。 */
@@ -396,39 +399,42 @@ async function assertCustomerOwnership(tenantId: string, customerId: string, lin
   }
 }
 
-/** 予約画面の選択肢（メニュー・指名候補スタッフ・自分の犬）を一括取得。 */
+/** 予約画面の選択肢（メニュー・指名候補スタッフ・自分の犬）。customerSession でも再利用。 */
+async function fetchBookingOptions(tenantId: string, customerId: string) {
+  const base = db.collection('tenants').doc(tenantId);
+  const [menusSnap, staffSnap, dogsSnap] = await Promise.all([
+    base.collection('menus').where('active', '==', true).get(),
+    base.collection('staff').where('active', '==', true).get(),
+    base.collection('dogs').where('customerId', '==', customerId).get(),
+  ]);
+  return {
+    menus: menusSnap.docs.map((d) => {
+      const m = d.data();
+      return {
+        id: d.id,
+        name: m.name,
+        defaultDurationMin: m.defaultDurationMin,
+        fixedDuration: m.fixedDuration,
+        price: m.price,
+      };
+    }),
+    staff: staffSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
+    dogs: dogsSnap.docs.map((d) => ({
+      id: d.id,
+      name: d.data().name,
+      confirmedDurationMin: (d.data().confirmedDurationMin ?? null) as number | null,
+    })),
+  };
+}
+
+/** 予約画面の選択肢を取得（犬の登録後などの再取得用）。 */
 export const getBookingOptions = onCall<{ tenantId: string; accessToken: string; customerId: string }>(
   async (request) => {
     const { tenantId, accessToken, customerId } = request.data;
     if (!tenantId || !customerId) throw new HttpsError('invalid-argument', 'tenantId, customerId required');
     const { lineUserId } = await verifyLineAccessToken(accessToken);
     await assertCustomerOwnership(tenantId, customerId, lineUserId);
-
-    const base = db.collection('tenants').doc(tenantId);
-    const [menusSnap, staffSnap, dogsSnap] = await Promise.all([
-      base.collection('menus').where('active', '==', true).get(),
-      base.collection('staff').where('active', '==', true).get(),
-      base.collection('dogs').where('customerId', '==', customerId).get(),
-    ]);
-
-    return {
-      menus: menusSnap.docs.map((d) => {
-        const m = d.data();
-        return {
-          id: d.id,
-          name: m.name,
-          defaultDurationMin: m.defaultDurationMin,
-          fixedDuration: m.fixedDuration,
-          price: m.price,
-        };
-      }),
-      staff: staffSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
-      dogs: dogsSnap.docs.map((d) => ({
-        id: d.id,
-        name: d.data().name,
-        confirmedDurationMin: (d.data().confirmedDurationMin ?? null) as number | null,
-      })),
-    };
+    return fetchBookingOptions(tenantId, customerId);
   },
 );
 
