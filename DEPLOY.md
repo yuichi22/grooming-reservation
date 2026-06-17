@@ -52,8 +52,16 @@ npm run deploy:prod        # 本番
 |---|---|---|
 | `CRM_WEBHOOK_URL` | §10 中央台帳への配信先 | `pointEvents` に pending で滞留（CRM 構築後に設定→`retryPointEvents` が回収配信） |
 | `LINE_CHANNEL_ACCESS_TOKEN` | §9 リマインドのプッシュ（単一テナント時のフォールバック） | 送信せず skip |
+| `ALLOW_DEV_LINE_TOKEN` | §2 開発用 LINE トークンバイパス（`dev:<userId>`）を許可 | 無効（`dev:` トークンは拒否） |
 
 テナント単位の値は `tenants/{tenantId}.lineConfig.messagingChannelAccessToken` を優先。
+
+> ⚠ **`ALLOW_DEV_LINE_TOKEN` は本番では必ず未設定（無効）にすること。**
+> `true` にすると誰でも `dev:<任意の userId>` を送るだけで任意の LINE ユーザに
+> 成りすませる認証バイパスになる。**prod デプロイでは絶対に設定しない。**
+> 一方で **dev (groomhaus-dev) の Functions デプロイ時は `ALLOW_DEV_LINE_TOKEN=true` を
+> 設定しないと dev モードの `/book` や E2E が動かなくなる**ので、dev では設定する。
+> ローカルは `functions/.env`（`ALLOW_DEV_LINE_TOKEN=true`）で有効化済み。
 
 ## スケジュール関数
 

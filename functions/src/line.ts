@@ -10,13 +10,17 @@ export interface LineIdentity {
 /**
  * LIFF アクセストークンを検証し lineUserId を返す。
  * 開発/エミュレータ用に "dev:<userId>" 形式のトークンはネットワーク検証を
- * スキップして許可する（本番では使われない想定）。
+ * スキップして許可するが、これは ALLOW_DEV_LINE_TOKEN=true のときだけ有効。
+ * 既定（未設定）では無効で、本番では必ず未設定にして無効化する（成りすまし防止）。
  */
 export async function verifyLineAccessToken(accessToken: string): Promise<LineIdentity> {
   if (!accessToken) throw new HttpsError('unauthenticated', 'accessToken required');
 
-  // 開発用バイパス
+  // 開発用バイパス（環境変数フラグでゲート。既定は無効＝本番では使えない）
   if (accessToken.startsWith('dev:')) {
+    if (process.env.ALLOW_DEV_LINE_TOKEN !== 'true') {
+      throw new HttpsError('unauthenticated', 'dev token not allowed');
+    }
     const lineUserId = accessToken.slice('dev:'.length);
     if (!lineUserId) throw new HttpsError('unauthenticated', 'invalid dev token');
     return { lineUserId };
