@@ -65,7 +65,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
       {loading ? (
         <p>読み込み中…</p>
       ) : (
-        <table>
+        <div className="table-wrap"><table>
           <thead>
             <tr>
               <th>氏名</th>
@@ -95,7 +95,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
               </tr>
             )}
           </tbody>
-        </table>
+        </table></div>
       )}
     </section>
   );

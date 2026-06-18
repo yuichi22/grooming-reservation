@@ -184,7 +184,7 @@ function Closures({ tenantId }: { tenantId: string }) {
         <input placeholder="理由（任意）" value={reason} onChange={(e) => setReason(e.target.value)} />
         <button type="submit">休業日を追加</button>
       </form>
-      <table>
+      <div className="table-wrap"><table>
         <thead>
           <tr>
             <th>日付</th>
@@ -212,7 +212,7 @@ function Closures({ tenantId }: { tenantId: string }) {
             </tr>
           )}
         </tbody>
-      </table>
+      </table></div>
     </section>
   );
 }

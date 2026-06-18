@@ -47,7 +47,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
       {loading ? (
         <p>読み込み中…</p>
       ) : (
-        <table>
+        <div className="table-wrap"><table>
           <thead>
             <tr>
               <th>名前</th>
@@ -75,7 +75,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
               </tr>
             )}
           </tbody>
-        </table>
+        </table></div>
       )}
     </section>
   );

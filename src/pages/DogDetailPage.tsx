@@ -109,7 +109,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
 
       <h2>施術履歴</h2>
       <RecordForm tenantId={tenantId} dogId={dogId} />
-      <table>
+      <div className="table-wrap"><table>
         <thead>
           <tr>
             <th>日付</th>
@@ -139,7 +139,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
             </tr>
           )}
         </tbody>
-      </table>
+      </table></div>
     </section>
   );
 }

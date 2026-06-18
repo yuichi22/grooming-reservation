@@ -14,8 +14,8 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <strong>GROOM HAUS 管理</strong>
-        <span className="muted">
+        <span className="brand">GROOM HAUS 管理</span>
+        <span className="user">
           {user?.email}
           {claims.role ? `（${claims.role}）` : claims.superAdmin ? '（superAdmin）' : ''}
           {claims.tenantId ? ` / ${claims.tenantId}` : ''}
