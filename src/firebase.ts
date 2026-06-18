@@ -17,7 +17,8 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
-export const functions = getFunctions(app);
+// 関数は東京リージョン（サーバ側 setGlobalOptions と一致させる）。
+export const functions = getFunctions(app, 'asia-northeast1');
 
 if (useEmulators) {
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);

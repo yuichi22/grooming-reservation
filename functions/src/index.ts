@@ -6,7 +6,7 @@ import { getFirestore, FieldValue, type DocumentReference } from 'firebase-admin
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { logger } from 'firebase-functions/v2';
+import { logger, setGlobalOptions } from 'firebase-functions/v2';
 import { defineInt } from 'firebase-functions/params';
 import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
 import { verifyLineAccessToken, pushLineMessage } from './line.js';
@@ -16,6 +16,9 @@ import { buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
 import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
 
 initializeApp();
+// 全関数を東京リージョンに（Firestore も asia-northeast1）。クライアント(日本)→関数、
+// 関数→Firestore の往復レイテンシを削減（旧 us-central1 では太平洋往復が積み重なっていた）。
+setGlobalOptions({ region: 'asia-northeast1' });
 const db = getFirestore();
 const auth = getAuth();
 

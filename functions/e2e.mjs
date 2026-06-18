@@ -9,7 +9,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 
 const PROJECT = 'demo-groomhaus';
-const FN = `http://127.0.0.1:5001/${PROJECT}/us-central1`;
+const FN = `http://127.0.0.1:5001/${PROJECT}/asia-northeast1`;
 const AUTH = `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts`;
 const TENANT = 'groomhaus';
 const DATE = '2026-06-20';
