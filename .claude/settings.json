@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "auto",
+    "ask": [
+      "Bash(npm run deploy:prod)",
+      "Bash(npm run deploy:prod *)",
+      "Bash(npm run deploy:prod:*)",
+      "Bash(firebase deploy *)",
+      "Bash(firebase deploy:*)"
+    ],
+    "allow": [
+      "Bash(git status *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git diff)",
+      "Bash(git log *)",
+      "Bash(git log)",
+      "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git branch *)",
+      "Bash(git rebase *)",
+      "Bash(git ls-remote *)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run typecheck *)",
+      "Bash(npm run build)",
+      "Bash(npm run build *)",
+      "Bash(npm run build:dev)",
+      "Bash(npm run build:dev *)",
+      "Bash(npm test)",
+      "Bash(npm test *)",
+      "Bash(npm run test *)",
+      "Bash(npm run e2e)",
+      "Bash(npm run e2e *)",
+      "Bash(npm run emulators *)",
+      "Bash(npm run deploy:dev)",
+      "Bash(npm run deploy:dev *)"
+    ]
+  }
+}
