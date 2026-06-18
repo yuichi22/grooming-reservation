@@ -7,6 +7,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
+import { defineInt } from 'firebase-functions/params';
 import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
 import { verifyLineAccessToken, pushLineMessage } from './line.js';
 import { availability, effectiveDuration, toMinutes, toTimeStr, unionStarts } from './slots.js';
@@ -19,6 +20,10 @@ const db = getFirestore();
 const auth = getAuth();
 
 type StaffRole = 'admin' | 'trimmer';
+
+// 顧客フローの要関数のウォーム維持台数。deploy 時に .env.<projectId> の MIN_INSTANCES から解決。
+// prod のみ 1（.env.groomhaus-prod）、dev は default 0（無料）。
+const minInstancesParam = defineInt('MIN_INSTANCES', { default: 0 });
 
 const DEFAULT_SETTINGS = {
   timezone: 'Asia/Tokyo',
@@ -200,7 +205,7 @@ export const customerSession = onCall<{
   accessToken: string;
   ownerName?: string;
   phone?: string;
-}>(async (request) => {
+}>({ minInstances: minInstancesParam }, async (request) => {
   const { tenantId, accessToken, ownerName, phone } = request.data;
   if (!tenantId) throw new HttpsError('invalid-argument', 'tenantId required');
   const { lineUserId } = await verifyLineAccessToken(accessToken);
@@ -255,7 +260,7 @@ export const getAvailability = onCall<{
   menuId: string;
   dogId?: string;
   staffId?: string;
-}>(async (request) => {
+}>({ minInstances: minInstancesParam }, async (request) => {
   const { tenantId, accessToken, date, menuId, dogId, staffId } = request.data;
   if (!tenantId || !date || !menuId) throw new HttpsError('invalid-argument', 'tenantId, date, menuId required');
   await verifyLineAccessToken(accessToken); // 顧客認証ゲート
@@ -320,7 +325,7 @@ export const createBooking = onCall<{
   date: string;
   startTime: string;
   staffId?: string;
-}>(async (request) => {
+}>({ minInstances: minInstancesParam }, async (request) => {
   const { tenantId, accessToken, customerId, dogId, menuId, date, startTime, staffId } = request.data;
   if (!tenantId || !customerId || !dogId || !menuId || !date || !startTime) {
     throw new HttpsError('invalid-argument', 'missing required fields');
