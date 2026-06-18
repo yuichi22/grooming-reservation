@@ -17,10 +17,14 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
   const { data: tenant, loading } = useDocument<Tenant>(tenantDoc(tenantId), [tenantId]);
 
   const [settings, setSettings] = useState<TenantSettings | null>(null);
+  const [name, setName] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (tenant) setSettings(tenant.settings);
+    if (tenant) {
+      setSettings(tenant.settings);
+      setName(tenant.name);
+    }
   }, [tenant]);
 
   if (loading || !settings) return <p>読み込み中…</p>;
@@ -43,7 +47,7 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
     e.preventDefault();
     if (!settings) return;
     setMsg(null);
-    await updateDoc(tenantDoc(tenantId), { settings });
+    await updateDoc(tenantDoc(tenantId), { name, settings });
     setMsg('保存しました');
   }
 
@@ -119,7 +123,19 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
         </label>
 
         <fieldset>
-          <legend>店舗情報（LINE の予約完了・リマインド文面に表示）</legend>
+          <legend>店舗情報（ヘッダー表示・LINE 文面に使用）</legend>
+          <label>
+            店舗名
+            <input value={name} placeholder="例: GROOM HAUS" onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label>
+            ロゴ画像URL（ヘッダー中央に表示）
+            <input
+              value={settings.logoUrl ?? ''}
+              placeholder="例: https://.../logo.png"
+              onChange={(e) => setSettings((s) => (s ? { ...s, logoUrl: e.target.value } : s))}
+            />
+          </label>
           <label>
             住所
             <input

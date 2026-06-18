@@ -48,6 +48,8 @@ export interface TenantSettings {
   address?: string;
   mapUrl?: string;
   phone?: string;
+  /** 店舗ロゴ画像URL（ヘッダー中央に表示・任意） */
+  logoUrl?: string;
 }
 
 /** tenants/{tenantId}/closures/{YYYY-MM-DD} — 臨時休業/祝日 (§11) */

@@ -186,17 +186,38 @@ label.inline > select {
   box-shadow: var(--shadow-sm);
 }
 .topbar .brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
   font-weight: 800;
   font-size: 1.05rem;
   color: var(--brand-dark);
-  margin-right: auto;
 }
-.topbar .brand::before {
-  content: '🐾';
-  font-size: 1.1rem;
+.header-center {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.store-logo {
+  height: 34px;
+  max-width: 170px;
+  object-fit: contain;
+  display: block;
+}
+.powered {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.topbar-right {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
 }
 .topbar .user {
   color: var(--muted);
@@ -205,6 +226,10 @@ label.inline > select {
 .topbar button {
   min-height: 36px;
   padding: 6px 14px;
+  flex: 0 0 auto;
+}
+.nav-icon {
+  margin-right: 7px;
 }
 
 .app-body {
