@@ -118,6 +118,34 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
           />
         </label>
 
+        <fieldset>
+          <legend>店舗情報（LINE の予約完了・リマインド文面に表示）</legend>
+          <label>
+            住所
+            <input
+              value={settings.address ?? ''}
+              placeholder="例: 島根県松江市〇〇1-2-3"
+              onChange={(e) => setSettings((s) => (s ? { ...s, address: e.target.value } : s))}
+            />
+          </label>
+          <label>
+            地図URL（Google マップ等）
+            <input
+              value={settings.mapUrl ?? ''}
+              placeholder="例: https://maps.google.com/?q=..."
+              onChange={(e) => setSettings((s) => (s ? { ...s, mapUrl: e.target.value } : s))}
+            />
+          </label>
+          <label>
+            電話番号
+            <input
+              value={settings.phone ?? ''}
+              placeholder="例: 0852-00-0000"
+              onChange={(e) => setSettings((s) => (s ? { ...s, phone: e.target.value } : s))}
+            />
+          </label>
+        </fieldset>
+
         <div>
           <button type="submit">保存</button>
           {msg && <span className="muted" style={{ marginLeft: 12 }}>{msg}</span>}

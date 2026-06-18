@@ -44,6 +44,10 @@ export interface TenantSettings {
   workTimeOptions: number[];
   /** キャンセル締切（予約開始の何時間前まで可）(§11) */
   cancelDeadlineHours?: number;
+  /** 店舗情報（LINE 文面に使用・任意） */
+  address?: string;
+  mapUrl?: string;
+  phone?: string;
 }
 
 /** tenants/{tenantId}/closures/{YYYY-MM-DD} — 臨時休業/祝日 (§11) */

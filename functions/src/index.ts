@@ -141,6 +141,14 @@ interface SettingsLike {
   cancelDeadlineHours: number;
 }
 
+/** メッセージ文面に使う店舗情報（settings に保持・任意）。 */
+interface StoreSettings {
+  address?: string;
+  mapUrl?: string;
+  phone?: string;
+  cancelDeadlineHours?: number;
+}
+
 async function loadSettings(tenantId: string): Promise<SettingsLike> {
   const snap = await db.collection('tenants').doc(tenantId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'tenant not found');
@@ -640,6 +648,7 @@ async function runReminders(tenantId: string, date: string): Promise<{ sent: num
 
   const tenantName = (tenant.name as string) ?? tenantId;
   const token = reminderChannelToken(tenant.lineConfig);
+  const s = (tenant.settings ?? {}) as StoreSettings;
 
   const bookings = await base.collection('bookings').where('date', '==', date).get();
   let sent = 0;
@@ -665,6 +674,10 @@ async function runReminders(tenantId: string, date: string): Promise<{ sent: num
       dogName: (dogSnap.data()?.name as string) ?? 'ワンちゃん',
       date,
       startTime: b.startTime as string,
+      address: s.address ?? null,
+      mapUrl: s.mapUrl ?? null,
+      phone: s.phone ?? null,
+      cancelDeadlineHours: s.cancelDeadlineHours ?? null,
     });
     const result = await pushLineMessage(token, lineUserId, message);
     if (result === 'sent') {
@@ -725,6 +738,7 @@ export const onBookingCreated = onDocumentCreated('tenants/{tenantId}/bookings/{
   if (!lineUserId) return; // LINE 未連携は対象外
 
   const token = reminderChannelToken(tenantSnap.data()?.lineConfig);
+  const s = (tenantSnap.data()?.settings ?? {}) as StoreSettings;
   const message = buildConfirmationMessage({
     tenantName: (tenantSnap.data()?.name as string) ?? tenantId,
     dogName: (dogSnap.data()?.name as string) ?? 'ワンちゃん',
@@ -732,6 +746,10 @@ export const onBookingCreated = onDocumentCreated('tenants/{tenantId}/bookings/{
     date: b.date as string,
     startTime: b.startTime as string,
     slotEnd: b.slotEnd as string,
+    address: s.address ?? null,
+    mapUrl: s.mapUrl ?? null,
+    phone: s.phone ?? null,
+    cancelDeadlineHours: s.cancelDeadlineHours ?? null,
   });
 
   const result = await pushLineMessage(token, lineUserId, message);

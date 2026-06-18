@@ -23,25 +23,60 @@ export function tomorrowInTimeZone(now: Date, timeZone: string): string {
   return addDays(dateStrInTimeZone(now, timeZone), 1);
 }
 
-export interface ReminderContext {
+const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
+/** YYYY-MM-DD → "6/22（日）"。曜日は日付要素から純粋計算（tz 非依存）。 */
+export function formatDateJa(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const wd = WEEKDAY_JA[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${m}/${d}（${wd}）`;
+}
+
+/** 店舗情報（任意）。設定済みの項目だけメッセージに出す。 */
+export interface StoreInfo {
+  address?: string | null;
+  mapUrl?: string | null;
+  phone?: string | null;
+  cancelDeadlineHours?: number | null;
+}
+
+function storeLines(s: StoreInfo): string[] {
+  const out: string[] = [];
+  if (s.address) out.push(`📍 ${s.address}`);
+  if (s.mapUrl) out.push(`🗺 ${s.mapUrl}`);
+  if (s.phone) out.push(`☎ ${s.phone}`);
+  return out;
+}
+
+function cancelLine(s: StoreInfo): string {
+  const h = s.cancelDeadlineHours ?? 24;
+  const tel = s.phone ? `お電話（☎${s.phone}）` : 'お電話';
+  return `❌ キャンセル・変更はご予約の${h}時間前までに、${tel}またはこのトークからご連絡ください。`;
+}
+
+export interface ReminderContext extends StoreInfo {
   tenantName: string;
   dogName: string;
   date: string; // YYYY-MM-DD
   startTime: string; // HH:MM
 }
 
-/**
- * リマインド文面 (§9: 無断キャンセル抑制)。
- * 注: 確定文面・送信時刻は §11 で要調整。ここは暫定テンプレート。
- */
+/** 前日リマインド文面 (§9: 無断キャンセル抑制)。絵文字・店舗情報・キャンセル案内入り。 */
 export function buildReminderMessage(ctx: ReminderContext): string {
-  return (
-    `【${ctx.tenantName}】明日 ${ctx.date} ${ctx.startTime} に ` +
-    `${ctx.dogName} ちゃんのトリミングのご予約があります。お気をつけてお越しください。`
-  );
+  const lines = [
+    '🐾 明日のご予約のリマインドです',
+    '',
+    `【${ctx.tenantName}】`,
+    `📅 明日 ${formatDateJa(ctx.date)} ${ctx.startTime}〜`,
+    `🐶 ${ctx.dogName} ちゃん`,
+  ];
+  const store = storeLines(ctx);
+  if (store.length) lines.push('', ...store);
+  lines.push('', cancelLine(ctx), '', 'お気をつけてお越しください😊');
+  return lines.join('\n');
 }
 
-export interface ConfirmationContext {
+export interface ConfirmationContext extends StoreInfo {
   tenantName: string;
   dogName: string;
   menuName: string;
@@ -50,12 +85,17 @@ export interface ConfirmationContext {
   slotEnd: string; // HH:MM
 }
 
-/** 予約確定の完了メッセージ（予約成立直後に送信。リマインドとは別）。 */
+/** 予約完了メッセージ（予約成立直後・リマインドとは別）。絵文字・店舗情報・キャンセル案内入り。 */
 export function buildConfirmationMessage(ctx: ConfirmationContext): string {
-  return (
-    `【${ctx.tenantName}】ご予約を承りました。\n` +
-    `${ctx.date} ${ctx.startTime}〜${ctx.slotEnd}\n` +
-    `${ctx.dogName} ちゃん / ${ctx.menuName}\n` +
-    `ご来店をお待ちしております。`
-  );
+  const lines = [
+    '🐾 ご予約ありがとうございます！',
+    '',
+    `【${ctx.tenantName}】`,
+    `📅 ${formatDateJa(ctx.date)} ${ctx.startTime}〜${ctx.slotEnd}`,
+    `🐶 ${ctx.dogName} ちゃん / ${ctx.menuName}`,
+  ];
+  const store = storeLines(ctx);
+  if (store.length) lines.push('', ...store);
+  lines.push('', cancelLine(ctx), '', 'ご来店をお待ちしております😊');
+  return lines.join('\n');
 }
