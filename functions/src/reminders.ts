@@ -40,3 +40,22 @@ export function buildReminderMessage(ctx: ReminderContext): string {
     `${ctx.dogName} ちゃんのトリミングのご予約があります。お気をつけてお越しください。`
   );
 }
+
+export interface ConfirmationContext {
+  tenantName: string;
+  dogName: string;
+  menuName: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  slotEnd: string; // HH:MM
+}
+
+/** 予約確定の完了メッセージ（予約成立直後に送信。リマインドとは別）。 */
+export function buildConfirmationMessage(ctx: ConfirmationContext): string {
+  return (
+    `【${ctx.tenantName}】ご予約を承りました。\n` +
+    `${ctx.date} ${ctx.startTime}〜${ctx.slotEnd}\n` +
+    `${ctx.dogName} ちゃん / ${ctx.menuName}\n` +
+    `ご来店をお待ちしております。`
+  );
+}

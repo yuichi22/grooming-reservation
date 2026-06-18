@@ -4,7 +4,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, type DocumentReference } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger, setGlobalOptions } from 'firebase-functions/v2';
 import { defineInt } from 'firebase-functions/params';
@@ -12,7 +12,7 @@ import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
 import { verifyLineAccessToken, pushLineMessage } from './line.js';
 import { availability, effectiveDuration, toMinutes, toTimeStr, unionStarts } from './slots.js';
 import { buildPointEvent, deliverPointEvent, type PointEventStatus } from './crm.js';
-import { buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
+import { buildConfirmationMessage, buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
 import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
 
 initializeApp();
@@ -700,6 +700,45 @@ export const sendRemindersNow = onCall<{ tenantId: string; date: string }>(async
   const ok = caller?.superAdmin === true || (caller?.tenantId === tenantId && caller?.role === 'admin');
   if (!ok) throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
   return runReminders(tenantId, date);
+});
+
+/**
+ * 予約成立(作成)時に確認メッセージを送る（リマインドとは別・即時）。
+ * lineUserId を持つ顧客のみ。confirmationSentAt で冪等化（トリガ at-least-once 対策）。
+ */
+export const onBookingCreated = onDocumentCreated('tenants/{tenantId}/bookings/{bookingId}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const b = snap.data();
+  if (b.status !== 'reserved' || b.confirmationSentAt) return;
+
+  const { tenantId } = event.params;
+  const base = db.collection('tenants').doc(tenantId);
+  const [tenantSnap, custSnap, dogSnap, menuSnap] = await Promise.all([
+    base.get(),
+    base.collection('customers').doc(b.customerId).get(),
+    base.collection('dogs').doc(b.dogId).get(),
+    base.collection('menus').doc(b.menuId).get(),
+  ]);
+
+  const lineUserId = custSnap.data()?.lineUserId as string | undefined;
+  if (!lineUserId) return; // LINE 未連携は対象外
+
+  const token = reminderChannelToken(tenantSnap.data()?.lineConfig);
+  const message = buildConfirmationMessage({
+    tenantName: (tenantSnap.data()?.name as string) ?? tenantId,
+    dogName: (dogSnap.data()?.name as string) ?? 'ワンちゃん',
+    menuName: (menuSnap.data()?.name as string) ?? 'メニュー',
+    date: b.date as string,
+    startTime: b.startTime as string,
+    slotEnd: b.slotEnd as string,
+  });
+
+  const result = await pushLineMessage(token, lineUserId, message);
+  if (result === 'sent') {
+    await snap.ref.update({ confirmationSentAt: FieldValue.serverTimestamp() });
+  }
+  logger.info('booking confirmation', { tenantId, bookingId: event.params.bookingId, result });
 });
 
 // ===== M6: キャンセル (§11) / 顧客マージ (§11) =====

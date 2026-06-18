@@ -148,6 +148,8 @@ export interface Booking {
   finalPrice?: number | null;
   /** 前日リマインド送信済みの印（冪等化, §9）。未送信なら未設定 */
   reminderSentAt?: IsoStr | null;
+  /** 予約完了メッセージ送信済みの印（冪等化）。未送信なら未設定 */
+  confirmationSentAt?: IsoStr | null;
   /** キャンセル日時 (§11) */
   canceledAt?: IsoStr | null;
   createdAt: IsoStr;

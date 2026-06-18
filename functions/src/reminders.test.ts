@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, buildReminderMessage, dateStrInTimeZone, tomorrowInTimeZone } from './reminders';
+import {
+  addDays,
+  buildConfirmationMessage,
+  buildReminderMessage,
+  dateStrInTimeZone,
+  tomorrowInTimeZone,
+} from './reminders';
 
 describe('日付計算 (§9)', () => {
   it('addDays は月跨ぎ・うるう年を正しく扱う', () => {
@@ -26,5 +32,18 @@ describe('文面 (§9)', () => {
     expect(
       buildReminderMessage({ tenantName: 'GROOM HAUS', dogName: 'ポチ', date: '2026-06-21', startTime: '11:00' }),
     ).toBe('【GROOM HAUS】明日 2026-06-21 11:00 に ポチ ちゃんのトリミングのご予約があります。お気をつけてお越しください。');
+  });
+
+  it('予約完了メッセージを組み立てる', () => {
+    expect(
+      buildConfirmationMessage({
+        tenantName: 'GROOM HAUS',
+        dogName: 'ポチ',
+        menuName: 'シャンプー',
+        date: '2026-06-22',
+        startTime: '10:00',
+        slotEnd: '11:00',
+      }),
+    ).toBe('【GROOM HAUS】ご予約を承りました。\n2026-06-22 10:00〜11:00\nポチ ちゃん / シャンプー\nご来店をお待ちしております。');
   });
 });
