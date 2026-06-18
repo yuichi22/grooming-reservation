@@ -65,14 +65,18 @@ async function seed() {
     },
     createdAt: new Date().toISOString(),
   });
-  await base.collection('menus').doc('trim').set({ name: 'カット', defaultDurationMin: 80, fixedDuration: false, price: 5500, active: true });
-  await base.collection('menus').doc('shampoo').set({ name: 'シャンプー', defaultDurationMin: 50, fixedDuration: true, price: 3300, active: true });
+  // 犬種マスタ / サービスマスタ / 料金表（犬種×サービス→所要時間・金額）
+  await base.collection('breeds').doc('b1').set({ name: 'テスト犬種', active: true });
+  await base.collection('services').doc('cut').set({ name: 'カット', active: true });
+  await base.collection('services').doc('sham').set({ name: 'シャンプー', active: true });
+  await base.collection('pricing').doc('b1__cut').set({ breedId: 'b1', serviceId: 'cut', price: 5500, durationMin: 80, active: true });
+  await base.collection('pricing').doc('b1__sham').set({ breedId: 'b1', serviceId: 'sham', price: 3300, durationMin: 50, active: true });
   await base.collection('staff').doc('trimmer1').set({ name: '担当A', role: 'trimmer', active: true, firebaseUid: 'trimmer1' });
   // admin は施術しない想定 → active:false（予約割当の対象外）。§6 例は単一リソース前提。
   await base.collection('staff').doc('admin1').set({ name: '管理者', role: 'admin', active: false, firebaseUid: 'admin1' });
   // §6 の例: 9:00-10:00 と 11:00-13:00 を trimmer1 に予約済みとして投入
-  await base.collection('bookings').doc('seed1').set({ dogId: 'x', customerId: 'x', menuId: 'trim', staffId: 'trimmer1', date: DATE, startTime: '09:00', durationMin: 50, bufferMin: 10, slotEnd: '10:00', status: 'reserved', createdAt: new Date().toISOString() });
-  await base.collection('bookings').doc('seed2').set({ dogId: 'x', customerId: 'x', menuId: 'trim', staffId: 'trimmer1', date: DATE, startTime: '11:00', durationMin: 110, bufferMin: 10, slotEnd: '13:00', status: 'reserved', createdAt: new Date().toISOString() });
+  await base.collection('bookings').doc('seed1').set({ dogId: 'x', customerId: 'x', serviceId: 'cut', staffId: 'trimmer1', date: DATE, startTime: '09:00', durationMin: 50, bufferMin: 10, slotEnd: '10:00', status: 'reserved', createdAt: new Date().toISOString() });
+  await base.collection('bookings').doc('seed2').set({ dogId: 'x', customerId: 'x', serviceId: 'cut', staffId: 'trimmer1', date: DATE, startTime: '11:00', durationMin: 110, bufferMin: 10, slotEnd: '13:00', status: 'reserved', createdAt: new Date().toISOString() });
   console.log('  seeded');
 }
 
@@ -101,28 +105,29 @@ async function main() {
   check('電話番号リンク後は needsPhone=false', s2.needsPhone === false);
   const customerId = s2.customerId;
 
-  console.log('\n# 犬の登録 (§7 初回 confirmedDurationMin=null)');
-  const dog = await call('registerDog', { tenantId: TENANT, accessToken: token, customerId, name: 'ポチ', breed: 'トイプー' });
+  console.log('\n# 犬の登録 (§7 初回 confirmedDurationMin=null, 犬種=b1)');
+  const dog = await call('registerDog', { tenantId: TENANT, accessToken: token, customerId, name: 'ポチ', breedId: 'b1' });
   const dogId = dog.dogId;
   check('dogId が返る', typeof dogId === 'string' && dogId.length > 0);
 
   console.log('\n# §6 空きスロット (営業9-13/buffer10, 予約済9-10・11-13 → 空きは10-11)');
-  const avTrim = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, menuId: 'trim', dogId });
-  check('80分(need90)は出ない', eq(avTrim.slots, []), `slots=${JSON.stringify(avTrim.slots)} duration=${avTrim.durationMin}`);
-  check('  duration=80 (confirmed=null→menu標準)', avTrim.durationMin === 80);
-  const avSham = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, menuId: 'shampoo', dogId });
-  check('シャンプー50分固定は10:00が出る', eq(avSham.slots, ['10:00']), `slots=${JSON.stringify(avSham.slots)}`);
-  check('  duration=50 (固定)', avSham.durationMin === 50);
+  const avCut = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, serviceId: 'cut', dogId });
+  check('カット(b1×cut=80分,need90)は出ない', eq(avCut.slots, []), `slots=${JSON.stringify(avCut.slots)} duration=${avCut.durationMin}`);
+  check('  duration=80 (料金表セル)', avCut.durationMin === 80);
+  check('  price=5500 (料金表セル)', avCut.price === 5500);
+  const avSham = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, serviceId: 'sham', dogId });
+  check('シャンプー(b1×sham=50分,need60)は10:00が出る', eq(avSham.slots, ['10:00']), `slots=${JSON.stringify(avSham.slots)}`);
+  check('  duration=50 (料金表セル)', avSham.durationMin === 50);
 
-  // 50分の犬で trim → need60 → 10:00 が出る ("50分は出る")
+  // 犬ごとの確定(§7)が料金表より優先: confirmed=50 にすると cut でも need60 → 10:00
   await db.collection('tenants').doc(TENANT).collection('dogs').doc(dogId).update({ confirmedDurationMin: 50 });
-  const avTrim50 = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, menuId: 'trim', dogId });
-  check('50分(need60)は10:00が出る', eq(avTrim50.slots, ['10:00']), `slots=${JSON.stringify(avTrim50.slots)} duration=${avTrim50.durationMin}`);
+  const avCut50 = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, serviceId: 'cut', dogId });
+  check('確定50分(§7)はcutでも10:00が出る', eq(avCut50.slots, ['10:00']), `slots=${JSON.stringify(avCut50.slots)} duration=${avCut50.durationMin}`);
   // 次の検証のため confirmed を戻す
   await db.collection('tenants').doc(TENANT).collection('dogs').doc(dogId).update({ confirmedDurationMin: null });
 
   console.log('\n# §8 予約確定 (指名なし→空きスタッフ割当) / §6 サーバ再検証');
-  const bk = await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, menuId: 'shampoo', date: DATE, startTime: '10:00' });
+  const bk = await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, serviceId: 'sham', date: DATE, startTime: '10:00' });
   check('スタッフが自動割当 (trimmer1)', bk.staffId === 'trimmer1', `staffId=${bk.staffId}`);
   check('slotEnd=11:00 (10:00+50+10)', bk.slotEnd === '11:00', `slotEnd=${bk.slotEnd}`);
   const bookingId = bk.bookingId;
@@ -130,7 +135,7 @@ async function main() {
   check('予約が reserved で作成される', bkSnap.data()?.status === 'reserved');
 
   // 空き済みになったか: 同じ10:00をもう一度取ると消える
-  const avAfter = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, menuId: 'shampoo', dogId });
+  const avAfter = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, serviceId: 'sham', dogId });
   check('予約後は10:00が空きから消える', eq(avAfter.slots, []), `slots=${JSON.stringify(avAfter.slots)}`);
 
   console.log('\n# §7 施術完了 (staff 認証, トランザクション)');
@@ -169,11 +174,11 @@ async function main() {
   console.log('\n# §11 営業時間の例外（休業日）');
   const CLOSED = '2026-06-25';
   await db.collection('tenants').doc(TENANT).collection('closures').doc(CLOSED).set({ reason: '臨時休業', fullDay: true });
-  const avClosed = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: CLOSED, menuId: 'shampoo', dogId });
+  const avClosed = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: CLOSED, serviceId: 'sham', dogId });
   check('休業日は closed=true で空きなし', avClosed.closed === true && eq(avClosed.slots, []), JSON.stringify(avClosed));
   let closedBookingRejected = false;
   try {
-    await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, menuId: 'shampoo', date: CLOSED, startTime: '09:00' });
+    await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, serviceId: 'sham', date: CLOSED, startTime: '09:00' });
   } catch {
     closedBookingRejected = true;
   }
@@ -181,10 +186,10 @@ async function main() {
 
   console.log('\n# §11 キャンセル（締切前は顧客が取消可）');
   const FREE = '2026-06-24'; // 空き日（十分先＝締切前）
-  const bk2 = await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, menuId: 'shampoo', date: FREE, startTime: '09:00' });
+  const bk2 = await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, serviceId: 'sham', date: FREE, startTime: '09:00' });
   const cancelRes = await call('cancelBookingByCustomer', { tenantId: TENANT, accessToken: token, bookingId: bk2.bookingId });
   check('顧客キャンセルで status=canceled', cancelRes.status === 'canceled');
-  const avFree = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: FREE, menuId: 'shampoo', dogId });
+  const avFree = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: FREE, serviceId: 'sham', dogId });
   check('キャンセル後は 09:00 が空きに戻る', avFree.slots.includes('09:00'), JSON.stringify(avFree.slots));
 
   console.log('\n# §11 手動マージ（重複顧客の統合）');

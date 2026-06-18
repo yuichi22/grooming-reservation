@@ -64,9 +64,23 @@ async function main() {
   await base.collection('staff').doc(adminUid).set({ name: '管理者', role: 'admin', active: true, firebaseUid: adminUid });
   await base.collection('staff').doc(trimmerUid).set({ name: '担当トリマー', role: 'trimmer', active: true, firebaseUid: trimmerUid });
 
-  console.log('# menus');
-  await base.collection('menus').doc('trim').set({ name: 'カット', defaultDurationMin: 80, fixedDuration: false, price: 5500, active: true });
-  await base.collection('menus').doc('shampoo').set({ name: 'シャンプー', defaultDurationMin: 50, fixedDuration: true, price: 3300, active: true });
+  console.log('# breeds / services / pricing');
+  // 犬種マスタ
+  await base.collection('breeds').doc('toy').set({ name: 'トイプードル', active: true });
+  await base.collection('breeds').doc('shiba').set({ name: '柴犬', active: true });
+  // サービスマスタ
+  await base.collection('services').doc('cut').set({ name: 'カット', active: true });
+  await base.collection('services').doc('shampoo').set({ name: 'シャンプー', active: true });
+  // 料金表（犬種×サービス → 金額・所要時間）
+  const cells = [
+    ['toy', 'cut', 6000, 90],
+    ['toy', 'shampoo', 3300, 50],
+    ['shiba', 'cut', 7000, 110],
+    ['shiba', 'shampoo', 3800, 60],
+  ];
+  for (const [breedId, serviceId, price, durationMin] of cells) {
+    await base.collection('pricing').doc(`${breedId}__${serviceId}`).set({ breedId, serviceId, price, durationMin, active: true });
+  }
 
   console.log('\n=== SEED DONE ===');
   console.log(`super:   super@groomhaus.dev / ${PW}  (uid ${superUid})`);

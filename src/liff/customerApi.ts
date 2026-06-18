@@ -2,10 +2,18 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
 
+export interface PriceCell {
+  breedId: string;
+  serviceId: string;
+  price: number;
+  durationMin: number;
+}
 export interface BookingOptions {
-  menus: { id: string; name: string; defaultDurationMin: number; fixedDuration: boolean; price: number }[];
+  services: { id: string; name: string }[];
+  breeds: { id: string; name: string }[];
   staff: { id: string; name: string }[];
-  dogs: { id: string; name: string; confirmedDurationMin: number | null }[];
+  dogs: { id: string; name: string; breedId: string | null; confirmedDurationMin: number | null }[];
+  pricing: PriceCell[];
 }
 
 export const customerSession = httpsCallable<
@@ -20,13 +28,13 @@ export const getBookingOptions = httpsCallable<
 >(functions, 'getBookingOptions');
 
 export const registerDog = httpsCallable<
-  { tenantId: string; accessToken: string; customerId: string; name: string; breed?: string },
+  { tenantId: string; accessToken: string; customerId: string; name: string; breedId?: string },
   { dogId: string }
 >(functions, 'registerDog');
 
 export const getAvailability = httpsCallable<
-  { tenantId: string; accessToken: string; date: string; menuId: string; dogId?: string; staffId?: string },
-  { slots: string[]; durationMin: number; bufferMin: number }
+  { tenantId: string; accessToken: string; date: string; serviceId: string; dogId?: string; staffId?: string },
+  { slots: string[]; durationMin: number; bufferMin: number; price: number | null; closed?: boolean }
 >(functions, 'getAvailability');
 
 export const cancelBookingByCustomer = httpsCallable<
@@ -40,7 +48,7 @@ export const createBooking = httpsCallable<
     accessToken: string;
     customerId: string;
     dogId: string;
-    menuId: string;
+    serviceId: string;
     date: string;
     startTime: string;
     staffId?: string;

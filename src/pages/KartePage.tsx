@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore';
 import { useAuth } from '../auth/AuthContext';
-import { dogsCol } from '../lib/firestore';
+import { breedsCol, dogsCol } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
-import type { Dog } from '../lib/types';
+import type { Breed, Dog } from '../lib/types';
 
 export default function KartePage() {
   const { claims } = useAuth();
@@ -15,9 +15,11 @@ export default function KartePage() {
 
 function KarteInner({ tenantId }: { tenantId: string }) {
   const { data: dogs, loading } = useCollection<Dog>(dogsCol(tenantId), [tenantId]);
+  const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
+  const breedName = useMemo(() => new Map(breeds.map((b) => [b.id, b.name])), [breeds]);
 
   const [name, setName] = useState('');
-  const [breed, setBreed] = useState('');
+  const [breedId, setBreedId] = useState('');
   const [customerId, setCustomerId] = useState('');
 
   async function onAdd(e: FormEvent) {
@@ -26,11 +28,11 @@ function KarteInner({ tenantId }: { tenantId: string }) {
     await addDoc(dogsCol(tenantId), {
       customerId: customerId.trim(),
       name: name.trim(),
-      breed: breed.trim() || undefined,
+      breedId: breedId || null,
       confirmedDurationMin: null, // 初回は未確定 (§7)
     } as Omit<Dog, 'id'> as Dog);
     setName('');
-    setBreed('');
+    setBreedId('');
     setCustomerId('');
   }
 
@@ -39,7 +41,14 @@ function KarteInner({ tenantId }: { tenantId: string }) {
       <h1>カルテ（犬）</h1>
       <form className="row-form" onSubmit={onAdd}>
         <input placeholder="犬の名前" value={name} onChange={(e) => setName(e.target.value)} />
-        <input placeholder="犬種" value={breed} onChange={(e) => setBreed(e.target.value)} />
+        <select value={breedId} onChange={(e) => setBreedId(e.target.value)}>
+          <option value="">犬種を選択</option>
+          {breeds.filter((b) => b.active).map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
         <input placeholder="顧客ID" value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
         <button type="submit">追加</button>
       </form>
@@ -60,7 +69,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
             {dogs.map((d) => (
               <tr key={d.id}>
                 <td>{d.name}</td>
-                <td>{d.breed ?? '—'}</td>
+                <td>{(d.breedId && breedName.get(d.breedId)) || d.breed || '—'}</td>
                 <td>{d.confirmedDurationMin != null ? `${d.confirmedDurationMin}分` : '未確定'}</td>
                 <td>
                   <Link to={`/karte/${d.id}`}>開く</Link>

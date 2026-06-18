@@ -11,10 +11,12 @@ import {
 import { db } from '../firebaseStaff';
 import type {
   Booking,
+  Breed,
   Closure,
   Customer,
   Dog,
-  Menu,
+  PriceEntry,
+  Service,
   ServiceRecord,
   Staff,
   Tenant,
@@ -38,7 +40,9 @@ function converter<T extends { id: string }>(): FirestoreDataConverter<T> {
 const tenantConverter = converter<Tenant>();
 const closureConverter = converter<Closure>();
 const staffConverter = converter<Staff>();
-const menuConverter = converter<Menu>();
+const breedConverter = converter<Breed>();
+const serviceConverter = converter<Service>();
+const pricingConverter = converter<PriceEntry>();
 const customerConverter = converter<Customer>();
 const dogConverter = converter<Dog>();
 const recordConverter = converter<ServiceRecord>();
@@ -52,8 +56,14 @@ export const tenantDoc = (tenantId: string) => doc(tenantsCol(), tenantId);
 export const staffCol = (tenantId: string): CollectionReference<Staff> =>
   collection(db, 'tenants', tenantId, 'staff').withConverter(staffConverter);
 
-export const menusCol = (tenantId: string): CollectionReference<Menu> =>
-  collection(db, 'tenants', tenantId, 'menus').withConverter(menuConverter);
+export const breedsCol = (tenantId: string): CollectionReference<Breed> =>
+  collection(db, 'tenants', tenantId, 'breeds').withConverter(breedConverter);
+
+export const servicesCol = (tenantId: string): CollectionReference<Service> =>
+  collection(db, 'tenants', tenantId, 'services').withConverter(serviceConverter);
+
+export const pricingCol = (tenantId: string): CollectionReference<PriceEntry> =>
+  collection(db, 'tenants', tenantId, 'pricing').withConverter(pricingConverter);
 
 export const customersCol = (tenantId: string): CollectionReference<Customer> =>
   collection(db, 'tenants', tenantId, 'customers').withConverter(customerConverter);

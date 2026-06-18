@@ -49,8 +49,16 @@ service cloud.firestore {
         allow write: if isSuperAdmin() || isAdmin(tenantId);
       }
 
-      // メニュー: 閲覧は所属スタッフ、変更は admin のみ
-      match /menus/{menuId} {
+      // 犬種マスタ / サービスマスタ / 料金表: 閲覧は所属スタッフ、変更は admin のみ
+      match /breeds/{breedId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+      match /services/{serviceId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+      match /pricing/{priceId} {
         allow read: if isSuperAdmin() || isStaff(tenantId);
         allow write: if isSuperAdmin() || isAdmin(tenantId);
       }

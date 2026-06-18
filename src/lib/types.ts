@@ -80,14 +80,30 @@ export interface Staff {
   firebaseUid: string;
 }
 
-/** tenants/{tenantId}/menus/{menuId} (§5) */
-export interface Menu {
+/** tenants/{tenantId}/breeds/{breedId} — 犬種マスタ */
+export interface Breed {
   id: string;
   name: string;
-  defaultDurationMin: number;
-  /** true なら犬ごとのオーバーライドを無視し defaultDurationMin 固定 (例: シャンプー=50分) */
-  fixedDuration: boolean;
+  active: boolean;
+}
+
+/** tenants/{tenantId}/services/{serviceId} — サービスメニュー マスタ */
+export interface Service {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+/**
+ * tenants/{tenantId}/pricing/{breedId__serviceId} — 料金表（犬種×サービス）。
+ * 金額と所要時間をセルごとに保持。
+ */
+export interface PriceEntry {
+  id: string; // = `${breedId}__${serviceId}`
+  breedId: string;
+  serviceId: string;
   price: number;
+  durationMin: number;
   active: boolean;
 }
 
@@ -113,6 +129,9 @@ export interface Dog {
   id: string;
   customerId: string;
   name: string;
+  /** 犬種マスタ(breeds)への参照。料金表の引当に使う */
+  breedId?: string | null;
+  /** 旧: 自由入力の犬種名（表示フォールバック） */
   breed?: string;
   size?: string;
   notes?: string;
@@ -128,7 +147,7 @@ export interface ServiceRecord {
   id: string;
   bookingId: string;
   date: DateStr;
-  menuId: string;
+  serviceId: string;
   staffId: string;
   durationMin: number;
   price: number;
@@ -140,7 +159,7 @@ export interface Booking {
   id: string;
   dogId: string;
   customerId: string;
-  menuId: string;
+  serviceId: string;
   /** 指名なしは null。確定時に割当 (§8) */
   staffId: string | null;
   date: DateStr;

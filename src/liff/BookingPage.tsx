@@ -28,10 +28,11 @@ export default function BookingPage() {
 
   // 予約選択
   const [dogId, setDogId] = useState('');
-  const [menuId, setMenuId] = useState('');
+  const [serviceId, setServiceId] = useState('');
   const [staffId, setStaffId] = useState(''); // '' = 指名なし (§8)
   const [date, setDate] = useState(todayStr());
   const [slots, setSlots] = useState<string[] | null>(null);
+  const [info, setInfo] = useState<{ durationMin: number; price: number | null } | null>(null);
   const [startTime, setStartTime] = useState('');
   const [confirmation, setConfirmation] = useState<{ startTime: string; slotEnd: string } | null>(null);
 
@@ -85,9 +86,9 @@ export default function BookingPage() {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const name = (form.elements.namedItem('dogName') as HTMLInputElement).value.trim();
-    const breed = (form.elements.namedItem('breed') as HTMLInputElement).value.trim();
+    const breedId = (form.elements.namedItem('breedId') as HTMLSelectElement).value;
     if (!name) return;
-    const res = await registerDog({ tenantId, accessToken: getAccessToken(), customerId, name, breed });
+    const res = await registerDog({ tenantId, accessToken: getAccessToken(), customerId, name, breedId: breedId || undefined });
     await loadOptions(customerId);
     setDogId(res.data.dogId);
     form.reset();
@@ -96,15 +97,17 @@ export default function BookingPage() {
   async function fetchSlots() {
     setSlots(null);
     setStartTime('');
+    setInfo(null);
     const res = await getAvailability({
       tenantId,
       accessToken: getAccessToken(),
       date,
-      menuId,
+      serviceId,
       dogId: dogId || undefined,
       staffId: staffId || undefined,
     });
     setSlots(res.data.slots);
+    setInfo({ durationMin: res.data.durationMin, price: res.data.price });
   }
 
   async function confirm() {
@@ -113,7 +116,7 @@ export default function BookingPage() {
       accessToken: getAccessToken(),
       customerId,
       dogId,
-      menuId,
+      serviceId,
       date,
       startTime,
       staffId: staffId || undefined,
@@ -157,7 +160,11 @@ export default function BookingPage() {
     );
   }
 
-  const selectedMenu = options?.menus.find((m) => m.id === menuId);
+  const selectedDog = options?.dogs.find((d) => d.id === dogId);
+  const breedName = (id: string | null) => options?.breeds.find((b) => b.id === id)?.name;
+  // 選択中の犬の犬種 × サービス の料金（料金表から）
+  const priceFor = (svcId: string) =>
+    options?.pricing.find((p) => p.breedId === selectedDog?.breedId && p.serviceId === svcId) ?? null;
 
   return (
     <Center>
@@ -174,7 +181,7 @@ export default function BookingPage() {
             {options?.dogs.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
-                {d.confirmedDurationMin != null ? `（確定 ${d.confirmedDurationMin}分）` : '（初回）'}
+                {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
               </option>
             ))}
           </select>
@@ -184,23 +191,38 @@ export default function BookingPage() {
         <summary className="muted">＋ ワンちゃんを登録</summary>
         <form className="row-form" onSubmit={addDog}>
           <input name="dogName" placeholder="名前" required />
-          <input name="breed" placeholder="犬種（任意）" />
+          <select name="breedId" defaultValue="">
+            <option value="">犬種を選択</option>
+            {options?.breeds.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
           <button type="submit">登録</button>
         </form>
       </details>
 
       <label>
-        メニュー
-        <select value={menuId} onChange={(e) => setMenuId(e.target.value)}>
+        メニュー（サービス）
+        <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
           <option value="">選択してください</option>
-          {options?.menus.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}（¥{m.price.toLocaleString()}
-              {m.fixedDuration ? ' / 固定時間' : ''}）
-            </option>
-          ))}
+          {options?.services.map((s) => {
+            const cell = priceFor(s.id);
+            return (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {cell ? `（¥${cell.price.toLocaleString()} / ${cell.durationMin}分）` : ''}
+              </option>
+            );
+          })}
         </select>
       </label>
+      {selectedDog && serviceId && !priceFor(serviceId) && (
+        <p className="muted">
+          ※ {breedName(selectedDog.breedId) ?? 'この犬種'} のこのメニューは料金未設定です。店舗にご確認ください。
+        </p>
+      )}
 
       <label>
         指名（任意 §8）
@@ -220,12 +242,12 @@ export default function BookingPage() {
       </label>
 
       <div style={{ marginTop: 12 }}>
-        <button type="button" onClick={fetchSlots} disabled={!menuId}>
+        <button type="button" onClick={fetchSlots} disabled={!serviceId || !dogId}>
           空き時間を見る
         </button>
-        {selectedMenu?.fixedDuration && (
+        {info && (
           <span className="muted" style={{ marginLeft: 8 }}>
-            固定時間メニュー（{selectedMenu.defaultDurationMin}分）
+            所要 {info.durationMin}分{info.price != null ? ` / ¥${info.price.toLocaleString()}` : ''}
           </span>
         )}
       </div>
