@@ -91,6 +91,8 @@ export interface Breed {
   active: boolean;
   /** 料金表での犬種カードの並び順（小さいほど上） */
   order?: number;
+  /** 犬種の標準作業時間（分）。カルテで確定時間の基準に使う */
+  standardDurationMin?: number;
 }
 
 /** tenants/{tenantId}/services/{serviceId} — サービスメニュー マスタ */
@@ -144,8 +146,12 @@ export interface Dog {
   size?: string;
   notes?: string;
   allergies?: string;
-  /** 確定作業時間。null なら未確定（メニュー標準を使う）(§7) */
+  /** 確定作業時間。null なら未確定（メニュー標準を使う）(§7)。= 犬種標準 + 個別加算 */
   confirmedDurationMin: number | null;
+  /** 個別加算時間（分）。難しい子などの上乗せ。確定時間 = 犬種標準 + これ */
+  additionalDurationMin?: number | null;
+  /** 基本料金。確定料金 = 基本料金 + 加算料金（加算料金は単価×加算時間を50円切上げ） */
+  basePrice?: number | null;
   confirmedPrice?: number | null;
   lastServiceAt?: IsoStr | null;
 }

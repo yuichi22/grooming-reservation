@@ -629,6 +629,41 @@ tr.row-link td.chevron-cell {
   background: #f7f9fa;
 }
 
+/* ---------- カルテ: 時間・料金の自動計算グリッド ---------- */
+.calc-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 14px;
+  align-items: center;
+}
+.calc-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.calc-val {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.calc-total {
+  font-weight: 800;
+  color: var(--brand-dark);
+  font-size: 1.1rem;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--brand-dark);
+  text-decoration: underline;
+  padding: 0;
+  min-height: auto;
+  font-weight: 600;
+}
+.link-btn:hover {
+  background: none;
+}
+
 /* ---------- LIFF (顧客) ---------- */
 .liff-shell {
   max-width: 480px;

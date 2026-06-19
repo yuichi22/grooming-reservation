@@ -27,21 +27,28 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const { data: customer } = useDocument<Customer>(doc(customersCol(tenantId), customerId), [tenantId, customerId]);
   const { data: customers } = useCollection<Customer>(customersCol(tenantId), [tenantId]);
 
-  const [form, setForm] = useState<Partial<Dog>>({});
+  const [form, setForm] = useState<{ breedId: string | null; notes: string; allergies: string }>({
+    breedId: null,
+    notes: '',
+    allergies: '',
+  });
+  const [additionalMin, setAdditionalMin] = useState(0);
+  const [basePrice, setBasePrice] = useState(0);
+  const [chargeAuto, setChargeAuto] = useState(true); // 加算料金を自動計算に追従させるか
+  const [chargeManual, setChargeManual] = useState(0); // 手入力した加算料金
   const [msg, setMsg] = useState<string | null>(null);
   const [cust, setCust] = useState({ ownerName: '', phone: '' });
   const [custMsg, setCustMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (dog) {
-      setForm({
-        breedId: dog.breedId ?? null,
-        notes: dog.notes ?? '',
-        allergies: dog.allergies ?? '',
-        confirmedDurationMin: dog.confirmedDurationMin,
-        confirmedPrice: dog.confirmedPrice ?? null,
-      });
-    }
+    if (!dog) return;
+    setForm({ breedId: dog.breedId ?? null, notes: dog.notes ?? '', allergies: dog.allergies ?? '' });
+    const base = dog.basePrice ?? dog.confirmedPrice ?? 0;
+    setBasePrice(base);
+    setAdditionalMin(dog.additionalDurationMin ?? 0);
+    // 既に basePrice を保存済みなら、保存時の確定料金を保持（手入力扱い）。新規は自動。
+    setChargeAuto(dog.basePrice == null);
+    setChargeManual(Math.max(0, (dog.confirmedPrice ?? base) - base));
   }, [dog]);
 
   useEffect(() => {
@@ -51,6 +58,15 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   if (loading) return <p>読み込み中…</p>;
   if (!dog) return <p className="error">カルテが見つかりません。</p>;
 
+  const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
+  const selectedBreed = breeds.find((b) => b.id === form.breedId);
+  const standardMin = selectedBreed?.standardDurationMin ?? 0;
+  const totalMin = standardMin + additionalMin;
+  const unitPerMin = standardMin > 0 ? basePrice / standardMin : 0;
+  const autoCharge = standardMin > 0 ? ceil50(unitPerMin * additionalMin) : 0;
+  const effectiveCharge = chargeAuto ? autoCharge : chargeManual;
+  const totalPrice = basePrice + effectiveCharge;
+
   async function saveDog(e: FormEvent) {
     e.preventDefault();
     setMsg(null);
@@ -58,8 +74,10 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
       breedId: form.breedId ?? null,
       notes: form.notes ?? '',
       allergies: form.allergies ?? '',
-      confirmedDurationMin: form.confirmedDurationMin ?? null,
-      confirmedPrice: form.confirmedPrice ?? null,
+      additionalDurationMin: additionalMin,
+      basePrice,
+      confirmedDurationMin: totalMin > 0 ? totalMin : null,
+      confirmedPrice: totalPrice > 0 ? totalPrice : null,
     });
     setMsg('保存しました');
   }
@@ -138,37 +156,95 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
             {breeds.filter((b) => b.active).map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
+                {b.standardDurationMin != null ? `（標準${b.standardDurationMin}分）` : ''}
               </option>
             ))}
           </select>
         </label>
-        <label className="inline">
-          確定作業時間(分・空なら未確定) (§7)
-          <input
-            type="number"
-            min={0}
-            step={5}
-            value={form.confirmedDurationMin ?? ''}
-            onChange={(e) =>
-              setForm((f) => ({
-                ...f,
-                confirmedDurationMin: e.target.value === '' ? null : Number(e.target.value),
-              }))
-            }
-          />
-        </label>
-        <label className="inline">
-          確定料金
-          <input
-            type="number"
-            min={0}
-            step={100}
-            value={form.confirmedPrice ?? ''}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, confirmedPrice: e.target.value === '' ? null : Number(e.target.value) }))
-            }
-          />
-        </label>
+
+        <fieldset>
+          <legend>作業時間（§6 カレンダー占有 / §7）</legend>
+          <div className="calc-grid">
+            <span className="calc-label">標準作業時間（犬種）</span>
+            <span className="calc-val">
+              {standardMin > 0 ? `${standardMin}分` : <span className="muted">犬種マスタに未設定</span>}
+            </span>
+
+            <label className="calc-label" htmlFor="addmin">個別加算時間</label>
+            <span className="calc-val">
+              ＋
+              <input
+                id="addmin"
+                type="number"
+                min={0}
+                step={5}
+                value={additionalMin}
+                onChange={(e) => setAdditionalMin(Math.max(0, Number(e.target.value)))}
+                style={{ width: 80 }}
+              />
+              分
+            </span>
+
+            <span className="calc-label">確定作業時間</span>
+            <span className="calc-val calc-total">{totalMin > 0 ? `${totalMin}分` : '未確定'}</span>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>料金</legend>
+          <div className="calc-grid">
+            <label className="calc-label" htmlFor="baseprice">基本料金</label>
+            <span className="calc-val">
+              ¥
+              <input
+                id="baseprice"
+                type="number"
+                min={0}
+                step={100}
+                value={basePrice}
+                onChange={(e) => setBasePrice(Math.max(0, Number(e.target.value)))}
+                style={{ width: 110 }}
+              />
+            </span>
+
+            <span className="calc-label">
+              加算料金
+              <span className="muted" style={{ fontWeight: 400 }}>
+                {standardMin > 0
+                  ? `（単価¥${Math.round(unitPerMin).toLocaleString()}/分 × ${additionalMin}分 → 50円切上 ¥${autoCharge.toLocaleString()}）`
+                  : '（犬種の標準時間が必要）'}
+              </span>
+            </span>
+            <span className="calc-val">
+              ¥
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={effectiveCharge}
+                onChange={(e) => {
+                  setChargeManual(Math.max(0, Number(e.target.value)));
+                  setChargeAuto(false);
+                }}
+                style={{ width: 110 }}
+              />
+              {!chargeAuto && (
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => setChargeAuto(true)}
+                  style={{ marginLeft: 8 }}
+                >
+                  自動計算に戻す
+                </button>
+              )}
+            </span>
+
+            <span className="calc-label">確定料金</span>
+            <span className="calc-val calc-total">¥{totalPrice.toLocaleString()}</span>
+          </div>
+        </fieldset>
+
         <label>
           メモ（噛み癖・サイズ等）
           <textarea

@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "mobile-order",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/mobile_order-app", "run", "dev", "--", "--port", "5174", "--strictPort"],
+      "port": 5174
     }
   ]
 }
