@@ -35,8 +35,8 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     allergies: '',
   });
   const [additionalMin, setAdditionalMin] = useState(0);
-  const [baseServiceId, setBaseServiceId] = useState(''); // 確認用の基準サービス（料金表の引当先）
-  const [optAdj, setOptAdj] = useState<Record<string, number>>({}); // オプション別の個別追加時間
+  const [optAdj, setOptAdj] = useState<Record<string, number>>({}); // オプション別の個別追加(超過)時間
+  const [optPick, setOptPick] = useState(''); // 追加するオプションの選択
   const [msg, setMsg] = useState<string | null>(null);
   const [cust, setCust] = useState({ ownerName: '', phone: '' });
   const [custMsg, setCustMsg] = useState<string | null>(null);
@@ -56,18 +56,20 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   if (!dog) return <p className="error">カルテが見つかりません。</p>;
 
   const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
-  // 基準サービス: 未選択なら、この犬種に料金表があるサービスの先頭を既定にする
   const cellFor = (svcId: string) =>
     pricing.find((p) => p.breedId === form.breedId && p.serviceId === svcId) ?? null;
   const activeServices = services.filter((s) => s.active);
-  const effBaseServiceId = baseServiceId || activeServices.find((s) => cellFor(s.id))?.id || '';
-  const cell = effBaseServiceId ? cellFor(effBaseServiceId) : null;
-  const baseTime = cell?.durationMin ?? null;
-  const baseStd = cell?.price ?? null;
-  const unitPerMin = baseTime && baseStd != null ? baseStd / baseTime : 0;
-  const addCharge = baseTime && baseStd != null ? ceil50(unitPerMin * additionalMin) : 0;
-  const totalMin = baseTime != null ? baseTime + additionalMin : null;
-  const totalPrice = baseStd != null ? baseStd + addCharge : null;
+  // この犬種に料金表があるサービス（時間・料金が割り出せるもの）
+  const pricedServices = activeServices.filter((s) => cellFor(s.id));
+  // 確定（個別加算込み）。料金は 標準 + 単価×個別加算 を50円切上げ
+  const confirmTime = (durationMin: number) => durationMin + additionalMin;
+  const confirmPrice = (price: number, durationMin: number) =>
+    price + ceil50((durationMin > 0 ? price / durationMin : 0) * additionalMin);
+  // オプション: 個別追加時間を設定済み（optAdj にキーがある）ものだけ表示
+  const activeOptions = optionItems.filter((o) => o.active);
+  const setOptionIds = Object.keys(optAdj);
+  const shownOptions = activeOptions.filter((o) => setOptionIds.includes(o.id));
+  const addableOptions = activeOptions.filter((o) => !setOptionIds.includes(o.id));
 
   async function saveDog(e: FormEvent) {
     e.preventDefault();
@@ -160,78 +162,69 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
             ))}
           </select>
         </label>
-        <label className="inline">
-          基準サービス（料金表の引当先）
-          <select value={effBaseServiceId} onChange={(e) => setBaseServiceId(e.target.value)}>
-            <option value="">選択</option>
-            {activeServices.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {cellFor(s.id) ? '' : '（料金表未設定）'}
-              </option>
-            ))}
-          </select>
-        </label>
-
         <fieldset>
-          <legend>作業時間（§6 カレンダー占有）</legend>
-          <div className="calc-grid">
-            <span className="calc-label">標準作業時間（犬種×サービス）</span>
-            <span className="calc-val">
-              {baseTime != null ? `${baseTime}分` : <span className="muted">料金表に未設定</span>}
-            </span>
-
-            <label className="calc-label" htmlFor="addmin">個別加算時間</label>
-            <span className="calc-val">
-              ＋
-              <input
-                id="addmin"
-                type="number"
-                min={0}
-                step={5}
-                value={additionalMin}
-                onChange={(e) => setAdditionalMin(Math.max(0, Number(e.target.value)))}
-                style={{ width: 80 }}
-              />
-              分
-            </span>
-
-            <span className="calc-label">確定作業時間</span>
-            <span className="calc-val calc-total">{totalMin != null ? `${totalMin}分` : '未確定'}</span>
-          </div>
+          <legend>作業時間・料金（料金表 犬種×サービス）</legend>
+          <label className="inline" htmlFor="addmin">
+            個別加算時間（この子だけの上乗せ）
+            <input
+              id="addmin"
+              type="number"
+              min={0}
+              step={5}
+              value={additionalMin}
+              onChange={(e) => setAdditionalMin(Math.max(0, Number(e.target.value)))}
+              style={{ width: 80 }}
+            />
+            分
+          </label>
+          {form.breedId == null ? (
+            <p className="muted">犬種を選ぶと、サービスごとの時間・料金が表示されます。</p>
+          ) : pricedServices.length === 0 ? (
+            <p className="muted">この犬種の料金表が未設定です。メニューの料金表で登録してください。</p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>サービス</th>
+                    <th>標準時間</th>
+                    <th>標準料金</th>
+                    <th>確定時間</th>
+                    <th>確定料金</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pricedServices.map((s) => {
+                    const cell = cellFor(s.id)!;
+                    return (
+                      <tr key={s.id}>
+                        <td>{s.name}</td>
+                        <td className="muted">{cell.durationMin}分</td>
+                        <td className="muted">¥{cell.price.toLocaleString()}</td>
+                        <td>
+                          <strong>{confirmTime(cell.durationMin)}分</strong>
+                        </td>
+                        <td>
+                          <strong>¥{confirmPrice(cell.price, cell.durationMin).toLocaleString()}</strong>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </fieldset>
 
-        <fieldset>
-          <legend>料金</legend>
-          <div className="calc-grid">
-            <span className="calc-label">標準料金（犬種×サービス）</span>
-            <span className="calc-val">
-              {baseStd != null ? `¥${baseStd.toLocaleString()}` : <span className="muted">料金表に未設定</span>}
-            </span>
-
-            <span className="calc-label">
-              加算料金
-              <span className="muted" style={{ fontWeight: 400 }}>
-                {baseTime && baseStd != null
-                  ? `（単価¥${Math.round(unitPerMin).toLocaleString()}/分 × ${additionalMin}分 → 50円切上）`
-                  : '（料金表が必要）'}
-              </span>
-            </span>
-            <span className="calc-val">{baseStd != null ? `¥${addCharge.toLocaleString()}` : '—'}</span>
-
-            <span className="calc-label">確定料金</span>
-            <span className="calc-val calc-total">{totalPrice != null ? `¥${totalPrice.toLocaleString()}` : '—'}</span>
-          </div>
-        </fieldset>
-
-        {optionItems.filter((o) => o.active).length > 0 && (
+        {activeOptions.length > 0 && (
           <fieldset>
-            <legend>オプション別 個別追加時間</legend>
-            <p className="muted">この子だけ余計にかかる分。予約でそのオプションを選んだとき所要時間に加算されます。</p>
-            <div className="calc-grid">
-              {optionItems
-                .filter((o) => o.active)
-                .map((o) => {
+            <legend>オプション超過時間の設定</legend>
+            <p className="muted">
+              この子だけ余計にかかるオプションを選んで時間を設定。設定したものだけ表示され、未設定は定価扱いです。
+            </p>
+            {shownOptions.length > 0 && (
+              <div className="calc-grid">
+                {shownOptions.map((o) => {
                   const add = optAdj[o.id] ?? 0;
                   const unit = o.durationMin > 0 ? o.price / o.durationMin : 0;
                   const effPrice = o.price + ceil50(unit * add);
@@ -260,11 +253,47 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
                         <span className="muted" style={{ marginLeft: 8 }}>
                           → 合計 {o.durationMin + add}分 / ¥{effPrice.toLocaleString()}
                         </span>
+                        <button
+                          type="button"
+                          className="link-btn"
+                          style={{ marginLeft: 10 }}
+                          onClick={() => setOptAdj((m) => {
+                            const n = { ...m };
+                            delete n[o.id];
+                            return n;
+                          })}
+                        >
+                          削除
+                        </button>
                       </span>
                     </Fragment>
                   );
                 })}
-            </div>
+              </div>
+            )}
+            {addableOptions.length > 0 && (
+              <div className="row-form" style={{ marginTop: 10 }}>
+                <select value={optPick} onChange={(e) => setOptPick(e.target.value)}>
+                  <option value="">オプションを選択</option>
+                  {addableOptions.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!optPick}
+                  onClick={() => {
+                    if (!optPick) return;
+                    setOptAdj((m) => ({ ...m, [optPick]: 0 }));
+                    setOptPick('');
+                  }}
+                >
+                  ＋ 時間設定を追加
+                </button>
+              </div>
+            )}
           </fieldset>
         )}
 

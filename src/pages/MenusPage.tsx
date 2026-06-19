@@ -83,8 +83,8 @@ function PricingTab({
 
   const [breedId, setBreedId] = useState('');
   const [serviceId, setServiceId] = useState('');
-  const [price, setPrice] = useState(5000);
-  const [durationMin, setDuration] = useState(60);
+  const [price, setPrice] = useState('');
+  const [durationMin, setDuration] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
 
   async function add(e: FormEvent) {
@@ -93,19 +93,25 @@ function PricingTab({
       setMsg('犬種とサービスを選んでください');
       return;
     }
+    if (price === '' || durationMin === '') {
+      setMsg('料金と作業時間を入力してください');
+      return;
+    }
     const id = `${breedId}__${serviceId}`;
     const maxOrder = sorted.reduce((m, p) => Math.max(m, p.order ?? 0), 0);
     await setDoc(doc(pricingCol(tenantId), id), {
       breedId,
       serviceId,
-      price,
-      durationMin,
+      price: Number(price),
+      durationMin: Number(durationMin),
       active: true,
       order: maxOrder + 1,
     } as Omit<PriceEntry, 'id'> as PriceEntry);
     setMsg(null);
     setBreedId('');
     setServiceId('');
+    setPrice('');
+    setDuration('');
   }
 
   // 犬種ごとにグループ化。カードの並びは犬種(breed.order)順。
@@ -152,8 +158,22 @@ function PricingTab({
             </option>
           ))}
         </select>
-        <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
-        <input type="number" min={5} step={5} value={durationMin} onChange={(e) => setDuration(Number(e.target.value))} />
+        <input
+          type="number"
+          min={0}
+          step={100}
+          placeholder="料金"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+        />
+        <input
+          type="number"
+          min={5}
+          step={5}
+          placeholder="作業時間"
+          value={durationMin}
+          onChange={(e) => setDuration(e.target.value)}
+        />
         <button type="submit">＋ 追加</button>
       </form>
       {msg && <p className="error">{msg}</p>}
@@ -334,16 +354,7 @@ function ServiceMaster({ tenantId, services }: { tenantId: string; services: Ser
             {[...services]
               .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
               .map((s) => (
-                <tr key={s.id}>
-                  <td>{s.name}</td>
-                  <td>{s.active ? '有効' : '無効'}</td>
-                  <td>
-                    <button onClick={() => updateDoc(doc(servicesCol(tenantId), s.id), { active: !s.active })}>
-                      {s.active ? '無効化' : '有効化'}
-                    </button>
-                    <button onClick={() => deleteDoc(doc(servicesCol(tenantId), s.id))}>削除</button>
-                  </td>
-                </tr>
+                <ServiceMasterRow key={s.id} tenantId={tenantId} service={s} />
               ))}
             {services.length === 0 && (
               <tr>
@@ -356,6 +367,46 @@ function ServiceMaster({ tenantId, services }: { tenantId: string; services: Ser
         </table>
       </div>
     </div>
+  );
+}
+
+function ServiceMasterRow({ tenantId, service }: { tenantId: string; service: Service }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(service.name);
+
+  async function save() {
+    if (!name.trim()) return;
+    await updateDoc(doc(servicesCol(tenantId), service.id), { name: name.trim() });
+    setEditing(false);
+  }
+
+  return (
+    <tr>
+      <td>
+        {editing ? (
+          <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: 160 }} />
+        ) : (
+          service.name
+        )}
+      </td>
+      <td>{service.active ? '有効' : '無効'}</td>
+      <td>
+        {editing ? (
+          <>
+            <button onClick={save}>保存</button>
+            <button onClick={() => { setName(service.name); setEditing(false); }}>取消</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => setEditing(true)}>編集</button>
+            <button onClick={() => updateDoc(doc(servicesCol(tenantId), service.id), { active: !service.active })}>
+              {service.active ? '無効化' : '有効化'}
+            </button>
+            <button onClick={() => deleteDoc(doc(servicesCol(tenantId), service.id))}>削除</button>
+          </>
+        )}
+      </td>
+    </tr>
   );
 }
 
