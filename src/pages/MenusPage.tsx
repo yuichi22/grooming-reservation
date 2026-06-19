@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { breedsCol, pricingCol, servicesCol, tenantDoc } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import type { Breed, PriceEntry, Service, Tenant } from '../lib/types';
+import type { Breed, PriceEntry, Service, ServiceOption, Tenant } from '../lib/types';
 
 /** 金額を税表示付きで整形（税抜なら税込も併記）。 */
 function priceLabel(price: number, taxMode: 'inclusive' | 'exclusive', taxRate: number): string {
@@ -288,15 +288,137 @@ function MastersTab({ tenantId, breeds, services }: { tenantId: string; breeds: 
   return (
     <>
       <BreedMaster tenantId={tenantId} breeds={breeds} />
-      <NameMaster
-        title="サービスマスタ"
-        items={services}
-        placeholder="例: カット / シャンプー"
-        onAdd={(name) => addDoc(servicesCol(tenantId), { name, active: true } as Omit<Service, 'id'> as Service)}
-        onToggle={(it) => updateDoc(doc(servicesCol(tenantId), it.id), { active: !it.active })}
-        onRemove={(it) => deleteDoc(doc(servicesCol(tenantId), it.id))}
-      />
+      <ServiceMaster tenantId={tenantId} services={services} />
     </>
+  );
+}
+
+/** サービスマスタ: サービスごとにオプション（料金＋所要時間）を設定。 */
+function ServiceMaster({ tenantId, services }: { tenantId: string; services: Service[] }) {
+  const [name, setName] = useState('');
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    await addDoc(servicesCol(tenantId), { name: name.trim(), active: true, options: [] } as Omit<Service, 'id'> as Service);
+    setName('');
+  }
+  return (
+    <div style={{ marginTop: 18 }}>
+      <h2>サービスマスタ</h2>
+      <p className="muted">
+        サービスごとにオプション（料金・追加時間）を設定できます。予約時はサービス＋オプションの合計時間で枠を確保します。
+      </p>
+      <form className="row-form" onSubmit={add}>
+        <input placeholder="例: カット / シャンプー" value={name} onChange={(e) => setName(e.target.value)} />
+        <button type="submit">サービスを追加</button>
+      </form>
+      <div className="svc-master-list">
+        {[...services]
+          .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+          .map((s) => (
+            <ServiceCard key={s.id} tenantId={tenantId} service={s} />
+          ))}
+        {services.length === 0 && <p className="muted">サービス未登録</p>}
+      </div>
+    </div>
+  );
+}
+
+function ServiceCard({ tenantId, service }: { tenantId: string; service: Service }) {
+  const options = service.options ?? [];
+  const [optName, setOptName] = useState('');
+  const [optPrice, setOptPrice] = useState(0);
+  const [optDur, setOptDur] = useState(15);
+
+  async function saveOptions(next: ServiceOption[]) {
+    await updateDoc(doc(servicesCol(tenantId), service.id), { options: next });
+  }
+  async function addOption(e: FormEvent) {
+    e.preventDefault();
+    if (!optName.trim()) return;
+    const opt: ServiceOption = { id: crypto.randomUUID(), name: optName.trim(), price: optPrice, durationMin: optDur };
+    await saveOptions([...options, opt]);
+    setOptName('');
+    setOptPrice(0);
+    setOptDur(15);
+  }
+
+  return (
+    <div className="price-card">
+      <div className="price-card-head">
+        <span className="price-card-title">
+          {service.name}
+          {!service.active && <span className="muted">（無効）</span>}
+        </span>
+        <span className="svc-actions">
+          <button onClick={() => updateDoc(doc(servicesCol(tenantId), service.id), { active: !service.active })}>
+            {service.active ? '無効化' : '有効化'}
+          </button>
+          <button onClick={() => deleteDoc(doc(servicesCol(tenantId), service.id))}>削除</button>
+        </span>
+      </div>
+      <ul className="svc-list">
+        {options.map((o) => (
+          <OptionRow
+            key={o.id}
+            option={o}
+            onSave={(patch) => saveOptions(options.map((x) => (x.id === o.id ? { ...x, ...patch } : x)))}
+            onRemove={() => saveOptions(options.filter((x) => x.id !== o.id))}
+          />
+        ))}
+        {options.length === 0 && <li className="muted">オプションなし</li>}
+      </ul>
+      <form className="row-form" style={{ margin: '10px 14px 14px' }} onSubmit={addOption}>
+        <input placeholder="オプション名" value={optName} onChange={(e) => setOptName(e.target.value)} />
+        <label className="inline">
+          ¥<input type="number" min={0} step={100} value={optPrice} onChange={(e) => setOptPrice(Number(e.target.value))} style={{ width: 90 }} />
+        </label>
+        <label className="inline">
+          +<input type="number" min={0} step={5} value={optDur} onChange={(e) => setOptDur(Number(e.target.value))} style={{ width: 70 }} />分
+        </label>
+        <button type="submit">＋ オプション追加</button>
+      </form>
+    </div>
+  );
+}
+
+function OptionRow({
+  option,
+  onSave,
+  onRemove,
+}: {
+  option: ServiceOption;
+  onSave: (patch: Partial<ServiceOption>) => void;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(option.name);
+  const [price, setPrice] = useState(option.price);
+  const [dur, setDur] = useState(option.durationMin);
+
+  if (editing) {
+    return (
+      <li className="svc-row">
+        <input value={name} onChange={(e) => setName(e.target.value)} style={{ flex: '1 1 120px' }} />
+        <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} style={{ width: 90 }} />
+        <input type="number" min={0} step={5} value={dur} onChange={(e) => setDur(Number(e.target.value))} style={{ width: 70 }} />
+        <span className="svc-actions">
+          <button type="button" onClick={() => { onSave({ name: name.trim(), price, durationMin: dur }); setEditing(false); }}>保存</button>
+          <button type="button" onClick={() => setEditing(false)}>取消</button>
+        </span>
+      </li>
+    );
+  }
+  return (
+    <li className="svc-row">
+      <span className="svc-name">{option.name}</span>
+      <span className="svc-price">¥{option.price.toLocaleString()}</span>
+      <span className="muted">+{option.durationMin}分</span>
+      <span className="svc-actions">
+        <button onClick={() => setEditing(true)}>編集</button>
+        <button onClick={onRemove}>削除</button>
+      </span>
+    </li>
   );
 }
 
@@ -411,69 +533,3 @@ function BreedRow({ tenantId, breed }: { tenantId: string; breed: Breed }) {
   );
 }
 
-type NamedItem = { id: string; name: string; active: boolean };
-
-function NameMaster({
-  title,
-  items,
-  placeholder,
-  onAdd,
-  onToggle,
-  onRemove,
-}: {
-  title: string;
-  items: NamedItem[];
-  placeholder: string;
-  onAdd: (name: string) => Promise<unknown>;
-  onToggle: (it: NamedItem) => Promise<unknown>;
-  onRemove: (it: NamedItem) => Promise<unknown>;
-}) {
-  const [name, setName] = useState('');
-  async function add(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    await onAdd(name.trim());
-    setName('');
-  }
-  return (
-    <div style={{ marginTop: 18 }}>
-      <h2>{title}</h2>
-      <form className="row-form" onSubmit={add}>
-        <input placeholder={placeholder} value={name} onChange={(e) => setName(e.target.value)} />
-        <button type="submit">追加</button>
-      </form>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>名前</th>
-              <th>状態</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...items]
-              .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
-              .map((it) => (
-                <tr key={it.id}>
-                  <td>{it.name}</td>
-                  <td>{it.active ? '有効' : '無効'}</td>
-                  <td>
-                    <button onClick={() => onToggle(it)}>{it.active ? '無効化' : '有効化'}</button>
-                    <button onClick={() => onRemove(it)}>削除</button>
-                  </td>
-                </tr>
-              ))}
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={3} className="muted">
-                  未登録
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}

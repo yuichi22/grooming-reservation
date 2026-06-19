@@ -8,11 +8,23 @@ export interface PriceCell {
   price: number;
   durationMin: number;
 }
+export interface ServiceOption {
+  id: string;
+  name: string;
+  price: number;
+  durationMin: number;
+}
 export interface BookingOptions {
-  services: { id: string; name: string }[];
+  services: { id: string; name: string; options?: ServiceOption[] }[];
   breeds: { id: string; name: string }[];
   staff: { id: string; name: string }[];
-  dogs: { id: string; name: string; breedId: string | null; confirmedDurationMin: number | null }[];
+  dogs: {
+    id: string;
+    name: string;
+    breedId: string | null;
+    confirmedDurationMin: number | null;
+    confirmedPrice: number | null;
+  }[];
   pricing: PriceCell[];
 }
 
@@ -33,7 +45,15 @@ export const registerDog = httpsCallable<
 >(functions, 'registerDog');
 
 export const getAvailability = httpsCallable<
-  { tenantId: string; accessToken: string; date: string; serviceId: string; dogId?: string; staffId?: string },
+  {
+    tenantId: string;
+    accessToken: string;
+    date: string;
+    serviceId: string;
+    dogId?: string;
+    staffId?: string;
+    optionIds?: string[];
+  },
   { slots: string[]; durationMin: number; bufferMin: number; price: number | null; closed?: boolean }
 >(functions, 'getAvailability');
 
@@ -52,6 +72,7 @@ export const createBooking = httpsCallable<
     date: string;
     startTime: string;
     staffId?: string;
+    optionIds?: string[];
   },
   { bookingId: string; staffId: string | null; slotEnd: string }
 >(functions, 'createBooking');

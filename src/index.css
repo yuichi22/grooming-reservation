@@ -629,6 +629,50 @@ tr.row-link td.chevron-cell {
   background: #f7f9fa;
 }
 
+/* サービス設定カードの縦並び */
+.svc-master-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* LIFF: オプション選択 */
+.opt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+.opt-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+.opt-item input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+.opt-item .opt-meta {
+  margin-left: auto;
+  color: var(--brand-dark);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.est-total {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--brand-50);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
 /* ---------- カルテ: 時間・料金の自動計算グリッド ---------- */
 .calc-grid {
   display: grid;

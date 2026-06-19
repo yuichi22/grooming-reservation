@@ -95,11 +95,22 @@ export interface Breed {
   standardDurationMin?: number;
 }
 
+/** サービスのオプション（追加メニュー）。料金と所要時間を持つ。 */
+export interface ServiceOption {
+  id: string;
+  name: string;
+  price: number;
+  /** 追加所要時間（分）。トータル時間に加算しカレンダー占有に反映 */
+  durationMin: number;
+}
+
 /** tenants/{tenantId}/services/{serviceId} — サービスメニュー マスタ */
 export interface Service {
   id: string;
   name: string;
   active: boolean;
+  /** 追加で選べるオプション（料金・時間付き） */
+  options?: ServiceOption[];
 }
 
 /**
@@ -174,6 +185,10 @@ export interface Booking {
   dogId: string;
   customerId: string;
   serviceId: string;
+  /** 選択されたオプションの id（§オプション） */
+  optionIds?: string[];
+  /** 予約時点のオプション内容スナップショット（後の料金表変更に影響されない） */
+  options?: ServiceOption[];
   /** 指名なしは null。確定時に割当 (§8) */
   staffId: string | null;
   date: DateStr;

@@ -168,6 +168,7 @@ const DEFAULT_DURATION_MIN = 60;
 interface DogInfo {
   breedId: string | null;
   confirmedDurationMin: number | null;
+  confirmedPrice: number | null;
   name: string;
 }
 async function loadDog(tenantId: string, dogId?: string): Promise<DogInfo | null> {
@@ -178,7 +179,31 @@ async function loadDog(tenantId: string, dogId?: string): Promise<DogInfo | null
   return {
     breedId: (d.breedId ?? null) as string | null,
     confirmedDurationMin: (d.confirmedDurationMin ?? null) as number | null,
+    confirmedPrice: (d.confirmedPrice ?? null) as number | null,
     name: (d.name as string) ?? 'ワンちゃん',
+  };
+}
+
+interface OptionSnapshot {
+  id: string;
+  name: string;
+  price: number;
+  durationMin: number;
+}
+/** サービスの options から選択分を取り出し、時間・料金を合計する（②トータル時間）。 */
+async function loadSelectedOptions(
+  tenantId: string,
+  serviceId: string,
+  optionIds: string[] | undefined,
+): Promise<{ options: OptionSnapshot[]; durationMin: number; price: number }> {
+  if (!optionIds || optionIds.length === 0) return { options: [], durationMin: 0, price: 0 };
+  const snap = await db.collection('tenants').doc(tenantId).collection('services').doc(serviceId).get();
+  const all = (snap.data()?.options ?? []) as OptionSnapshot[];
+  const picked = all.filter((o) => optionIds.includes(o.id));
+  return {
+    options: picked,
+    durationMin: picked.reduce((s, o) => s + (o.durationMin ?? 0), 0),
+    price: picked.reduce((s, o) => s + (o.price ?? 0), 0),
   };
 }
 
@@ -203,6 +228,11 @@ async function loadPriceCell(tenantId: string, breedId: string | null, serviceId
 /** 実効所要時間: 犬ごとの確定(§7)があればそれ、無ければ料金表セル、無ければ既定。 */
 function effectiveDurationMin(dog: DogInfo | null, cell: PriceCell | null): number {
   return dog?.confirmedDurationMin ?? cell?.durationMin ?? DEFAULT_DURATION_MIN;
+}
+
+/** 実効基本料金: 犬ごとの確定料金があればそれ、無ければ料金表セル。 */
+function effectivePrice(dog: DogInfo | null, cell: PriceCell | null): number | null {
+  return dog?.confirmedPrice ?? cell?.price ?? null;
 }
 
 interface BookingRow {
@@ -295,15 +325,22 @@ export const getAvailability = onCall<{
   serviceId: string;
   dogId?: string;
   staffId?: string;
+  optionIds?: string[];
 }>({ minInstances: minInstancesParam }, async (request) => {
-  const { tenantId, accessToken, date, serviceId, dogId, staffId } = request.data;
+  const { tenantId, accessToken, date, serviceId, dogId, staffId, optionIds } = request.data;
   if (!tenantId || !date || !serviceId) throw new HttpsError('invalid-argument', 'tenantId, date, serviceId required');
   await verifyLineAccessToken(accessToken); // 顧客認証ゲート
 
-  const [settings, dog] = await Promise.all([loadSettings(tenantId), loadDog(tenantId, dogId)]);
+  const [settings, dog, opts] = await Promise.all([
+    loadSettings(tenantId),
+    loadDog(tenantId, dogId),
+    loadSelectedOptions(tenantId, serviceId, optionIds),
+  ]);
   const cell = await loadPriceCell(tenantId, dog?.breedId ?? null, serviceId);
-  const durationMin = effectiveDurationMin(dog, cell);
-  const price = cell?.price ?? null;
+  // ②トータル時間 = カルテ確定作業時間（基準）+ オプション所要時間の合計
+  const durationMin = effectiveDurationMin(dog, cell) + opts.durationMin;
+  const basePrice = effectivePrice(dog, cell);
+  const price = basePrice == null && opts.price === 0 ? null : (basePrice ?? 0) + opts.price;
 
   // 臨時休業/祝日は空きなし (§11)
   if (await isClosedDate(tenantId, date)) {
@@ -358,8 +395,9 @@ export const createBooking = onCall<{
   date: string;
   startTime: string;
   staffId?: string;
+  optionIds?: string[];
 }>({ minInstances: minInstancesParam }, async (request) => {
-  const { tenantId, accessToken, customerId, dogId, serviceId, date, startTime, staffId } = request.data;
+  const { tenantId, accessToken, customerId, dogId, serviceId, date, startTime, staffId, optionIds } = request.data;
   if (!tenantId || !customerId || !dogId || !serviceId || !date || !startTime) {
     throw new HttpsError('invalid-argument', 'missing required fields');
   }
@@ -375,9 +413,14 @@ export const createBooking = onCall<{
     throw new HttpsError('failed-precondition', 'the salon is closed on this date');
   }
 
-  const [settings, dog] = await Promise.all([loadSettings(tenantId), loadDog(tenantId, dogId)]);
+  const [settings, dog, opts] = await Promise.all([
+    loadSettings(tenantId),
+    loadDog(tenantId, dogId),
+    loadSelectedOptions(tenantId, serviceId, optionIds),
+  ]);
   const cell = await loadPriceCell(tenantId, dog?.breedId ?? null, serviceId);
-  const durationMin = effectiveDurationMin(dog, cell);
+  // ②トータル時間 = カルテ確定作業時間（基準）+ オプション所要時間
+  const durationMin = effectiveDurationMin(dog, cell) + opts.durationMin;
   const bufferMin = settings.bufferMin;
   const slotEnd = toTimeStr(toMinutes(startTime) + durationMin + bufferMin);
 
@@ -413,6 +456,8 @@ export const createBooking = onCall<{
       dogId,
       customerId,
       serviceId,
+      optionIds: optionIds ?? [],
+      options: opts.options,
       staffId: assigned,
       date,
       startTime,
@@ -445,7 +490,11 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
     base.collection('pricing').get(),
   ]);
   return {
-    services: servicesSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
+    services: servicesSnap.docs.map((d) => ({
+      id: d.id,
+      name: d.data().name,
+      options: (d.data().options ?? []) as OptionSnapshot[],
+    })),
     breeds: breedsSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
     staff: staffSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
     dogs: dogsSnap.docs.map((d) => ({
@@ -453,6 +502,7 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
       name: d.data().name,
       breedId: (d.data().breedId ?? null) as string | null,
       confirmedDurationMin: (d.data().confirmedDurationMin ?? null) as number | null,
+      confirmedPrice: (d.data().confirmedPrice ?? null) as number | null,
     })),
     // 料金表: breedId×serviceId → {price, durationMin}。クライアントで金額表示に使う。
     pricing: pricingSnap.docs.map((d) => {

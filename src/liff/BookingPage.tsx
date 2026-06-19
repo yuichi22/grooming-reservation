@@ -29,6 +29,7 @@ export default function BookingPage() {
   // 予約選択
   const [dogId, setDogId] = useState('');
   const [serviceId, setServiceId] = useState('');
+  const [optionIds, setOptionIds] = useState<string[]>([]);
   const [staffId, setStaffId] = useState(''); // '' = 指名なし (§8)
   const [date, setDate] = useState(todayStr());
   const [slots, setSlots] = useState<string[] | null>(null);
@@ -105,6 +106,7 @@ export default function BookingPage() {
       serviceId,
       dogId: dogId || undefined,
       staffId: staffId || undefined,
+      optionIds,
     });
     setSlots(res.data.slots);
     setInfo({ durationMin: res.data.durationMin, price: res.data.price });
@@ -120,6 +122,7 @@ export default function BookingPage() {
       date,
       startTime,
       staffId: staffId || undefined,
+      optionIds,
     });
     setConfirmation({ startTime, slotEnd: res.data.slotEnd });
     setPhase('done');
@@ -166,6 +169,22 @@ export default function BookingPage() {
   const priceFor = (svcId: string) =>
     options?.pricing.find((p) => p.breedId === selectedDog?.breedId && p.serviceId === svcId) ?? null;
 
+  // ② 合計時間/料金 = カルテ確定（基準）＋ 選択オプション
+  const selectedService = options?.services.find((s) => s.id === serviceId);
+  const serviceOptions = selectedService?.options ?? [];
+  const chosenOptions = serviceOptions.filter((o) => optionIds.includes(o.id));
+  const baseDur = selectedDog?.confirmedDurationMin ?? priceFor(serviceId)?.durationMin ?? null;
+  const baseAmt = selectedDog?.confirmedPrice ?? priceFor(serviceId)?.price ?? null;
+  const optDur = chosenOptions.reduce((s, o) => s + o.durationMin, 0);
+  const optAmt = chosenOptions.reduce((s, o) => s + o.price, 0);
+  const estDur = baseDur != null ? baseDur + optDur : null;
+  const estAmt = baseAmt != null || optAmt > 0 ? (baseAmt ?? 0) + optAmt : null;
+  function toggleOption(id: string) {
+    setOptionIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSlots(null);
+    setStartTime('');
+  }
+
   return (
     <Center>
       <h2>{displayName ? `${displayName} さんの予約` : 'ご予約'}</h2>
@@ -205,7 +224,16 @@ export default function BookingPage() {
 
       <label>
         メニュー（サービス）
-        <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+        <select
+          value={serviceId}
+          onChange={(e) => {
+            setServiceId(e.target.value);
+            setOptionIds([]);
+            setSlots(null);
+            setStartTime('');
+            setInfo(null);
+          }}
+        >
           <option value="">選択してください</option>
           {options?.services.map((s) => {
             const cell = priceFor(s.id);
@@ -222,6 +250,31 @@ export default function BookingPage() {
         <p className="muted">
           ※ {breedName(selectedDog.breedId) ?? 'この犬種'} のこのメニューは料金未設定です。店舗にご確認ください。
         </p>
+      )}
+
+      {serviceOptions.length > 0 && (
+        <div>
+          <label>オプション（複数選択可）</label>
+          <div className="opt-list">
+            {serviceOptions.map((o) => (
+              <label key={o.id} className="opt-item">
+                <input type="checkbox" checked={optionIds.includes(o.id)} onChange={() => toggleOption(o.id)} />
+                {o.name}
+                <span className="opt-meta">
+                  +¥{o.price.toLocaleString()} / +{o.durationMin}分
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      {serviceId && estDur != null && (
+        <div className="est-total">
+          合計 {estDur}分{estAmt != null ? ` / ¥${estAmt.toLocaleString()}` : ''}
+          <span className="muted" style={{ fontWeight: 400, display: 'block' }}>
+            （基準 {baseDur ?? '—'}分 ＋ オプション {optDur}分）
+          </span>
+        </div>
       )}
 
       <label>
