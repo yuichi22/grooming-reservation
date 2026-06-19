@@ -123,6 +123,32 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
         </label>
 
         <fieldset>
+          <legend>消費税</legend>
+          <label className="inline">
+            税率(%)
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={settings.taxRate ?? 10}
+              onChange={(e) => setSettings((s) => (s ? { ...s, taxRate: Number(e.target.value) } : s))}
+            />
+          </label>
+          <label className="inline">
+            表示
+            <select
+              value={settings.taxMode ?? 'exclusive'}
+              onChange={(e) =>
+                setSettings((s) => (s ? { ...s, taxMode: e.target.value as 'inclusive' | 'exclusive' } : s))
+              }
+            >
+              <option value="exclusive">税抜（税込を併記）</option>
+              <option value="inclusive">税込</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
           <legend>店舗情報（ヘッダー表示・LINE 文面に使用）</legend>
           <label>
             店舗名

@@ -50,6 +50,10 @@ export interface TenantSettings {
   phone?: string;
   /** 店舗ロゴ画像URL（ヘッダー中央に表示・任意） */
   logoUrl?: string;
+  /** 消費税率(%)。既定 10 */
+  taxRate?: number;
+  /** 料金の税表示: 税込 or 税抜。既定 'exclusive'(税抜) */
+  taxMode?: 'inclusive' | 'exclusive';
 }
 
 /** tenants/{tenantId}/closures/{YYYY-MM-DD} — 臨時休業/祝日 (§11) */
@@ -85,6 +89,8 @@ export interface Breed {
   id: string;
   name: string;
   active: boolean;
+  /** 料金表での犬種カードの並び順（小さいほど上） */
+  order?: number;
 }
 
 /** tenants/{tenantId}/services/{serviceId} — サービスメニュー マスタ */

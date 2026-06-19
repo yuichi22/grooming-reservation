@@ -1,10 +1,11 @@
 :root {
-  --brand: #14868b;
-  --brand-dark: #0f6b6f;
-  --brand-50: #e7f3f3;
-  --brand-100: #cfe8e8;
+  /* テーマ: 茶系（ドッグサロン） */
+  --brand: #92603a;
+  --brand-dark: #6f4626;
+  --brand-50: #f6efe7;
+  --brand-100: #e8d7c4;
 
-  --bg: #f3f5f7;
+  --bg: #f6f3ef;
   --surface: #ffffff;
   --fg: #1f2933;
   --muted: #6b7785;
@@ -185,15 +186,36 @@ label.inline > select {
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
 }
-.topbar .brand {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-weight: 800;
-  font-size: 1.05rem;
+.nav-toggle {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 6px 12px;
+  font-size: 1rem;
+  font-weight: 700;
   color: var(--brand-dark);
 }
-.header-center {
+.header-btn {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--fg);
+  background: var(--brand-50);
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 38px;
+}
+.header-btn:hover {
+  background: var(--brand-100);
+}
+.header-btn.active {
+  background: var(--brand);
+  color: #fff;
+}
+.header-center {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -212,8 +234,7 @@ label.inline > select {
   color: var(--muted);
 }
 .topbar-right {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -223,13 +244,18 @@ label.inline > select {
   color: var(--muted);
   font-size: 0.85rem;
 }
-.topbar button {
-  min-height: 36px;
-  padding: 6px 14px;
-  flex: 0 0 auto;
-}
 .nav-icon {
   margin-right: 7px;
+}
+/* サイドバー最下部のログアウト */
+.nav-logout {
+  margin-top: auto;
+  color: var(--danger);
+  font-weight: 700;
+}
+/* サイドバー開閉 */
+.app-body.nav-collapsed .sidenav {
+  display: none;
 }
 
 .app-body {
@@ -441,6 +467,11 @@ legend {
   font-weight: 800;
   color: var(--brand-dark);
   font-size: 1.05rem;
+}
+.price-card-reorder button {
+  min-height: 30px;
+  padding: 2px 9px;
+  margin-left: 4px;
 }
 .svc-list {
   list-style: none;

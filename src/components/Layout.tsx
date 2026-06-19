@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
 import { tenantDoc } from '../lib/firestore';
@@ -20,7 +21,7 @@ export default function Layout() {
   const { user, claims, logout } = useAuth();
   const isAdmin = useIsAdmin();
   const navigate = useNavigate();
-  // 店舗名・ロゴ取得（superAdmin で tenantId 無しの場合は存在しない doc → null）
+  const [navOpen, setNavOpen] = useState(true);
   const { data: tenant } = useDocument<Tenant>(tenantDoc(claims.tenantId ?? '__none__'), [claims.tenantId]);
 
   const storeName = tenant?.name ?? 'サロン';
@@ -34,20 +35,25 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <span className="brand">{storeName} 予約管理</span>
+        <button className="nav-toggle" onClick={() => setNavOpen((o) => !o)} aria-label="メニュー開閉">
+          {navOpen ? '＜' : '＞'}
+        </button>
+        <NavLink to="/bookings" className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+          予約
+        </NavLink>
+        <NavLink to="/karte" className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+          カルテ
+        </NavLink>
         <div className="header-center">
           {logoUrl && <img className="store-logo" src={logoUrl} alt={storeName} />}
           <span className="powered">CONNECTED BY AKUTO</span>
         </div>
-        <div className="topbar-right">
-          <span className="user">
-            {user?.email}
-            {claims.role ? `（${claims.role}）` : claims.superAdmin ? '（superAdmin）' : ''}
-          </span>
-          <button onClick={onLogout}>ログアウト</button>
-        </div>
+        <span className="user">
+          {user?.email}
+          {claims.role ? `（${claims.role}）` : claims.superAdmin ? '（superAdmin）' : ''}
+        </span>
       </header>
-      <div className="app-body">
+      <div className={`app-body${navOpen ? '' : ' nav-collapsed'}`}>
         <nav className="sidenav">
           {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end}>
@@ -57,6 +63,9 @@ export default function Layout() {
               {n.label}
             </NavLink>
           ))}
+          <button className="nav-logout" onClick={onLogout}>
+            ログアウト
+          </button>
         </nav>
         <main className="content">
           <Outlet />

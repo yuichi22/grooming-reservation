@@ -2,9 +2,17 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { addDoc, deleteDoc, doc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebaseStaff';
 import { useAuth } from '../auth/AuthContext';
-import { breedsCol, pricingCol, servicesCol } from '../lib/firestore';
+import { breedsCol, pricingCol, servicesCol, tenantDoc } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
-import type { Breed, PriceEntry, Service } from '../lib/types';
+import { useDocument } from '../lib/useDocument';
+import type { Breed, PriceEntry, Service, Tenant } from '../lib/types';
+
+/** 金額を税表示付きで整形（税抜なら税込も併記）。 */
+function priceLabel(price: number, taxMode: 'inclusive' | 'exclusive', taxRate: number): string {
+  if (taxMode === 'inclusive') return `¥${price.toLocaleString()}（税込）`;
+  const incl = Math.round(price * (1 + taxRate / 100));
+  return `¥${price.toLocaleString()}（税込¥${incl.toLocaleString()}）`;
+}
 
 export default function MenusPage() {
   const { claims } = useAuth();
@@ -17,6 +25,9 @@ function MenusInner({ tenantId }: { tenantId: string }) {
   const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
   const { data: services } = useCollection<Service>(servicesCol(tenantId), [tenantId]);
   const { data: pricing } = useCollection<PriceEntry>(pricingCol(tenantId), [tenantId]);
+  const { data: tenant } = useDocument<Tenant>(tenantDoc(tenantId), [tenantId]);
+  const taxMode = tenant?.settings?.taxMode ?? 'exclusive';
+  const taxRate = tenant?.settings?.taxRate ?? 10;
   const [tab, setTab] = useState<'pricing' | 'masters'>('pricing');
 
   return (
@@ -32,7 +43,14 @@ function MenusInner({ tenantId }: { tenantId: string }) {
       </div>
 
       {tab === 'pricing' ? (
-        <PricingTab tenantId={tenantId} breeds={breeds} services={services} pricing={pricing} />
+        <PricingTab
+          tenantId={tenantId}
+          breeds={breeds}
+          services={services}
+          pricing={pricing}
+          taxMode={taxMode}
+          taxRate={taxRate}
+        />
       ) : (
         <MastersTab tenantId={tenantId} breeds={breeds} services={services} />
       )}
@@ -46,13 +64,16 @@ function PricingTab({
   breeds,
   services,
   pricing,
+  taxMode,
+  taxRate,
 }: {
   tenantId: string;
   breeds: Breed[];
   services: Service[];
   pricing: PriceEntry[];
+  taxMode: 'inclusive' | 'exclusive';
+  taxRate: number;
 }) {
-  const breedName = useMemo(() => new Map(breeds.map((b) => [b.id, b.name])), [breeds]);
   const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
   const sorted = useMemo(
     () => [...pricing].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.id.localeCompare(b.id)),
@@ -86,26 +107,27 @@ function PricingTab({
     setServiceId('');
   }
 
-  // 犬種ごとにグループ化（各グループ内は order 順）
+  // 犬種ごとにグループ化。カードの並びは犬種(breed.order)順。
   const groups = useMemo(() => {
     const m = new Map<string, PriceEntry[]>();
     for (const p of sorted) {
       if (!m.has(p.breedId)) m.set(p.breedId, []);
       m.get(p.breedId)!.push(p);
     }
-    return [...m.entries()]
-      .map(([bid, entries]) => ({ breedId: bid, breedName: breedName.get(bid) ?? bid, entries }))
-      .sort((a, b) => a.breedName.localeCompare(b.breedName, 'ja'));
-  }, [sorted, breedName]);
+    return [...breeds]
+      .filter((b) => m.has(b.id))
+      .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.name.localeCompare(b.name, 'ja'))
+      .map((b) => ({ breed: b, entries: m.get(b.id) ?? [] }));
+  }, [sorted, breeds]);
 
-  // 同じ犬種内でサービス行を並べ替え（order を書き戻す）
-  async function moveWithin(entries: PriceEntry[], index: number, dir: -1 | 1) {
+  // 犬種カードの並べ替え（breed.order を書き戻す）
+  async function moveBreed(index: number, dir: -1 | 1) {
     const next = index + dir;
-    if (next < 0 || next >= entries.length) return;
-    const arr = [...entries];
+    if (next < 0 || next >= groups.length) return;
+    const arr = groups.map((g) => g.breed);
     [arr[index], arr[next]] = [arr[next], arr[index]];
     const batch = writeBatch(db);
-    arr.forEach((p, i) => batch.update(doc(pricingCol(tenantId), p.id), { order: i }));
+    arr.forEach((b, i) => batch.update(doc(breedsCol(tenantId), b.id), { order: i }));
     await batch.commit();
   }
 
@@ -136,14 +158,19 @@ function PricingTab({
       {msg && <p className="error">{msg}</p>}
 
       <div className="price-cards">
-        {groups.map((g) => (
+        {groups.map((g, i) => (
           <BreedCard
-            key={g.breedId}
+            key={g.breed.id}
             tenantId={tenantId}
-            breedName={g.breedName}
+            breedName={g.breed.name}
             entries={g.entries}
             serviceName={serviceName}
-            onMove={moveWithin}
+            taxMode={taxMode}
+            taxRate={taxRate}
+            canUp={i > 0}
+            canDown={i < groups.length - 1}
+            onUp={() => moveBreed(i, -1)}
+            onDown={() => moveBreed(i, 1)}
           />
         ))}
         {groups.length === 0 && <p className="muted">料金表が空です。上のフォームから追加してください。</p>}
@@ -152,37 +179,48 @@ function PricingTab({
   );
 }
 
-/** 犬種カード: ヘッダーに犬種名、本体にサービス行リスト。 */
+/** 犬種カード: ヘッダーに犬種名＋並べ替え、本体にサービス行リスト。 */
 function BreedCard({
   tenantId,
   breedName,
   entries,
   serviceName,
-  onMove,
+  taxMode,
+  taxRate,
+  canUp,
+  canDown,
+  onUp,
+  onDown,
 }: {
   tenantId: string;
   breedName: string;
   entries: PriceEntry[];
   serviceName: Map<string, string>;
-  onMove: (entries: PriceEntry[], index: number, dir: -1 | 1) => void;
+  taxMode: 'inclusive' | 'exclusive';
+  taxRate: number;
+  canUp: boolean;
+  canDown: boolean;
+  onUp: () => void;
+  onDown: () => void;
 }) {
   return (
     <div className="price-card">
       <div className="price-card-head">
         <span className="price-card-title">{breedName}</span>
-        <span className="muted">{entries.length}件</span>
+        <span className="price-card-reorder">
+          <button onClick={onUp} disabled={!canUp} aria-label="犬種を上へ">↑</button>
+          <button onClick={onDown} disabled={!canDown} aria-label="犬種を下へ">↓</button>
+        </span>
       </div>
       <ul className="svc-list">
-        {entries.map((e, i) => (
+        {entries.map((e) => (
           <ServiceRow
             key={e.id}
             tenantId={tenantId}
             entry={e}
             serviceName={serviceName.get(e.serviceId) ?? e.serviceId}
-            canUp={i > 0}
-            canDown={i < entries.length - 1}
-            onUp={() => onMove(entries, i, -1)}
-            onDown={() => onMove(entries, i, 1)}
+            taxMode={taxMode}
+            taxRate={taxRate}
           />
         ))}
         {entries.length === 0 && <li className="muted">サービス未設定</li>}
@@ -195,18 +233,14 @@ function ServiceRow({
   tenantId,
   entry,
   serviceName,
-  canUp,
-  canDown,
-  onUp,
-  onDown,
+  taxMode,
+  taxRate,
 }: {
   tenantId: string;
   entry: PriceEntry;
   serviceName: string;
-  canUp: boolean;
-  canDown: boolean;
-  onUp: () => void;
-  onDown: () => void;
+  taxMode: 'inclusive' | 'exclusive';
+  taxRate: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [price, setPrice] = useState(entry.price);
@@ -239,11 +273,9 @@ function ServiceRow({
   return (
     <li className="svc-row">
       <span className="svc-name">{serviceName}</span>
-      <span className="svc-price">¥{entry.price.toLocaleString()}</span>
+      <span className="svc-price">{priceLabel(entry.price, taxMode, taxRate)}</span>
       <span className="muted">{entry.durationMin}分</span>
       <span className="svc-actions">
-        <button onClick={onUp} disabled={!canUp} aria-label="上へ">↑</button>
-        <button onClick={onDown} disabled={!canDown} aria-label="下へ">↓</button>
         <button onClick={() => setEditing(true)}>編集</button>
         <button onClick={remove}>削除</button>
       </span>
