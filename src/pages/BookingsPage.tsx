@@ -363,12 +363,14 @@ function TimeGrid({
             <span className="tg-hour-label">{toHHMM(h)}</span>
           </div>
         ))}
-        {/* 列の区切り線 */}
+        {/* 時間列（ガター）の区切り線 */}
+        <div className="tg-colsep" style={{ left: '56px' }} />
+        {/* スタッフ列の区切り線 */}
         {Array.from({ length: colCount - 1 }, (_, i) => (
           <div
             key={i}
             className="tg-colsep"
-            style={{ left: `calc(52px + ${i + 1} * (100% - 58px) / ${colCount})` }}
+            style={{ left: `calc(56px + ${i + 1} * (100% - 56px) / ${colCount})` }}
           />
         ))}
         {/* クリックで作成 */}
@@ -387,8 +389,8 @@ function TimeGrid({
                 style={{
                   top: (s - axisStart) * PX_PER_MIN,
                   height: Math.max(18, b.durationMin * PX_PER_MIN - 2),
-                  left: spanning ? '54px' : `calc(54px + ${colIndex} * (100% - 60px) / ${colCount})`,
-                  width: spanning ? 'calc(100% - 60px)' : `calc((100% - 60px) / ${colCount} - 4px)`,
+                  left: spanning ? '58px' : `calc(56px + ${colIndex} * (100% - 56px) / ${colCount} + 2px)`,
+                  width: spanning ? 'calc(100% - 60px)' : `calc((100% - 56px) / ${colCount} - 4px)`,
                 }}
               >
                 <div className="b-time">

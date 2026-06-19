@@ -985,7 +985,7 @@ tr.row-link td.chevron-cell {
   margin-top: 12px;
 }
 .tg-colhead .gutter {
-  flex: 0 0 52px;
+  flex: 0 0 56px;
 }
 .tg-colhead .col {
   flex: 1 1 0;
@@ -1036,14 +1036,14 @@ tr.row-link td.chevron-cell {
 }
 .tg-hour {
   position: absolute;
-  left: 52px;
+  left: 56px;
   right: 0;
   border-top: 1px solid var(--border);
 }
 .tg-hour-label {
   position: absolute;
   left: 0;
-  width: 46px;
+  width: 50px;
   font-size: 0.72rem;
   color: var(--muted);
   transform: translateY(-50%);
@@ -1052,14 +1052,14 @@ tr.row-link td.chevron-cell {
 }
 .tg-open {
   position: absolute;
-  left: 52px;
-  right: 6px;
+  left: 56px;
+  right: 0;
   background: var(--surface);
 }
 .tg-clicklayer {
   position: absolute;
-  left: 52px;
-  right: 6px;
+  left: 56px;
+  right: 0;
   top: 0;
   bottom: 0;
   cursor: copy;
