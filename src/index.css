@@ -995,6 +995,7 @@ tr.row-link td.chevron-cell {
 .tg-colhead {
   display: flex;
   margin-top: 12px;
+  padding-right: 10px;
 }
 .tg-colhead .gutter {
   flex: 0 0 56px;
@@ -1049,7 +1050,7 @@ tr.row-link td.chevron-cell {
 .tg-hour {
   position: absolute;
   left: 56px;
-  right: 0;
+  right: 10px;
   border-top: 1px solid var(--border);
 }
 .tg-hour-label {
@@ -1065,13 +1066,13 @@ tr.row-link td.chevron-cell {
 .tg-open {
   position: absolute;
   left: 56px;
-  right: 0;
+  right: 10px;
   background: var(--surface);
 }
 .tg-clicklayer {
   position: absolute;
   left: 56px;
-  right: 0;
+  right: 10px;
   top: 0;
   bottom: 0;
   cursor: copy;
