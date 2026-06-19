@@ -280,6 +280,7 @@ label.inline > select {
   display: flex;
   justify-content: center;
   gap: 10px;
+  margin-top: 8px; /* ロゴと予約/カルテの間の余白 */
 }
 .topbar .user {
   order: 3;
@@ -297,6 +298,7 @@ label.inline > select {
   }
   .header-quick {
     order: 1;
+    margin-top: 0;
   }
   .header-center {
     order: 2;
