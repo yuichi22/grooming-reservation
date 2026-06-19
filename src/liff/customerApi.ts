@@ -23,7 +23,7 @@ export interface BookingOptions {
     id: string;
     name: string;
     breedId: string | null;
-    additionalDurationMin: number;
+    serviceAdjustments: Record<string, number>;
     optionAdjustments: Record<string, number>;
   }[];
   pricing: PriceCell[];

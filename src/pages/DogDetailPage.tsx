@@ -34,7 +34,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     notes: '',
     allergies: '',
   });
-  const [additionalMin, setAdditionalMin] = useState(0);
+  const [serviceAdj, setServiceAdj] = useState<Record<string, number>>({}); // サービス別の個別加算時間
   const [optAdj, setOptAdj] = useState<Record<string, number>>({}); // オプション別の個別追加(超過)時間
   const [optPick, setOptPick] = useState(''); // 追加するオプションの選択
   const [msg, setMsg] = useState<string | null>(null);
@@ -44,7 +44,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   useEffect(() => {
     if (!dog) return;
     setForm({ breedId: dog.breedId ?? null, notes: dog.notes ?? '', allergies: dog.allergies ?? '' });
-    setAdditionalMin(dog.additionalDurationMin ?? 0);
+    setServiceAdj(dog.serviceAdjustments ?? {});
     setOptAdj(dog.optionAdjustments ?? {});
   }, [dog]);
 
@@ -61,10 +61,11 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const activeServices = services.filter((s) => s.active);
   // この犬種に料金表があるサービス（時間・料金が割り出せるもの）
   const pricedServices = activeServices.filter((s) => cellFor(s.id));
-  // 確定（個別加算込み）。料金は 標準 + 単価×個別加算 を50円切上げ
-  const confirmTime = (durationMin: number) => durationMin + additionalMin;
-  const confirmPrice = (price: number, durationMin: number) =>
-    price + ceil50((durationMin > 0 ? price / durationMin : 0) * additionalMin);
+  // 確定（サービス別個別加算込み）。料金は 標準 + 単価×個別加算 を50円切上げ
+  const adjFor = (svcId: string) => serviceAdj[svcId] ?? 0;
+  const confirmTime = (svcId: string, durationMin: number) => durationMin + adjFor(svcId);
+  const confirmPrice = (svcId: string, price: number, durationMin: number) =>
+    price + ceil50((durationMin > 0 ? price / durationMin : 0) * adjFor(svcId));
   // オプション: 個別追加時間を設定済み（optAdj にキーがある）ものだけ表示
   const activeOptions = optionItems.filter((o) => o.active);
   const setOptionIds = Object.keys(optAdj);
@@ -78,7 +79,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
       breedId: form.breedId ?? null,
       notes: form.notes ?? '',
       allergies: form.allergies ?? '',
-      additionalDurationMin: additionalMin,
+      serviceAdjustments: serviceAdj,
       optionAdjustments: optAdj,
     });
     setMsg('保存しました');
@@ -164,19 +165,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
         </label>
         <fieldset>
           <legend>作業時間・料金（料金表 犬種×サービス）</legend>
-          <label className="inline" htmlFor="addmin">
-            個別加算時間（この子だけの上乗せ）
-            <input
-              id="addmin"
-              type="number"
-              min={0}
-              step={5}
-              value={additionalMin}
-              onChange={(e) => setAdditionalMin(Math.max(0, Number(e.target.value)))}
-              style={{ width: 80 }}
-            />
-            分
-          </label>
+          <p className="muted">個別加算時間は、この子だけ余計にかかる分をサービスごとに設定できます。</p>
           {form.breedId == null ? (
             <p className="muted">犬種を選ぶと、サービスごとの時間・料金が表示されます。</p>
           ) : pricedServices.length === 0 ? (
@@ -189,6 +178,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
                     <th>サービス</th>
                     <th>標準時間</th>
                     <th>標準料金</th>
+                    <th>個別加算</th>
                     <th>確定時間</th>
                     <th>確定料金</th>
                   </tr>
@@ -201,11 +191,26 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
                         <td>{s.name}</td>
                         <td className="muted">{cell.durationMin}分</td>
                         <td className="muted">¥{cell.price.toLocaleString()}</td>
-                        <td>
-                          <strong>{confirmTime(cell.durationMin)}分</strong>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          ＋
+                          <input
+                            type="number"
+                            min={0}
+                            step={5}
+                            value={adjFor(s.id)}
+                            onChange={(e) => {
+                              const v = Math.max(0, Number(e.target.value));
+                              setServiceAdj((m) => ({ ...m, [s.id]: v }));
+                            }}
+                            style={{ width: 64 }}
+                          />
+                          分
                         </td>
                         <td>
-                          <strong>¥{confirmPrice(cell.price, cell.durationMin).toLocaleString()}</strong>
+                          <strong>{confirmTime(s.id, cell.durationMin)}分</strong>
+                        </td>
+                        <td>
+                          <strong>¥{confirmPrice(s.id, cell.price, cell.durationMin).toLocaleString()}</strong>
                         </td>
                       </tr>
                     );

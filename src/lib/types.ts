@@ -161,9 +161,11 @@ export interface Dog {
   notes?: string;
   allergies?: string;
   /**
-   * 個別加算時間（分）。この子だけ標準より余計にかかる分。
+   * サービスごとの個別加算時間（分）。{ [serviceId]: 加算分 }。この子だけ標準より余計にかかる分。
    * 予約の所要時間 = 料金表(犬種×サービス)の標準時間 + これ（+ オプション）。
    */
+  serviceAdjustments?: Record<string, number>;
+  /** 旧: 全サービス共通の個別加算（廃止・後方互換の任意残置） */
   additionalDurationMin?: number | null;
   /** オプションごとの個別追加時間（分）。{ [optionId]: 追加分 }。この子だけ余計にかかる分 */
   optionAdjustments?: Record<string, number>;

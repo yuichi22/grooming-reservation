@@ -174,7 +174,7 @@ export default function BookingPage() {
   const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
   const allOptions = options?.options ?? [];
   const optAdj = (id: string) => selectedDog?.optionAdjustments?.[id] ?? 0;
-  const addMin = selectedDog?.additionalDurationMin ?? 0;
+  const addMin = selectedDog?.serviceAdjustments?.[serviceId] ?? 0;
   const cell = priceFor(serviceId);
   const baseStdDur = cell?.durationMin ?? null;
   const baseStdAmt = cell?.price ?? null;
