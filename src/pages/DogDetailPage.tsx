@@ -72,8 +72,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const shownOptions = activeOptions.filter((o) => setOptionIds.includes(o.id));
   const addableOptions = activeOptions.filter((o) => !setOptionIds.includes(o.id));
 
-  async function saveDog(e: FormEvent) {
-    e.preventDefault();
+  async function saveDog() {
     setMsg(null);
     await updateDoc(doc(dogsCol(tenantId), dogId), {
       breedId: form.breedId ?? null,
@@ -104,6 +103,12 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
           <ChevronLeft size={22} strokeWidth={2.25} />
         </Link>
         <h1>{dog.name}</h1>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {msg && <span className="muted">{msg}</span>}
+          <button type="button" onClick={saveDog}>
+            保存
+          </button>
+        </div>
       </div>
 
       {dog.customerId ? (
@@ -148,7 +153,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
         <AttachCustomer tenantId={tenantId} dogId={dogId} customers={customers} />
       )}
 
-      <form onSubmit={saveDog}>
+      <form onSubmit={(e) => { e.preventDefault(); saveDog(); }}>
         <label className="inline">
           犬種
           <select
@@ -316,10 +321,8 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
             onChange={(e) => setForm((f) => ({ ...f, allergies: e.target.value }))}
           />
         </label>
-        <div>
-          <button type="submit">保存</button>
-          {msg && <span className="muted" style={{ marginLeft: 12 }}>{msg}</span>}
-        </div>
+        {/* 保存ボタンはヘッダー上部に移動 */}
+        <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
       </form>
 
       <h2>施術履歴</h2>
