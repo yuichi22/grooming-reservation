@@ -1,14 +1,26 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { deleteDoc, doc, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { useAuth } from '../auth/AuthContext';
-import { bookingsCol, closuresCol, dogsCol, servicesCol, staffCol } from '../lib/firestore';
-import { completeBooking } from '../lib/functions';
+import {
+  bookingsCol,
+  closuresCol,
+  customersCol,
+  dogsCol,
+  optionsCol,
+  pricingCol,
+  servicesCol,
+  staffCol,
+  tenantDoc,
+} from '../lib/firestore';
+import { completeBooking, createBookingByStaff } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
-import type { Booking, Closure, Dog, Service, Staff } from '../lib/types';
+import { useDocument } from '../lib/useDocument';
+import type { Booking, Closure, Customer, Dog, Option, PriceEntry, Service, Staff, Tenant } from '../lib/types';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
+const PX_PER_MIN = 1; // 時間軸の縮尺
+const SLOT_ROUND = 15; // クリック時刻の丸め（分）
 
-/** ローカル日付を YYYY-MM-DD に（toISOString は UTC ずれするため使わない）。 */
 function fmt(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -17,9 +29,13 @@ function todayStr() {
 }
 function formatDateJa(ds: string): string {
   const [y, m, d] = ds.split('-').map(Number);
-  const dow = DOW[new Date(y, m - 1, d).getDay()];
-  return `${y}年${m}月${d}日（${dow}）`;
+  return `${y}年${m}月${d}日（${DOW[new Date(y, m - 1, d).getDay()]}）`;
 }
+const toMin = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
 export default function BookingsPage() {
   const { claims } = useAuth();
@@ -36,7 +52,6 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
   });
   const [selected, setSelected] = useState(today);
 
-  // カレンダーグリッド: 月初の週の日曜から6週間（42日）
   const gridDays = useMemo(() => {
     const first = new Date(view.y, view.m, 1);
     const start = new Date(first);
@@ -135,38 +150,56 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
         })}
       </div>
 
-      <DayDetail tenantId={tenantId} date={selected} closed={closedDates.has(selected)} />
+      <DaySection tenantId={tenantId} date={selected} closed={closedDates.has(selected)} />
     </section>
   );
 }
 
-function DayDetail({ tenantId, date, closed }: { tenantId: string; date: string; closed: boolean }) {
+function DaySection({ tenantId, date, closed }: { tenantId: string; date: string; closed: boolean }) {
   const { data: bookings, loading } = useCollection<Booking>(
     query(bookingsCol(tenantId), where('date', '==', date)),
     [tenantId, date],
   );
+  const { data: tenant } = useDocument<Tenant>(tenantDoc(tenantId), [tenantId]);
   const { data: dogs } = useCollection<Dog>(dogsCol(tenantId), [tenantId]);
+  const { data: customers } = useCollection<Customer>(customersCol(tenantId), [tenantId]);
   const { data: staff } = useCollection<Staff>(staffCol(tenantId), [tenantId]);
   const { data: services } = useCollection<Service>(servicesCol(tenantId), [tenantId]);
+  const { data: options } = useCollection<Option>(optionsCol(tenantId), [tenantId]);
+  const { data: pricing } = useCollection<PriceEntry>(pricingCol(tenantId), [tenantId]);
+
   const dogName = useMemo(() => new Map(dogs.map((d) => [d.id, d.name])), [dogs]);
   const staffName = useMemo(() => new Map(staff.map((s) => [s.id, s.name])), [staff]);
   const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
 
-  const sorted = [...bookings].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const [dayView, setDayView] = useState<'time' | 'list'>('time');
+  const [createStart, setCreateStart] = useState<string | null>(null);
+
+  const businessHours =
+    tenant?.settings?.businessHours && tenant.settings.businessHours.length > 0
+      ? tenant.settings.businessHours
+      : [{ start: '09:00', end: '19:00' }];
 
   async function toggleClosure() {
     const ref = doc(closuresCol(tenantId), date);
-    if (closed) {
-      await deleteDoc(ref);
-    } else {
-      await setDoc(ref, { fullDay: true } as Omit<Closure, 'id'> as Closure);
-    }
+    if (closed) await deleteDoc(ref);
+    else await setDoc(ref, { fullDay: true } as Omit<Closure, 'id'> as Closure);
   }
+
+  const sorted = [...bookings].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   return (
     <>
       <div className="cal-detail-head">
         <h2>{formatDateJa(date)}</h2>
+        <div className="view-toggle">
+          <button type="button" className={dayView === 'time' ? 'active' : ''} onClick={() => setDayView('time')}>
+            時間
+          </button>
+          <button type="button" className={dayView === 'list' ? 'active' : ''} onClick={() => setDayView('list')}>
+            リスト
+          </button>
+        </div>
         <button type="button" className={closed ? 'btn-closed' : ''} onClick={toggleClosure}>
           {closed ? '休業日を解除' : '休業日にする'}
         </button>
@@ -175,63 +208,356 @@ function DayDetail({ tenantId, date, closed }: { tenantId: string; date: string;
 
       {loading ? (
         <p>読み込み中…</p>
+      ) : dayView === 'time' ? (
+        <>
+          <TimeGrid
+            bookings={sorted}
+            businessHours={businessHours}
+            dogName={dogName}
+            serviceName={serviceName}
+            closed={closed}
+            onCreateAt={(t) => setCreateStart(t)}
+          />
+          {!closed && <p className="tg-hint">空き時間をクリックすると予約を作成できます。</p>}
+        </>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>時間</th>
-                <th>ワンちゃん</th>
-                <th>メニュー</th>
-                <th>担当</th>
-                <th>状態</th>
-                <th>施術完了 (§7)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((b) => (
-                <tr key={b.id}>
-                  <td>
-                    {b.startTime}〜{b.slotEnd}
-                  </td>
-                  <td>{dogName.get(b.dogId) ?? b.dogId}</td>
-                  <td>
-                    {serviceName.get(b.serviceId) ?? b.serviceId}
-                    {b.options && b.options.length > 0 ? `＋${b.options.length}` : ''}
-                  </td>
-                  <td>{b.staffId ? staffName.get(b.staffId) ?? b.staffId : '未割当'}</td>
-                  <td>{statusLabel(b.status)}</td>
-                  <td>
-                    {b.status === 'reserved' ? (
-                      <>
-                        <CompleteForm tenantId={tenantId} booking={b} />
-                        <div className="row-form" style={{ margin: '4px 0 0' }}>
-                          <button onClick={() => setStatus(tenantId, b.id, 'canceled')}>キャンセル</button>
-                          <button onClick={() => setStatus(tenantId, b.id, 'noshow')}>無断欠席</button>
-                        </div>
-                      </>
-                    ) : b.status === 'done' ? (
-                      <span className="muted">
-                        {b.finalDurationMin}分 / ¥{(b.finalPrice ?? 0).toLocaleString()}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {sorted.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="muted">
-                    この日の予約はありません
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ListView
+          tenantId={tenantId}
+          bookings={sorted}
+          dogName={dogName}
+          staffName={staffName}
+          serviceName={serviceName}
+        />
+      )}
+
+      {createStart && (
+        <CreateModal
+          tenantId={tenantId}
+          date={date}
+          startTime={createStart}
+          dogs={dogs}
+          customers={customers}
+          services={services}
+          options={options}
+          staff={staff}
+          pricing={pricing}
+          onClose={() => setCreateStart(null)}
+        />
       )}
     </>
+  );
+}
+
+function TimeGrid({
+  bookings,
+  businessHours,
+  dogName,
+  serviceName,
+  closed,
+  onCreateAt,
+}: {
+  bookings: Booking[];
+  businessHours: { start: string; end: string }[];
+  dogName: Map<string, string>;
+  serviceName: Map<string, string>;
+  closed: boolean;
+  onCreateAt: (startTime: string) => void;
+}) {
+  const axisStart = Math.min(...businessHours.map((h) => toMin(h.start)));
+  const axisEnd = Math.max(...businessHours.map((h) => toMin(h.end)));
+  const height = (axisEnd - axisStart) * PX_PER_MIN;
+
+  // 時刻ラベル（1時間ごと）
+  const hours: number[] = [];
+  for (let h = Math.ceil(axisStart / 60) * 60; h <= axisEnd; h += 60) hours.push(h);
+
+  // レーン詰め（重なる予約を横に並べる）
+  const active = bookings.filter((b) => b.status === 'reserved' || b.status === 'done');
+  const laneEnds: number[] = [];
+  const placed = active.map((b) => {
+    const s = toMin(b.startTime);
+    const e = s + b.durationMin;
+    let lane = laneEnds.findIndex((end) => end <= s);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(e);
+    } else laneEnds[lane] = e;
+    return { b, s, e, lane };
+  });
+  const laneCount = Math.max(1, laneEnds.length);
+
+  function handleClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (closed) return;
+    const y = e.nativeEvent.offsetY;
+    let min = axisStart + Math.round(y / PX_PER_MIN / SLOT_ROUND) * SLOT_ROUND;
+    const seg = businessHours.find((h) => min >= toMin(h.start) && min < toMin(h.end));
+    if (!seg) return; // 営業時間外は無視
+    if (min < axisStart) min = axisStart;
+    onCreateAt(toHHMM(min));
+  }
+
+  return (
+    <div className="tg" style={{ height }}>
+      {/* 営業時間の白背景 */}
+      {businessHours.map((h, i) => (
+        <div
+          key={i}
+          className="tg-open"
+          style={{ top: (toMin(h.start) - axisStart) * PX_PER_MIN, height: (toMin(h.end) - toMin(h.start)) * PX_PER_MIN }}
+        />
+      ))}
+      {/* 時刻ライン＋ラベル */}
+      {hours.map((h) => (
+        <div key={h} className="tg-hour" style={{ top: (h - axisStart) * PX_PER_MIN }}>
+          <span className="tg-hour-label">{toHHMM(h)}</span>
+        </div>
+      ))}
+      {/* クリックで作成 */}
+      <div className="tg-clicklayer" onClick={handleClick} />
+      {/* 予約ブロック */}
+      {placed.map(({ b, s, lane }) => (
+        <div
+          key={b.id}
+          className={`tg-block${b.status === 'done' ? ' done' : ''}`}
+          style={{
+            top: (s - axisStart) * PX_PER_MIN,
+            height: Math.max(18, b.durationMin * PX_PER_MIN - 2),
+            left: `calc(54px + ${lane} * (100% - 60px) / ${laneCount})`,
+            width: `calc((100% - 60px) / ${laneCount} - 4px)`,
+          }}
+        >
+          <div className="b-time">
+            {b.startTime}–{b.slotEnd}
+          </div>
+          {dogName.get(b.dogId) ?? b.dogId}
+          <div style={{ opacity: 0.9, fontSize: '0.7rem' }}>{serviceName.get(b.serviceId) ?? ''}</div>
+        </div>
+      ))}
+      {closed && <div className="tg-closed">休業日</div>}
+    </div>
+  );
+}
+
+function CreateModal({
+  tenantId,
+  date,
+  startTime,
+  dogs,
+  customers,
+  services,
+  options,
+  staff,
+  pricing,
+  onClose,
+}: {
+  tenantId: string;
+  date: string;
+  startTime: string;
+  dogs: Dog[];
+  customers: Customer[];
+  services: Service[];
+  options: Option[];
+  staff: Staff[];
+  pricing: PriceEntry[];
+  onClose: () => void;
+}) {
+  const customerName = useMemo(() => new Map(customers.map((c) => [c.id, c.ownerName])), [customers]);
+  const [start, setStart] = useState(startTime);
+  const [dogId, setDogId] = useState('');
+  const [serviceId, setServiceId] = useState('');
+  const [optionIds, setOptionIds] = useState<string[]>([]);
+  const [staffId, setStaffId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const dog = dogs.find((d) => d.id === dogId);
+  const cell = dog && serviceId ? pricing.find((p) => p.breedId === dog.breedId && p.serviceId === serviceId) : null;
+  const baseDur = cell ? cell.durationMin + (dog?.serviceAdjustments?.[serviceId] ?? 0) : null;
+  const activeOptions = options.filter((o) => o.active);
+  const optDur = activeOptions
+    .filter((o) => optionIds.includes(o.id))
+    .reduce((s, o) => s + o.durationMin + (dog?.optionAdjustments?.[o.id] ?? 0), 0);
+  const previewDur = baseDur != null ? baseDur + optDur : null;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!dogId || !serviceId) {
+      setErr('ワンちゃんとサービスを選んでください');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await createBookingByStaff({
+        tenantId,
+        dogId,
+        serviceId,
+        date,
+        startTime: start,
+        staffId: staffId || undefined,
+        optionIds,
+      });
+      onClose();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : '予約の作成に失敗しました');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>予約を作成</h2>
+        <p className="muted">{formatDateJa(date)}</p>
+        <form onSubmit={submit}>
+          <label className="inline">
+            開始時刻
+            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+          </label>
+          <label>
+            ワンちゃん
+            <select value={dogId} onChange={(e) => setDogId(e.target.value)}>
+              <option value="">選択してください</option>
+              {dogs.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                  {customerName.get(d.customerId) ? `（${customerName.get(d.customerId)}）` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            サービス
+            <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+              <option value="">選択してください</option>
+              {services.filter((s) => s.active).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {dog && serviceId && !cell && (
+            <p className="muted">※ この犬種×サービスは料金表が未設定です（既定時間で確保されます）。</p>
+          )}
+          {activeOptions.length > 0 && (
+            <div>
+              <label>オプション（複数選択可）</label>
+              <div className="opt-list">
+                {activeOptions.map((o) => (
+                  <label key={o.id} className="opt-item">
+                    <input
+                      type="checkbox"
+                      checked={optionIds.includes(o.id)}
+                      onChange={() =>
+                        setOptionIds((prev) =>
+                          prev.includes(o.id) ? prev.filter((x) => x !== o.id) : [...prev, o.id],
+                        )
+                      }
+                    />
+                    {o.name}
+                    <span className="opt-meta">+{o.durationMin + (dog?.optionAdjustments?.[o.id] ?? 0)}分</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          <label>
+            指名（任意）
+            <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
+              <option value="">指名なし（空いているスタッフ）</option>
+              {staff.filter((s) => s.active).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {previewDur != null && <p className="muted">所要 {previewDur}分（バッファ込みで枠を確保）</p>}
+          {err && <p className="error">{err}</p>}
+          <div className="modal-actions">
+            <button type="button" onClick={onClose}>
+              キャンセル
+            </button>
+            <button type="submit" disabled={busy}>
+              {busy ? '作成中…' : '予約する'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ListView({
+  tenantId,
+  bookings,
+  dogName,
+  staffName,
+  serviceName,
+}: {
+  tenantId: string;
+  bookings: Booking[];
+  dogName: Map<string, string>;
+  staffName: Map<string, string>;
+  serviceName: Map<string, string>;
+}) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>時間</th>
+            <th>ワンちゃん</th>
+            <th>メニュー</th>
+            <th>担当</th>
+            <th>状態</th>
+            <th>施術完了 (§7)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bookings.map((b) => (
+            <tr key={b.id}>
+              <td>
+                {b.startTime}〜{b.slotEnd}
+              </td>
+              <td>{dogName.get(b.dogId) ?? b.dogId}</td>
+              <td>
+                {serviceName.get(b.serviceId) ?? b.serviceId}
+                {b.options && b.options.length > 0 ? `＋${b.options.length}` : ''}
+              </td>
+              <td>{b.staffId ? staffName.get(b.staffId) ?? b.staffId : '未割当'}</td>
+              <td>{statusLabel(b.status)}</td>
+              <td>
+                {b.status === 'reserved' ? (
+                  <>
+                    <CompleteForm tenantId={tenantId} booking={b} />
+                    <div className="row-form" style={{ margin: '4px 0 0' }}>
+                      <button onClick={() => setStatus(tenantId, b.id, 'canceled')}>キャンセル</button>
+                      <button onClick={() => setStatus(tenantId, b.id, 'noshow')}>無断欠席</button>
+                    </div>
+                  </>
+                ) : b.status === 'done' ? (
+                  <span className="muted">
+                    {b.finalDurationMin}分 / ¥{(b.finalPrice ?? 0).toLocaleString()}
+                  </span>
+                ) : (
+                  '—'
+                )}
+              </td>
+            </tr>
+          ))}
+          {bookings.length === 0 && (
+            <tr>
+              <td colSpan={6} className="muted">
+                この日の予約はありません
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -239,7 +565,6 @@ function statusLabel(s: Booking['status']): string {
   return { reserved: '予約', done: '完了', canceled: 'キャンセル', noshow: '無断欠席' }[s];
 }
 
-// スタッフはルール上 bookings を直接更新できる（§2）
 async function setStatus(tenantId: string, bookingId: string, status: Booking['status']) {
   const label = status === 'canceled' ? 'キャンセル' : '無断欠席';
   if (confirm(`この予約を「${label}」にしますか？`)) {
@@ -257,7 +582,6 @@ function CompleteForm({ tenantId, booking }: { tenantId: string; booking: Bookin
     setBusy(true);
     setErr(null);
     try {
-      // done にすると onBookingDone トリガが §10 イベントを生成・配信する
       await completeBooking({ tenantId, bookingId: booking.id, finalDurationMin: durationMin, finalPrice: price });
     } catch (e) {
       setErr(e instanceof Error ? e.message : '完了処理に失敗しました');

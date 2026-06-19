@@ -919,6 +919,132 @@ tr.row-link td.chevron-cell {
   border-color: #b42318;
 }
 
+/* ---------- 予約: 日の時間軸グリッド ---------- */
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.view-toggle button {
+  border: none;
+  border-radius: 0;
+  min-height: 36px;
+  padding: 6px 14px;
+  background: var(--surface);
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+.view-toggle button.active {
+  background: var(--brand);
+  color: #fff;
+}
+.tg {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #f1f0ee;
+  margin-top: 12px;
+  overflow: hidden;
+}
+.tg-hour {
+  position: absolute;
+  left: 52px;
+  right: 0;
+  border-top: 1px solid var(--border);
+}
+.tg-hour-label {
+  position: absolute;
+  left: 0;
+  width: 46px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  transform: translateY(-50%);
+  text-align: right;
+  padding-right: 6px;
+}
+.tg-open {
+  position: absolute;
+  left: 52px;
+  right: 6px;
+  background: var(--surface);
+}
+.tg-clicklayer {
+  position: absolute;
+  left: 52px;
+  right: 6px;
+  top: 0;
+  bottom: 0;
+  cursor: copy;
+}
+.tg-block {
+  position: absolute;
+  background: var(--brand);
+  color: #fff;
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 0.76rem;
+  line-height: 1.25;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+.tg-block.done {
+  background: var(--brand-dark);
+}
+.tg-block .b-time {
+  font-weight: 700;
+  font-size: 0.68rem;
+  opacity: 0.92;
+}
+.tg-closed {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(217, 45, 32, 0.07);
+  color: var(--danger);
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+.tg-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+
+/* ---------- モーダル ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px 18px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: var(--shadow-md);
+}
+.modal h2 {
+  margin-top: 0;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 /* ---------- LIFF (顧客) ---------- */
 .liff-shell {
   max-width: 480px;

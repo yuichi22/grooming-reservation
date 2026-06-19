@@ -18,6 +18,19 @@ export const completeBooking = httpsCallable<
   { bookingId: string; status: 'done' }
 >(functions, 'completeBooking');
 
+export const createBookingByStaff = httpsCallable<
+  {
+    tenantId: string;
+    dogId: string;
+    serviceId: string;
+    date: string;
+    startTime: string;
+    staffId?: string;
+    optionIds?: string[];
+  },
+  { bookingId: string; staffId: string | null; slotEnd: string; durationMin: number }
+>(functions, 'createBookingByStaff');
+
 export const mergeCustomers = httpsCallable<
   { tenantId: string; sourceCustomerId: string; targetCustomerId: string },
   { targetCustomerId: string; movedDogs: number; movedBookings: number; patch: Record<string, unknown> }

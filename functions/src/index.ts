@@ -167,6 +167,7 @@ const DEFAULT_DURATION_MIN = 60;
 
 interface DogInfo {
   breedId: string | null;
+  customerId: string | null;
   /** サービスごとの個別加算時間（分）。{ [serviceId]: 加算分 } */
   serviceAdjustments: Record<string, number>;
   optionAdjustments: Record<string, number>;
@@ -179,6 +180,7 @@ async function loadDog(tenantId: string, dogId?: string): Promise<DogInfo | null
   const d = snap.data() ?? {};
   return {
     breedId: (d.breedId ?? null) as string | null,
+    customerId: (d.customerId ?? null) as string | null,
     serviceAdjustments: (d.serviceAdjustments ?? {}) as Record<string, number>,
     optionAdjustments: (d.optionAdjustments ?? {}) as Record<string, number>,
     name: (d.name as string) ?? 'ワンちゃん',
@@ -501,6 +503,82 @@ export const createBooking = onCall<{
     });
 
   return { bookingId: ref.id, staffId: assigned, slotEnd };
+});
+
+/** スタッフ（管理者/トリマー）による予約作成。LINE トークン不要・Firebase Auth で認可。 */
+export const createBookingByStaff = onCall<{
+  tenantId: string;
+  dogId: string;
+  serviceId: string;
+  date: string;
+  startTime: string;
+  staffId?: string;
+  optionIds?: string[];
+}>(async (request) => {
+  const { tenantId, dogId, serviceId, date, startTime, staffId, optionIds } = request.data;
+  if (!tenantId || !dogId || !serviceId || !date || !startTime) {
+    throw new HttpsError('invalid-argument', 'missing required fields');
+  }
+  const caller = request.auth?.token;
+  const isSuper = caller?.superAdmin === true;
+  const isStaff = caller?.tenantId === tenantId && (caller?.role === 'admin' || caller?.role === 'trimmer');
+  if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
+
+  if (await isClosedDate(tenantId, date)) {
+    throw new HttpsError('failed-precondition', 'the salon is closed on this date');
+  }
+
+  const [settings, dog] = await Promise.all([loadSettings(tenantId), loadDog(tenantId, dogId)]);
+  if (!dog) throw new HttpsError('not-found', 'dog not found');
+  const opts = await loadSelectedOptions(tenantId, optionIds, dog.optionAdjustments);
+  const cell = await loadPriceCell(tenantId, dog.breedId, serviceId);
+  const durationMin = effectiveBase(dog, cell, serviceId).durationMin + opts.durationMin;
+  const bufferMin = settings.bufferMin;
+  const slotEnd = toTimeStr(toMinutes(startTime) + durationMin + bufferMin);
+
+  const bookings = await loadDayBookings(tenantId, date);
+  function isFree(sid: string): boolean {
+    return availability({
+      businessHours: settings.businessHours,
+      bufferMin,
+      durationMin,
+      occupied: occupiedFor(bookings, sid),
+    }).includes(startTime);
+  }
+
+  let assigned: string | null = null;
+  if (staffId) {
+    if (!isFree(staffId)) throw new HttpsError('failed-precondition', 'nominated staff is not available');
+    assigned = staffId;
+  } else {
+    const staffIds = await loadActiveStaffIds(tenantId);
+    assigned = staffIds.find((sid) => isFree(sid)) ?? null;
+    if (staffIds.length > 0 && assigned == null) {
+      throw new HttpsError('failed-precondition', 'no staff available at this time');
+    }
+  }
+
+  const ref = await db
+    .collection('tenants')
+    .doc(tenantId)
+    .collection('bookings')
+    .add({
+      dogId,
+      customerId: dog.customerId,
+      serviceId,
+      optionIds: optionIds ?? [],
+      options: opts.options,
+      staffId: assigned,
+      date,
+      startTime,
+      durationMin,
+      bufferMin,
+      slotEnd,
+      status: 'reserved',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+  return { bookingId: ref.id, staffId: assigned, slotEnd, durationMin };
 });
 
 /** customerId が当該 LINE ユーザのものか検証する共通ガード。 */
