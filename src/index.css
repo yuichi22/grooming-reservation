@@ -315,9 +315,14 @@ label.inline > select {
   color: var(--danger);
   font-weight: 700;
 }
-/* サイドバー開閉 */
+/* サイドバー開閉（モバイル: 縦方向にスライド表示） */
 .app-body.nav-collapsed .sidenav {
-  display: none;
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom-color: transparent;
+  pointer-events: none;
 }
 
 .app-body {
@@ -335,10 +340,15 @@ label.inline > select {
   gap: 8px;
   padding: 12px 14px;
   overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   scrollbar-width: thin;
+  /* 開閉アニメーション（縦スライド）。flex item の min-height:auto を打ち消す */
+  min-height: 0;
+  max-height: 240px;
+  transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
 }
 .sidenav a {
   flex: 0 0 auto;
@@ -467,10 +477,24 @@ legend {
     border-right: 1px solid var(--border);
     padding: 18px 14px;
     gap: 4px;
+    /* デスクトップは幅をアニメーション（縦の max-height は無効化） */
+    max-height: none;
+    min-width: 0;
+    transition: width 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+  }
+  /* 折りたたみ時は幅0でスライド収納 */
+  .app-body.nav-collapsed .sidenav {
+    width: 0;
+    max-height: none;
+    padding-left: 0;
+    padding-right: 0;
+    overflow: hidden;
+    border-right-color: transparent;
   }
   .sidenav a {
     background: transparent;
     border-radius: var(--radius-sm);
+    white-space: nowrap;
   }
   .sidenav a:hover {
     background: var(--brand-50);
@@ -781,3 +805,5 @@ tr.row-link td.chevron-cell {
   color: #fff;
   border-color: var(--brand);
 }
+
+/* nav slide animation */
