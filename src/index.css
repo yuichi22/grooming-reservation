@@ -935,7 +935,7 @@ tr.row-link td.chevron-cell {
 .cal-acc-head {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   width: 100%;
   font-weight: 800;
