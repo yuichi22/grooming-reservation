@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { RequireAuth } from './auth/RequireAuth';
 import LoginPage from './auth/LoginPage';
@@ -26,7 +26,8 @@ export default function StaffApp() {
             </RequireAuth>
           }
         >
-          <Route index element={<DashboardPage />} />
+          <Route index element={<Navigate to="/bookings" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
           <Route path="bookings" element={<BookingsPage />} />
           <Route path="karte" element={<KartePage />} />
           <Route path="karte/:dogId" element={<DogDetailPage />} />

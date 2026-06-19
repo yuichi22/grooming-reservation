@@ -9,7 +9,7 @@ import type { Tenant } from '../lib/types';
 type NavItem = { to: string; label: string; icon: string; end?: boolean; admin?: boolean };
 
 const NAV: NavItem[] = [
-  { to: '/', label: 'ダッシュボード', icon: '🏠', end: true },
+  { to: '/dashboard', label: 'ダッシュボード', icon: '🏠' },
   // 予約・カルテはヘッダーのボタンに集約（サイドバーからは除外）
   { to: '/menus', label: 'メニュー', icon: '✂️', admin: true },
   { to: '/staff', label: 'スタッフ', icon: '👤', admin: true },
@@ -21,7 +21,7 @@ export default function Layout() {
   const { user, claims, logout } = useAuth();
   const isAdmin = useIsAdmin();
   const navigate = useNavigate();
-  const [navOpen, setNavOpen] = useState(true);
+  const [navOpen, setNavOpen] = useState(false);
   const { data: tenant } = useDocument<Tenant>(tenantDoc(claims.tenantId ?? '__none__'), [claims.tenantId]);
 
   const storeName = tenant?.name ?? 'サロン';
