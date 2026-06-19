@@ -105,6 +105,8 @@ export interface PriceEntry {
   price: number;
   durationMin: number;
   active: boolean;
+  /** 料金表カードの並び順（小さいほど上） */
+  order?: number;
 }
 
 /**

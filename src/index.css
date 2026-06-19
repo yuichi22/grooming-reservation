@@ -384,6 +384,79 @@ legend {
   }
 }
 
+/* ---------- tabs ---------- */
+.tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  margin: 8px 0 18px;
+}
+.tabs .tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 8px 14px;
+  min-height: 40px;
+}
+.tabs .tab:hover {
+  background: var(--brand-50);
+}
+.tabs .tab.active {
+  color: var(--brand-dark);
+  border-bottom-color: var(--brand);
+}
+
+/* ---------- price cards (料金表) ---------- */
+.price-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.price-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.price-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.price-card-title {
+  font-weight: 700;
+}
+.price-card-reorder button {
+  min-height: 30px;
+  padding: 2px 9px;
+  margin-left: 4px;
+}
+.price-card-body {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.price-card-price {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--brand-dark);
+}
+.price-card-actions {
+  margin-left: auto;
+}
+.price-card-actions button {
+  min-height: 32px;
+  padding: 4px 12px;
+}
+
 /* ---------- LIFF (顧客) ---------- */
 .liff-shell {
   max-width: 480px;

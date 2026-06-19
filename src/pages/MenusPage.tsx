@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react';
-import { addDoc, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { useMemo, useState, type FormEvent } from 'react';
+import { addDoc, deleteDoc, doc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { db } from '../firebaseStaff';
 import { useAuth } from '../auth/AuthContext';
 import { breedsCol, pricingCol, servicesCol } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
@@ -16,7 +17,213 @@ function MenusInner({ tenantId }: { tenantId: string }) {
   const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
   const { data: services } = useCollection<Service>(servicesCol(tenantId), [tenantId]);
   const { data: pricing } = useCollection<PriceEntry>(pricingCol(tenantId), [tenantId]);
+  const [tab, setTab] = useState<'pricing' | 'masters'>('pricing');
 
+  return (
+    <section>
+      <h1>メニュー</h1>
+      <div className="tabs">
+        <button className={`tab ${tab === 'pricing' ? 'active' : ''}`} onClick={() => setTab('pricing')}>
+          料金表
+        </button>
+        <button className={`tab ${tab === 'masters' ? 'active' : ''}`} onClick={() => setTab('masters')}>
+          犬種・サービス設定
+        </button>
+      </div>
+
+      {tab === 'pricing' ? (
+        <PricingTab tenantId={tenantId} breeds={breeds} services={services} pricing={pricing} />
+      ) : (
+        <MastersTab tenantId={tenantId} breeds={breeds} services={services} />
+      )}
+    </section>
+  );
+}
+
+/* ============ 料金表タブ ============ */
+function PricingTab({
+  tenantId,
+  breeds,
+  services,
+  pricing,
+}: {
+  tenantId: string;
+  breeds: Breed[];
+  services: Service[];
+  pricing: PriceEntry[];
+}) {
+  const breedName = useMemo(() => new Map(breeds.map((b) => [b.id, b.name])), [breeds]);
+  const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
+  const sorted = useMemo(
+    () => [...pricing].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.id.localeCompare(b.id)),
+    [pricing],
+  );
+
+  const [breedId, setBreedId] = useState('');
+  const [serviceId, setServiceId] = useState('');
+  const [price, setPrice] = useState(5000);
+  const [durationMin, setDuration] = useState(60);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!breedId || !serviceId) {
+      setMsg('犬種とサービスを選んでください');
+      return;
+    }
+    const id = `${breedId}__${serviceId}`;
+    const maxOrder = sorted.reduce((m, p) => Math.max(m, p.order ?? 0), 0);
+    await setDoc(doc(pricingCol(tenantId), id), {
+      breedId,
+      serviceId,
+      price,
+      durationMin,
+      active: true,
+      order: maxOrder + 1,
+    } as Omit<PriceEntry, 'id'> as PriceEntry);
+    setMsg(null);
+    setBreedId('');
+    setServiceId('');
+  }
+
+  async function move(index: number, dir: -1 | 1) {
+    const next = index + dir;
+    if (next < 0 || next >= sorted.length) return;
+    const arr = [...sorted];
+    [arr[index], arr[next]] = [arr[next], arr[index]];
+    // 並び替え後の順序を全カードに書き戻す
+    const batch = writeBatch(db);
+    arr.forEach((p, i) => batch.update(doc(pricingCol(tenantId), p.id), { order: i }));
+    await batch.commit();
+  }
+
+  return (
+    <>
+      <p className="muted">犬種とサービスを選び、金額・所要時間を入力して「追加」。カードは編集・並べ替えできます。</p>
+      <form className="row-form" onSubmit={add}>
+        <select value={breedId} onChange={(e) => setBreedId(e.target.value)}>
+          <option value="">犬種</option>
+          {breeds.filter((b) => b.active).map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+          <option value="">サービス</option>
+          {services.filter((s) => s.active).map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+        <input type="number" min={5} step={5} value={durationMin} onChange={(e) => setDuration(Number(e.target.value))} />
+        <button type="submit">＋ 追加</button>
+      </form>
+      {msg && <p className="error">{msg}</p>}
+
+      <div className="price-cards">
+        {sorted.map((p, i) => (
+          <PriceCard
+            key={p.id}
+            tenantId={tenantId}
+            entry={p}
+            breedName={breedName.get(p.breedId) ?? p.breedId}
+            serviceName={serviceName.get(p.serviceId) ?? p.serviceId}
+            canUp={i > 0}
+            canDown={i < sorted.length - 1}
+            onUp={() => move(i, -1)}
+            onDown={() => move(i, 1)}
+          />
+        ))}
+        {sorted.length === 0 && <p className="muted">料金表が空です。上のフォームから追加してください。</p>}
+      </div>
+    </>
+  );
+}
+
+function PriceCard({
+  tenantId,
+  entry,
+  breedName,
+  serviceName,
+  canUp,
+  canDown,
+  onUp,
+  onDown,
+}: {
+  tenantId: string;
+  entry: PriceEntry;
+  breedName: string;
+  serviceName: string;
+  canUp: boolean;
+  canDown: boolean;
+  onUp: () => void;
+  onDown: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [price, setPrice] = useState(entry.price);
+  const [durationMin, setDuration] = useState(entry.durationMin);
+
+  async function save() {
+    await updateDoc(doc(pricingCol(tenantId), entry.id), { price, durationMin });
+    setEditing(false);
+  }
+  async function remove() {
+    if (confirm(`「${breedName} × ${serviceName}」を削除しますか？`)) {
+      await deleteDoc(doc(pricingCol(tenantId), entry.id));
+    }
+  }
+
+  return (
+    <div className="price-card">
+      <div className="price-card-head">
+        <span className="price-card-title">
+          {breedName} <span className="muted">×</span> {serviceName}
+        </span>
+        <span className="price-card-reorder">
+          <button onClick={onUp} disabled={!canUp} aria-label="上へ">
+            ↑
+          </button>
+          <button onClick={onDown} disabled={!canDown} aria-label="下へ">
+            ↓
+          </button>
+        </span>
+      </div>
+      {editing ? (
+        <div className="row-form" style={{ margin: '8px 0 0' }}>
+          <label className="inline">
+            ¥
+            <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+          </label>
+          <label className="inline">
+            分
+            <input type="number" min={5} step={5} value={durationMin} onChange={(e) => setDuration(Number(e.target.value))} />
+          </label>
+          <button type="button" onClick={save}>
+            保存
+          </button>
+          <button type="button" onClick={() => setEditing(false)}>
+            取消
+          </button>
+        </div>
+      ) : (
+        <div className="price-card-body">
+          <span className="price-card-price">¥{entry.price.toLocaleString()}</span>
+          <span className="muted">{entry.durationMin}分</span>
+          <span className="price-card-actions">
+            <button onClick={() => setEditing(true)}>編集</button>
+            <button onClick={remove}>削除</button>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============ 犬種・サービス設定タブ ============ */
+function MastersTab({ tenantId, breeds, services }: { tenantId: string; breeds: Breed[]; services: Service[] }) {
   return (
     <>
       <NameMaster
@@ -35,14 +242,12 @@ function MenusInner({ tenantId }: { tenantId: string }) {
         onToggle={(it) => updateDoc(doc(servicesCol(tenantId), it.id), { active: !it.active })}
         onRemove={(it) => deleteDoc(doc(servicesCol(tenantId), it.id))}
       />
-      <PriceTable tenantId={tenantId} breeds={breeds} services={services} pricing={pricing} />
     </>
   );
 }
 
 type NamedItem = { id: string; name: string; active: boolean };
 
-/** 名前のみのマスタ（犬種・サービス共通）。 */
 function NameMaster({
   title,
   items,
@@ -66,7 +271,7 @@ function NameMaster({
     setName('');
   }
   return (
-    <section>
+    <div style={{ marginTop: 18 }}>
       <h2>{title}</h2>
       <form className="row-form" onSubmit={add}>
         <input placeholder={placeholder} value={name} onChange={(e) => setName(e.target.value)} />
@@ -104,110 +309,6 @@ function NameMaster({
           </tbody>
         </table>
       </div>
-    </section>
-  );
-}
-
-/** 料金表: 犬種を選択 → サービスごとに金額・所要時間を登録。 */
-function PriceTable({
-  tenantId,
-  breeds,
-  services,
-  pricing,
-}: {
-  tenantId: string;
-  breeds: Breed[];
-  services: Service[];
-  pricing: PriceEntry[];
-}) {
-  const [breedId, setBreedId] = useState('');
-  const activeServices = services.filter((s) => s.active);
-
-  return (
-    <section>
-      <h2>料金表（犬種 × サービス）</h2>
-      <p className="muted">犬種を選び、サービスごとに金額と所要時間を登録します。</p>
-      <label className="inline">
-        犬種
-        <select value={breedId} onChange={(e) => setBreedId(e.target.value)}>
-          <option value="">選択してください</option>
-          {breeds
-            .filter((b) => b.active)
-            .map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-        </select>
-      </label>
-
-      {breedId && activeServices.length === 0 && <p className="muted">先にサービスを登録してください。</p>}
-      {breedId && activeServices.length > 0 && (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>サービス</th>
-                <th>金額(円)</th>
-                <th>所要(分)</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeServices.map((s) => {
-                const cell = pricing.find((p) => p.breedId === breedId && p.serviceId === s.id) ?? null;
-                return <PriceRow key={s.id} tenantId={tenantId} breedId={breedId} service={s} cell={cell} />;
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function PriceRow({
-  tenantId,
-  breedId,
-  service,
-  cell,
-}: {
-  tenantId: string;
-  breedId: string;
-  service: Service;
-  cell: PriceEntry | null;
-}) {
-  const [price, setPrice] = useState<number>(cell?.price ?? 0);
-  const [durationMin, setDuration] = useState<number>(cell?.durationMin ?? 60);
-  const [saved, setSaved] = useState(false);
-
-  async function save() {
-    const id = `${breedId}__${service.id}`;
-    await setDoc(doc(pricingCol(tenantId), id), {
-      breedId,
-      serviceId: service.id,
-      price,
-      durationMin,
-      active: true,
-    } as Omit<PriceEntry, 'id'> as PriceEntry);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  }
-
-  return (
-    <tr>
-      <td>{service.name}</td>
-      <td>
-        <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
-      </td>
-      <td>
-        <input type="number" min={5} step={5} value={durationMin} onChange={(e) => setDuration(Number(e.target.value))} />
-      </td>
-      <td>
-        <button onClick={save}>保存</button>
-        {saved && <span className="muted" style={{ marginLeft: 6 }}>✓</span>}
-        {!cell && <span className="muted" style={{ marginLeft: 6 }}>未登録</span>}
-      </td>
-    </tr>
+    </div>
   );
 }
