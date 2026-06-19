@@ -95,7 +95,7 @@ export interface Breed {
   standardDurationMin?: number;
 }
 
-/** サービスのオプション（追加メニュー）。料金と所要時間を持つ。 */
+/** オプションの基本形（予約時スナップショットにも使う）。 */
 export interface ServiceOption {
   id: string;
   name: string;
@@ -104,13 +104,18 @@ export interface ServiceOption {
   durationMin: number;
 }
 
+/** tenants/{tenantId}/options/{optionId} — オプションマスタ（サービスから独立） */
+export interface Option extends ServiceOption {
+  active: boolean;
+  /** 表示順 */
+  order?: number;
+}
+
 /** tenants/{tenantId}/services/{serviceId} — サービスメニュー マスタ */
 export interface Service {
   id: string;
   name: string;
   active: boolean;
-  /** 追加で選べるオプション（料金・時間付き） */
-  options?: ServiceOption[];
 }
 
 /**
@@ -163,6 +168,8 @@ export interface Dog {
   additionalDurationMin?: number | null;
   /** 基本料金。確定料金 = 基本料金 + 加算料金（加算料金は単価×加算時間を50円切上げ） */
   basePrice?: number | null;
+  /** オプションごとの個別追加時間（分）。{ [optionId]: 追加分 }。この子だけ余計にかかる分 */
+  optionAdjustments?: Record<string, number>;
   confirmedPrice?: number | null;
   lastServiceAt?: IsoStr | null;
 }

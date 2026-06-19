@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { addDoc, doc, updateDoc } from 'firebase/firestore';
 import { ChevronLeft, MessageCircle, Phone } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { breedsCol, customersCol, dogsCol, recordsCol, servicesCol } from '../lib/firestore';
+import { breedsCol, customersCol, dogsCol, optionsCol, recordsCol, servicesCol } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import type { Breed, Customer, Dog, Service, ServiceRecord } from '../lib/types';
+import type { Breed, Customer, Dog, Option, Service, ServiceRecord } from '../lib/types';
 
 export default function DogDetailPage() {
   const { claims } = useAuth();
@@ -22,6 +22,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const { data: records } = useCollection<ServiceRecord>(recordsCol(tenantId, dogId), [tenantId, dogId]);
   const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
   const { data: services } = useCollection<Service>(servicesCol(tenantId), [tenantId]);
+  const { data: optionItems } = useCollection<Option>(optionsCol(tenantId), [tenantId]);
   const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
   const customerId = dog?.customerId || '__none__';
   const { data: customer } = useDocument<Customer>(doc(customersCol(tenantId), customerId), [tenantId, customerId]);
@@ -36,6 +37,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const [basePrice, setBasePrice] = useState(0);
   const [chargeAuto, setChargeAuto] = useState(true); // 加算料金を自動計算に追従させるか
   const [chargeManual, setChargeManual] = useState(0); // 手入力した加算料金
+  const [optAdj, setOptAdj] = useState<Record<string, number>>({}); // オプション別の個別追加時間
   const [msg, setMsg] = useState<string | null>(null);
   const [cust, setCust] = useState({ ownerName: '', phone: '' });
   const [custMsg, setCustMsg] = useState<string | null>(null);
@@ -49,6 +51,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     // 既に basePrice を保存済みなら、保存時の確定料金を保持（手入力扱い）。新規は自動。
     setChargeAuto(dog.basePrice == null);
     setChargeManual(Math.max(0, (dog.confirmedPrice ?? base) - base));
+    setOptAdj(dog.optionAdjustments ?? {});
   }, [dog]);
 
   useEffect(() => {
@@ -78,6 +81,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
       basePrice,
       confirmedDurationMin: totalMin > 0 ? totalMin : null,
       confirmedPrice: totalPrice > 0 ? totalPrice : null,
+      optionAdjustments: optAdj,
     });
     setMsg('保存しました');
   }
@@ -244,6 +248,44 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
             <span className="calc-val calc-total">¥{totalPrice.toLocaleString()}</span>
           </div>
         </fieldset>
+
+        {optionItems.filter((o) => o.active).length > 0 && (
+          <fieldset>
+            <legend>オプション別 個別追加時間</legend>
+            <p className="muted">この子だけ余計にかかる分。予約でそのオプションを選んだとき所要時間に加算されます。</p>
+            <div className="calc-grid">
+              {optionItems
+                .filter((o) => o.active)
+                .map((o) => {
+                  const add = optAdj[o.id] ?? 0;
+                  return (
+                    <Fragment key={o.id}>
+                      <span className="calc-label">
+                        {o.name}
+                        <span className="muted" style={{ fontWeight: 400 }}>（標準{o.durationMin}分）</span>
+                      </span>
+                      <span className="calc-val">
+                        ＋
+                        <input
+                          type="number"
+                          min={0}
+                          step={5}
+                          value={add}
+                          onChange={(e) => {
+                            const v = Math.max(0, Number(e.target.value));
+                            setOptAdj((m) => ({ ...m, [o.id]: v }));
+                          }}
+                          style={{ width: 80 }}
+                        />
+                        分
+                        <span className="muted" style={{ marginLeft: 8 }}>→ 合計 {o.durationMin + add}分</span>
+                      </span>
+                    </Fragment>
+                  );
+                })}
+            </div>
+          </fieldset>
+        )}
 
         <label>
           メモ（噛み癖・サイズ等）

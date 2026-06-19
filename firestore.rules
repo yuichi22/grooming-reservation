@@ -58,6 +58,10 @@ service cloud.firestore {
         allow read: if isSuperAdmin() || isStaff(tenantId);
         allow write: if isSuperAdmin() || isAdmin(tenantId);
       }
+      match /options/{optionId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
       match /pricing/{priceId} {
         allow read: if isSuperAdmin() || isStaff(tenantId);
         allow write: if isSuperAdmin() || isAdmin(tenantId);

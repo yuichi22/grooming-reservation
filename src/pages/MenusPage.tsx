@@ -2,10 +2,10 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { addDoc, deleteDoc, doc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebaseStaff';
 import { useAuth } from '../auth/AuthContext';
-import { breedsCol, pricingCol, servicesCol, tenantDoc } from '../lib/firestore';
+import { breedsCol, optionsCol, pricingCol, servicesCol, tenantDoc } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import type { Breed, PriceEntry, Service, ServiceOption, Tenant } from '../lib/types';
+import type { Breed, Option, PriceEntry, Service, Tenant } from '../lib/types';
 
 /** 金額を税表示付きで整形（税抜なら税込も併記）。 */
 function priceLabel(price: number, taxMode: 'inclusive' | 'exclusive', taxRate: number): string {
@@ -24,6 +24,7 @@ export default function MenusPage() {
 function MenusInner({ tenantId }: { tenantId: string }) {
   const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
   const { data: services } = useCollection<Service>(servicesCol(tenantId), [tenantId]);
+  const { data: optionItems } = useCollection<Option>(optionsCol(tenantId), [tenantId]);
   const { data: pricing } = useCollection<PriceEntry>(pricingCol(tenantId), [tenantId]);
   const { data: tenant } = useDocument<Tenant>(tenantDoc(tenantId), [tenantId]);
   const taxMode = tenant?.settings?.taxMode ?? 'exclusive';
@@ -52,7 +53,7 @@ function MenusInner({ tenantId }: { tenantId: string }) {
           taxRate={taxRate}
         />
       ) : (
-        <MastersTab tenantId={tenantId} breeds={breeds} services={services} />
+        <MastersTab tenantId={tenantId} breeds={breeds} services={services} optionItems={optionItems} />
       )}
     </section>
   );
@@ -284,141 +285,194 @@ function ServiceRow({
 }
 
 /* ============ 犬種・サービス設定タブ ============ */
-function MastersTab({ tenantId, breeds, services }: { tenantId: string; breeds: Breed[]; services: Service[] }) {
+function MastersTab({
+  tenantId,
+  breeds,
+  services,
+  optionItems,
+}: {
+  tenantId: string;
+  breeds: Breed[];
+  services: Service[];
+  optionItems: Option[];
+}) {
   return (
     <>
       <BreedMaster tenantId={tenantId} breeds={breeds} />
       <ServiceMaster tenantId={tenantId} services={services} />
+      <OptionMaster tenantId={tenantId} optionItems={optionItems} />
     </>
   );
 }
 
-/** サービスマスタ: サービスごとにオプション（料金＋所要時間）を設定。 */
+/** サービスマスタ: 名前のみ（オプションは独立マスタ）。 */
 function ServiceMaster({ tenantId, services }: { tenantId: string; services: Service[] }) {
   const [name, setName] = useState('');
   async function add(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    await addDoc(servicesCol(tenantId), { name: name.trim(), active: true, options: [] } as Omit<Service, 'id'> as Service);
+    await addDoc(servicesCol(tenantId), { name: name.trim(), active: true } as Omit<Service, 'id'> as Service);
     setName('');
   }
   return (
     <div style={{ marginTop: 18 }}>
       <h2>サービスマスタ</h2>
-      <p className="muted">
-        サービスごとにオプション（料金・追加時間）を設定できます。予約時はサービス＋オプションの合計時間で枠を確保します。
-      </p>
       <form className="row-form" onSubmit={add}>
         <input placeholder="例: カット / シャンプー" value={name} onChange={(e) => setName(e.target.value)} />
         <button type="submit">サービスを追加</button>
       </form>
-      <div className="svc-master-list">
-        {[...services]
-          .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
-          .map((s) => (
-            <ServiceCard key={s.id} tenantId={tenantId} service={s} />
-          ))}
-        {services.length === 0 && <p className="muted">サービス未登録</p>}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>名前</th>
+              <th>状態</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...services]
+              .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+              .map((s) => (
+                <tr key={s.id}>
+                  <td>{s.name}</td>
+                  <td>{s.active ? '有効' : '無効'}</td>
+                  <td>
+                    <button onClick={() => updateDoc(doc(servicesCol(tenantId), s.id), { active: !s.active })}>
+                      {s.active ? '無効化' : '有効化'}
+                    </button>
+                    <button onClick={() => deleteDoc(doc(servicesCol(tenantId), s.id))}>削除</button>
+                  </td>
+                </tr>
+              ))}
+            {services.length === 0 && (
+              <tr>
+                <td colSpan={3} className="muted">
+                  未登録
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-function ServiceCard({ tenantId, service }: { tenantId: string; service: Service }) {
-  const options = service.options ?? [];
-  const [optName, setOptName] = useState('');
-  const [optPrice, setOptPrice] = useState(0);
-  const [optDur, setOptDur] = useState(15);
+/** オプションマスタ: サービスから独立。名前＋料金＋追加時間。顧客はサービスと別に選べる。 */
+function OptionMaster({ tenantId, optionItems }: { tenantId: string; optionItems: Option[] }) {
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState(0);
+  const [dur, setDur] = useState(15);
 
-  async function saveOptions(next: ServiceOption[]) {
-    await updateDoc(doc(servicesCol(tenantId), service.id), { options: next });
-  }
-  async function addOption(e: FormEvent) {
+  async function add(e: FormEvent) {
     e.preventDefault();
-    if (!optName.trim()) return;
-    const opt: ServiceOption = { id: crypto.randomUUID(), name: optName.trim(), price: optPrice, durationMin: optDur };
-    await saveOptions([...options, opt]);
-    setOptName('');
-    setOptPrice(0);
-    setOptDur(15);
+    if (!name.trim()) return;
+    await addDoc(optionsCol(tenantId), {
+      name: name.trim(),
+      price,
+      durationMin: dur,
+      active: true,
+    } as Omit<Option, 'id'> as Option);
+    setName('');
+    setPrice(0);
+    setDur(15);
   }
 
   return (
-    <div className="price-card">
-      <div className="price-card-head">
-        <span className="price-card-title">
-          {service.name}
-          {!service.active && <span className="muted">（無効）</span>}
-        </span>
-        <span className="svc-actions">
-          <button onClick={() => updateDoc(doc(servicesCol(tenantId), service.id), { active: !service.active })}>
-            {service.active ? '無効化' : '有効化'}
-          </button>
-          <button onClick={() => deleteDoc(doc(servicesCol(tenantId), service.id))}>削除</button>
-        </span>
-      </div>
-      <ul className="svc-list">
-        {options.map((o) => (
-          <OptionRow
-            key={o.id}
-            option={o}
-            onSave={(patch) => saveOptions(options.map((x) => (x.id === o.id ? { ...x, ...patch } : x)))}
-            onRemove={() => saveOptions(options.filter((x) => x.id !== o.id))}
-          />
-        ))}
-        {options.length === 0 && <li className="muted">オプションなし</li>}
-      </ul>
-      <form className="row-form" style={{ margin: '10px 14px 14px' }} onSubmit={addOption}>
-        <input placeholder="オプション名" value={optName} onChange={(e) => setOptName(e.target.value)} />
+    <div style={{ marginTop: 18 }}>
+      <h2>オプションマスタ</h2>
+      <p className="muted">
+        サービスとは別に選べるオプション（料金・追加時間）。予約時はサービス＋オプションの合計時間で枠を確保します。
+      </p>
+      <form className="row-form" onSubmit={add}>
+        <input placeholder="例: 歯磨き / 爪切り" value={name} onChange={(e) => setName(e.target.value)} />
         <label className="inline">
-          ¥<input type="number" min={0} step={100} value={optPrice} onChange={(e) => setOptPrice(Number(e.target.value))} style={{ width: 90 }} />
+          ¥<input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} style={{ width: 90 }} />
         </label>
         <label className="inline">
-          +<input type="number" min={0} step={5} value={optDur} onChange={(e) => setOptDur(Number(e.target.value))} style={{ width: 70 }} />分
+          +<input type="number" min={0} step={5} value={dur} onChange={(e) => setDur(Number(e.target.value))} style={{ width: 70 }} />分
         </label>
-        <button type="submit">＋ オプション追加</button>
+        <button type="submit">オプションを追加</button>
       </form>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>名前</th>
+              <th>料金</th>
+              <th>追加時間</th>
+              <th>状態</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...optionItems]
+              .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+              .map((o) => (
+                <OptionMasterRow key={o.id} tenantId={tenantId} option={o} />
+              ))}
+            {optionItems.length === 0 && (
+              <tr>
+                <td colSpan={5} className="muted">
+                  未登録
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function OptionRow({
-  option,
-  onSave,
-  onRemove,
-}: {
-  option: ServiceOption;
-  onSave: (patch: Partial<ServiceOption>) => void;
-  onRemove: () => void;
-}) {
+function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Option }) {
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(option.name);
   const [price, setPrice] = useState(option.price);
   const [dur, setDur] = useState(option.durationMin);
 
-  if (editing) {
-    return (
-      <li className="svc-row">
-        <input value={name} onChange={(e) => setName(e.target.value)} style={{ flex: '1 1 120px' }} />
-        <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} style={{ width: 90 }} />
-        <input type="number" min={0} step={5} value={dur} onChange={(e) => setDur(Number(e.target.value))} style={{ width: 70 }} />
-        <span className="svc-actions">
-          <button type="button" onClick={() => { onSave({ name: name.trim(), price, durationMin: dur }); setEditing(false); }}>保存</button>
-          <button type="button" onClick={() => setEditing(false)}>取消</button>
-        </span>
-      </li>
-    );
+  async function save() {
+    await updateDoc(doc(optionsCol(tenantId), option.id), { price, durationMin: dur });
+    setEditing(false);
   }
+
   return (
-    <li className="svc-row">
-      <span className="svc-name">{option.name}</span>
-      <span className="svc-price">¥{option.price.toLocaleString()}</span>
-      <span className="muted">+{option.durationMin}分</span>
-      <span className="svc-actions">
-        <button onClick={() => setEditing(true)}>編集</button>
-        <button onClick={onRemove}>削除</button>
-      </span>
-    </li>
+    <tr>
+      <td>{option.name}</td>
+      <td>
+        {editing ? (
+          <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} style={{ width: 90 }} />
+        ) : (
+          `¥${option.price.toLocaleString()}`
+        )}
+      </td>
+      <td>
+        {editing ? (
+          <>
+            +<input type="number" min={0} step={5} value={dur} onChange={(e) => setDur(Number(e.target.value))} style={{ width: 70 }} />分
+          </>
+        ) : (
+          `+${option.durationMin}分`
+        )}
+      </td>
+      <td>{option.active ? '有効' : '無効'}</td>
+      <td>
+        {editing ? (
+          <>
+            <button onClick={save}>保存</button>
+            <button onClick={() => setEditing(false)}>取消</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => setEditing(true)}>編集</button>
+            <button onClick={() => updateDoc(doc(optionsCol(tenantId), option.id), { active: !option.active })}>
+              {option.active ? '無効化' : '有効化'}
+            </button>
+            <button onClick={() => deleteDoc(doc(optionsCol(tenantId), option.id))}>削除</button>
+          </>
+        )}
+      </td>
+    </tr>
   );
 }
 

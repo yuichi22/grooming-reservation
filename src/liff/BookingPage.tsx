@@ -169,13 +169,14 @@ export default function BookingPage() {
   const priceFor = (svcId: string) =>
     options?.pricing.find((p) => p.breedId === selectedDog?.breedId && p.serviceId === svcId) ?? null;
 
-  // ② 合計時間/料金 = カルテ確定（基準）＋ 選択オプション
-  const selectedService = options?.services.find((s) => s.id === serviceId);
-  const serviceOptions = selectedService?.options ?? [];
-  const chosenOptions = serviceOptions.filter((o) => optionIds.includes(o.id));
+  // ② 合計時間/料金 = カルテ確定（基準）＋ 選択オプション（犬ごとの個別追加時間込み）
+  const allOptions = options?.options ?? [];
+  const optAdj = (id: string) => selectedDog?.optionAdjustments?.[id] ?? 0;
+  const optEffDur = (o: { id: string; durationMin: number }) => o.durationMin + optAdj(o.id);
+  const chosenOptions = allOptions.filter((o) => optionIds.includes(o.id));
   const baseDur = selectedDog?.confirmedDurationMin ?? priceFor(serviceId)?.durationMin ?? null;
   const baseAmt = selectedDog?.confirmedPrice ?? priceFor(serviceId)?.price ?? null;
-  const optDur = chosenOptions.reduce((s, o) => s + o.durationMin, 0);
+  const optDur = chosenOptions.reduce((s, o) => s + optEffDur(o), 0);
   const optAmt = chosenOptions.reduce((s, o) => s + o.price, 0);
   const estDur = baseDur != null ? baseDur + optDur : null;
   const estAmt = baseAmt != null || optAmt > 0 ? (baseAmt ?? 0) + optAmt : null;
@@ -252,16 +253,16 @@ export default function BookingPage() {
         </p>
       )}
 
-      {serviceOptions.length > 0 && (
+      {allOptions.length > 0 && (
         <div>
           <label>オプション（複数選択可）</label>
           <div className="opt-list">
-            {serviceOptions.map((o) => (
+            {allOptions.map((o) => (
               <label key={o.id} className="opt-item">
                 <input type="checkbox" checked={optionIds.includes(o.id)} onChange={() => toggleOption(o.id)} />
                 {o.name}
                 <span className="opt-meta">
-                  +¥{o.price.toLocaleString()} / +{o.durationMin}分
+                  +¥{o.price.toLocaleString()} / +{optEffDur(o)}分
                 </span>
               </label>
             ))}

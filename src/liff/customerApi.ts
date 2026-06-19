@@ -15,7 +15,8 @@ export interface ServiceOption {
   durationMin: number;
 }
 export interface BookingOptions {
-  services: { id: string; name: string; options?: ServiceOption[] }[];
+  services: { id: string; name: string }[];
+  options: ServiceOption[];
   breeds: { id: string; name: string }[];
   staff: { id: string; name: string }[];
   dogs: {
@@ -24,6 +25,7 @@ export interface BookingOptions {
     breedId: string | null;
     confirmedDurationMin: number | null;
     confirmedPrice: number | null;
+    optionAdjustments: Record<string, number>;
   }[];
   pricing: PriceCell[];
 }

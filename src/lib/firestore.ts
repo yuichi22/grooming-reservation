@@ -15,6 +15,7 @@ import type {
   Closure,
   Customer,
   Dog,
+  Option,
   PriceEntry,
   Service,
   ServiceRecord,
@@ -42,6 +43,7 @@ const closureConverter = converter<Closure>();
 const staffConverter = converter<Staff>();
 const breedConverter = converter<Breed>();
 const serviceConverter = converter<Service>();
+const optionConverter = converter<Option>();
 const pricingConverter = converter<PriceEntry>();
 const customerConverter = converter<Customer>();
 const dogConverter = converter<Dog>();
@@ -61,6 +63,9 @@ export const breedsCol = (tenantId: string): CollectionReference<Breed> =>
 
 export const servicesCol = (tenantId: string): CollectionReference<Service> =>
   collection(db, 'tenants', tenantId, 'services').withConverter(serviceConverter);
+
+export const optionsCol = (tenantId: string): CollectionReference<Option> =>
+  collection(db, 'tenants', tenantId, 'options').withConverter(optionConverter);
 
 export const pricingCol = (tenantId: string): CollectionReference<PriceEntry> =>
   collection(db, 'tenants', tenantId, 'pricing').withConverter(pricingConverter);
