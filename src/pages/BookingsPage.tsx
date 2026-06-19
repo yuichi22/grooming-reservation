@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { deleteDoc, doc, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
   bookingsCol,
@@ -20,6 +21,7 @@ import type { Booking, Closure, Customer, Dog, Option, PriceEntry, Service, Staf
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const PX_PER_MIN = 1; // 時間軸の縮尺
 const SLOT_ROUND = 15; // クリック時刻の丸め（分）
+const EDGE_PAD = 30; // 営業時間前後の余白（分）
 
 function fmt(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -46,11 +48,13 @@ export default function BookingsPage() {
 
 function BookingsInner({ tenantId }: { tenantId: string }) {
   const today = todayStr();
+  const [monthOpen, setMonthOpen] = useState(false);
   const [view, setView] = useState(() => {
     const d = new Date();
     return { y: d.getFullYear(), m: d.getMonth() };
   });
   const [selected, setSelected] = useState(today);
+  const [dayView, setDayView] = useState<'time' | 'list'>('time');
 
   const gridDays = useMemo(() => {
     const first = new Date(view.y, view.m, 1);
@@ -82,8 +86,9 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
     () => new Set(closures.filter((c) => c.fullDay !== false).map((c) => c.id)),
     [closures],
   );
+  const selectedClosed = closedDates.has(selected);
 
-  function go(delta: number) {
+  function goMonth(delta: number) {
     setView((v) => {
       const d = new Date(v.y, v.m + delta, 1);
       return { y: d.getFullYear(), m: d.getMonth() };
@@ -93,69 +98,124 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
     setSelected(fmt(d));
     if (d.getMonth() !== view.m || d.getFullYear() !== view.y) setView({ y: d.getFullYear(), m: d.getMonth() });
   }
+  function shiftDay(delta: number) {
+    const [y, m, d] = selected.split('-').map(Number);
+    const nd = new Date(y, m - 1, d + delta);
+    setSelected(fmt(nd));
+    if (nd.getMonth() !== view.m || nd.getFullYear() !== view.y) setView({ y: nd.getFullYear(), m: nd.getMonth() });
+  }
+  async function toggleClosure() {
+    const ref = doc(closuresCol(tenantId), selected);
+    if (selectedClosed) await deleteDoc(ref);
+    else await setDoc(ref, { fullDay: true } as Omit<Closure, 'id'> as Closure);
+  }
 
   return (
     <section>
       <h1>予約カレンダー</h1>
-      <div className="cal-head">
-        <button type="button" onClick={() => go(-1)} aria-label="前の月">
+
+      {/* 月カレンダー（アコーディオン・既定で閉） */}
+      <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
+        {monthOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+        {view.y}年 {view.m + 1}月（月カレンダー）
+      </button>
+      {monthOpen && (
+        <div className="cal-acc-body">
+          <div className="cal-head">
+            <button type="button" onClick={() => goMonth(-1)} aria-label="前の月">
+              ‹
+            </button>
+            <span className="cal-title">
+              {view.y}年 {view.m + 1}月
+            </span>
+            <button type="button" onClick={() => goMonth(1)} aria-label="次の月">
+              ›
+            </button>
+            <button
+              type="button"
+              className="cal-today-btn"
+              onClick={() => {
+                const d = new Date();
+                setView({ y: d.getFullYear(), m: d.getMonth() });
+                setSelected(todayStr());
+              }}
+            >
+              今日
+            </button>
+          </div>
+          <div className="cal-grid">
+            {DOW.map((w, i) => (
+              <div key={w} className={`cal-dow${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}`}>
+                {w}
+              </div>
+            ))}
+            {gridDays.map((d) => {
+              const ds = fmt(d);
+              const dow = d.getDay();
+              const inMonth = d.getMonth() === view.m;
+              const count = countByDate.get(ds) ?? 0;
+              const closed = closedDates.has(ds);
+              const cls = ['cal-cell'];
+              if (!inMonth) cls.push('other');
+              if (ds === today) cls.push('today');
+              if (ds === selected) cls.push('selected');
+              if (closed) cls.push('closed');
+              return (
+                <button key={ds} type="button" className={cls.join(' ')} onClick={() => pickDay(d)}>
+                  <span className={`cal-daynum${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}`}>{d.getDate()}</span>
+                  {closed ? (
+                    <span className="cal-badge closed">休</span>
+                  ) : count > 0 ? (
+                    <span className="cal-badge count">{count}件</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="cal-closeday">
+            <span className="muted">選択日: {formatDateJa(selected)}</span>
+            <button type="button" className={selectedClosed ? 'btn-closed' : ''} onClick={toggleClosure}>
+              {selectedClosed ? '休業日を解除' : '休業日にする'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 日ナビ */}
+      <div className="day-nav">
+        <button type="button" onClick={() => shiftDay(-1)} aria-label="前日">
           ‹
         </button>
-        <span className="cal-title">
-          {view.y}年 {view.m + 1}月
-        </span>
-        <button type="button" onClick={() => go(1)} aria-label="次の月">
+        <span className="day-label">{formatDateJa(selected)}</span>
+        <button type="button" onClick={() => shiftDay(1)} aria-label="翌日">
           ›
         </button>
-        <button
-          type="button"
-          className="cal-today-btn"
-          onClick={() => {
-            const d = new Date();
-            setView({ y: d.getFullYear(), m: d.getMonth() });
-            setSelected(todayStr());
-          }}
-        >
-          今日
-        </button>
+        <div className="view-toggle">
+          <button type="button" className={dayView === 'time' ? 'active' : ''} onClick={() => setDayView('time')}>
+            時間
+          </button>
+          <button type="button" className={dayView === 'list' ? 'active' : ''} onClick={() => setDayView('list')}>
+            リスト
+          </button>
+        </div>
       </div>
 
-      <div className="cal-grid">
-        {DOW.map((w, i) => (
-          <div key={w} className={`cal-dow${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}`}>
-            {w}
-          </div>
-        ))}
-        {gridDays.map((d) => {
-          const ds = fmt(d);
-          const dow = d.getDay();
-          const inMonth = d.getMonth() === view.m;
-          const count = countByDate.get(ds) ?? 0;
-          const closed = closedDates.has(ds);
-          const cls = ['cal-cell'];
-          if (!inMonth) cls.push('other');
-          if (ds === today) cls.push('today');
-          if (ds === selected) cls.push('selected');
-          if (closed) cls.push('closed');
-          return (
-            <button key={ds} type="button" className={cls.join(' ')} onClick={() => pickDay(d)}>
-              <span className={`cal-daynum${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}`}>{d.getDate()}</span>
-              {closed ? (
-                <span className="cal-badge closed">休</span>
-              ) : count > 0 ? (
-                <span className="cal-badge count">{count}件</span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-
-      <DaySection tenantId={tenantId} date={selected} closed={closedDates.has(selected)} />
+      <DaySection tenantId={tenantId} date={selected} closed={selectedClosed} dayView={dayView} />
     </section>
   );
 }
 
-function DaySection({ tenantId, date, closed }: { tenantId: string; date: string; closed: boolean }) {
+function DaySection({
+  tenantId,
+  date,
+  closed,
+  dayView,
+}: {
+  tenantId: string;
+  date: string;
+  closed: boolean;
+  dayView: 'time' | 'list';
+}) {
   const { data: bookings, loading } = useCollection<Booking>(
     query(bookingsCol(tenantId), where('date', '==', date)),
     [tenantId, date],
@@ -171,41 +231,19 @@ function DaySection({ tenantId, date, closed }: { tenantId: string; date: string
   const dogName = useMemo(() => new Map(dogs.map((d) => [d.id, d.name])), [dogs]);
   const staffName = useMemo(() => new Map(staff.map((s) => [s.id, s.name])), [staff]);
   const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
+  const activeStaff = useMemo(() => staff.filter((s) => s.active).sort((a, b) => a.name.localeCompare(b.name, 'ja')), [staff]);
 
-  const [dayView, setDayView] = useState<'time' | 'list'>('time');
-  const [createStart, setCreateStart] = useState<string | null>(null);
+  const [createInfo, setCreateInfo] = useState<{ start: string; staffId: string } | null>(null);
 
   const businessHours =
     tenant?.settings?.businessHours && tenant.settings.businessHours.length > 0
       ? tenant.settings.businessHours
       : [{ start: '09:00', end: '19:00' }];
 
-  async function toggleClosure() {
-    const ref = doc(closuresCol(tenantId), date);
-    if (closed) await deleteDoc(ref);
-    else await setDoc(ref, { fullDay: true } as Omit<Closure, 'id'> as Closure);
-  }
-
   const sorted = [...bookings].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   return (
     <>
-      <div className="cal-detail-head">
-        <h2>{formatDateJa(date)}</h2>
-        <div className="view-toggle">
-          <button type="button" className={dayView === 'time' ? 'active' : ''} onClick={() => setDayView('time')}>
-            時間
-          </button>
-          <button type="button" className={dayView === 'list' ? 'active' : ''} onClick={() => setDayView('list')}>
-            リスト
-          </button>
-        </div>
-        <button type="button" className={closed ? 'btn-closed' : ''} onClick={toggleClosure}>
-          {closed ? '休業日を解除' : '休業日にする'}
-        </button>
-      </div>
-      {closed && <p className="muted">この日は休業日です（空き計算で「空きなし」・予約受付なし §11）。</p>}
-
       {loading ? (
         <p>読み込み中…</p>
       ) : dayView === 'time' ? (
@@ -213,10 +251,11 @@ function DaySection({ tenantId, date, closed }: { tenantId: string; date: string
           <TimeGrid
             bookings={sorted}
             businessHours={businessHours}
+            staff={activeStaff}
             dogName={dogName}
             serviceName={serviceName}
             closed={closed}
-            onCreateAt={(t) => setCreateStart(t)}
+            onCreateAt={(start, staffId) => setCreateInfo({ start, staffId })}
           />
           {!closed && <p className="tg-hint">空き時間をクリックすると予約を作成できます。</p>}
         </>
@@ -230,18 +269,19 @@ function DaySection({ tenantId, date, closed }: { tenantId: string; date: string
         />
       )}
 
-      {createStart && (
+      {createInfo && (
         <CreateModal
           tenantId={tenantId}
           date={date}
-          startTime={createStart}
+          startTime={createInfo.start}
+          defaultStaffId={createInfo.staffId}
           dogs={dogs}
           customers={customers}
           services={services}
           options={options}
           staff={staff}
           pricing={pricing}
-          onClose={() => setCreateStart(null)}
+          onClose={() => setCreateInfo(null)}
         />
       )}
     </>
@@ -251,6 +291,7 @@ function DaySection({ tenantId, date, closed }: { tenantId: string; date: string
 function TimeGrid({
   bookings,
   businessHours,
+  staff,
   dogName,
   serviceName,
   closed,
@@ -258,83 +299,107 @@ function TimeGrid({
 }: {
   bookings: Booking[];
   businessHours: { start: string; end: string }[];
+  staff: Staff[];
   dogName: Map<string, string>;
   serviceName: Map<string, string>;
   closed: boolean;
-  onCreateAt: (startTime: string) => void;
+  onCreateAt: (startTime: string, staffId: string) => void;
 }) {
-  const axisStart = Math.min(...businessHours.map((h) => toMin(h.start)));
-  const axisEnd = Math.max(...businessHours.map((h) => toMin(h.end)));
+  // 営業時間前後に余白を足した軸
+  const axisStart = Math.min(...businessHours.map((h) => toMin(h.start))) - EDGE_PAD;
+  const axisEnd = Math.max(...businessHours.map((h) => toMin(h.end))) + EDGE_PAD;
   const height = (axisEnd - axisStart) * PX_PER_MIN;
 
-  // 時刻ラベル（1時間ごと）
   const hours: number[] = [];
   for (let h = Math.ceil(axisStart / 60) * 60; h <= axisEnd; h += 60) hours.push(h);
 
-  // レーン詰め（重なる予約を横に並べる）
-  const active = bookings.filter((b) => b.status === 'reserved' || b.status === 'done');
-  const laneEnds: number[] = [];
-  const placed = active.map((b) => {
-    const s = toMin(b.startTime);
-    const e = s + b.durationMin;
-    let lane = laneEnds.findIndex((end) => end <= s);
-    if (lane === -1) {
-      lane = laneEnds.length;
-      laneEnds.push(e);
-    } else laneEnds[lane] = e;
-    return { b, s, e, lane };
-  });
-  const laneCount = Math.max(1, laneEnds.length);
+  const columns = staff; // スタッフ列
+  const colCount = Math.max(1, columns.length);
 
   function handleClick(e: React.MouseEvent<HTMLDivElement>) {
     if (closed) return;
-    const y = e.nativeEvent.offsetY;
-    let min = axisStart + Math.round(y / PX_PER_MIN / SLOT_ROUND) * SLOT_ROUND;
+    const layer = e.currentTarget;
+    const min = axisStart + Math.round(e.nativeEvent.offsetY / PX_PER_MIN / SLOT_ROUND) * SLOT_ROUND;
     const seg = businessHours.find((h) => min >= toMin(h.start) && min < toMin(h.end));
-    if (!seg) return; // 営業時間外は無視
-    if (min < axisStart) min = axisStart;
-    onCreateAt(toHHMM(min));
+    if (!seg) return; // 営業時間外
+    const colW = layer.clientWidth / colCount;
+    const col = Math.min(colCount - 1, Math.max(0, Math.floor(e.nativeEvent.offsetX / colW)));
+    onCreateAt(toHHMM(min), columns[col]?.id ?? '');
   }
 
   return (
-    <div className="tg" style={{ height }}>
-      {/* 営業時間の白背景 */}
-      {businessHours.map((h, i) => (
-        <div
-          key={i}
-          className="tg-open"
-          style={{ top: (toMin(h.start) - axisStart) * PX_PER_MIN, height: (toMin(h.end) - toMin(h.start)) * PX_PER_MIN }}
-        />
-      ))}
-      {/* 時刻ライン＋ラベル */}
-      {hours.map((h) => (
-        <div key={h} className="tg-hour" style={{ top: (h - axisStart) * PX_PER_MIN }}>
-          <span className="tg-hour-label">{toHHMM(h)}</span>
-        </div>
-      ))}
-      {/* クリックで作成 */}
-      <div className="tg-clicklayer" onClick={handleClick} />
-      {/* 予約ブロック */}
-      {placed.map(({ b, s, lane }) => (
-        <div
-          key={b.id}
-          className={`tg-block${b.status === 'done' ? ' done' : ''}`}
-          style={{
-            top: (s - axisStart) * PX_PER_MIN,
-            height: Math.max(18, b.durationMin * PX_PER_MIN - 2),
-            left: `calc(54px + ${lane} * (100% - 60px) / ${laneCount})`,
-            width: `calc((100% - 60px) / ${laneCount} - 4px)`,
-          }}
-        >
-          <div className="b-time">
-            {b.startTime}–{b.slotEnd}
+    <>
+      {/* スタッフ列ヘッダー */}
+      <div className="tg-colhead">
+        <div className="gutter" />
+        {columns.length > 0 ? (
+          columns.map((s) => (
+            <div key={s.id} className="col">
+              {s.name}
+            </div>
+          ))
+        ) : (
+          <div className="col muted">（スタッフ未登録）</div>
+        )}
+      </div>
+
+      <div className="tg" style={{ height }}>
+        {/* 営業時間の白背景 */}
+        {businessHours.map((h, i) => (
+          <div
+            key={i}
+            className="tg-open"
+            style={{
+              top: (toMin(h.start) - axisStart) * PX_PER_MIN,
+              height: (toMin(h.end) - toMin(h.start)) * PX_PER_MIN,
+            }}
+          />
+        ))}
+        {/* 時刻ライン＋ラベル */}
+        {hours.map((h) => (
+          <div key={h} className="tg-hour" style={{ top: (h - axisStart) * PX_PER_MIN }}>
+            <span className="tg-hour-label">{toHHMM(h)}</span>
           </div>
-          {dogName.get(b.dogId) ?? b.dogId}
-          <div style={{ opacity: 0.9, fontSize: '0.7rem' }}>{serviceName.get(b.serviceId) ?? ''}</div>
-        </div>
-      ))}
-      {closed && <div className="tg-closed">休業日</div>}
-    </div>
+        ))}
+        {/* 列の区切り線 */}
+        {Array.from({ length: colCount - 1 }, (_, i) => (
+          <div
+            key={i}
+            className="tg-colsep"
+            style={{ left: `calc(52px + ${i + 1} * (100% - 58px) / ${colCount})` }}
+          />
+        ))}
+        {/* クリックで作成 */}
+        <div className="tg-clicklayer" onClick={handleClick} />
+        {/* 予約ブロック */}
+        {bookings
+          .filter((b) => b.status === 'reserved' || b.status === 'done')
+          .map((b) => {
+            const s = toMin(b.startTime);
+            const colIndex = columns.findIndex((c) => c.id === b.staffId);
+            const spanning = colIndex < 0;
+            return (
+              <div
+                key={b.id}
+                className={`tg-block${b.status === 'done' ? ' done' : ''}`}
+                style={{
+                  top: (s - axisStart) * PX_PER_MIN,
+                  height: Math.max(18, b.durationMin * PX_PER_MIN - 2),
+                  left: spanning ? '54px' : `calc(54px + ${colIndex} * (100% - 60px) / ${colCount})`,
+                  width: spanning ? 'calc(100% - 60px)' : `calc((100% - 60px) / ${colCount} - 4px)`,
+                }}
+              >
+                <div className="b-time">
+                  {b.startTime}–{b.slotEnd}
+                </div>
+                {dogName.get(b.dogId) ?? b.dogId}
+                <div style={{ opacity: 0.9, fontSize: '0.7rem' }}>{serviceName.get(b.serviceId) ?? ''}</div>
+              </div>
+            );
+          })}
+        {closed && <div className="tg-closed">休業日</div>}
+      </div>
+    </>
   );
 }
 
@@ -342,6 +407,7 @@ function CreateModal({
   tenantId,
   date,
   startTime,
+  defaultStaffId,
   dogs,
   customers,
   services,
@@ -353,6 +419,7 @@ function CreateModal({
   tenantId: string;
   date: string;
   startTime: string;
+  defaultStaffId: string;
   dogs: Dog[];
   customers: Customer[];
   services: Service[];
@@ -366,7 +433,7 @@ function CreateModal({
   const [dogId, setDogId] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [optionIds, setOptionIds] = useState<string[]>([]);
-  const [staffId, setStaffId] = useState('');
+  const [staffId, setStaffId] = useState(defaultStaffId);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 

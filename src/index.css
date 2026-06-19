@@ -919,7 +919,74 @@ tr.row-link td.chevron-cell {
   border-color: #b42318;
 }
 
+/* ---------- 予約: 月アコーディオン & 日ナビ ---------- */
+.cal-acc-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  font-weight: 800;
+  font-size: 1.02rem;
+  color: var(--brand-dark);
+  padding: 11px 12px;
+  background: var(--brand-50);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.cal-acc-body {
+  padding-top: 12px;
+}
+.cal-closeday {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.day-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 18px 0 4px;
+}
+.day-nav .day-label {
+  font-weight: 800;
+  font-size: 1.05rem;
+  min-width: 11.5em;
+  text-align: center;
+}
+
 /* ---------- 予約: 日の時間軸グリッド ---------- */
+.tg-colhead {
+  display: flex;
+  margin-top: 12px;
+}
+.tg-colhead .gutter {
+  flex: 0 0 52px;
+}
+.tg-colhead .col {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 6px 2px;
+  border-bottom: 2px solid var(--brand-100);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tg-colsep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+/* ---------- 予約: 日の時間軸グリッド(本体) ---------- */
 .view-toggle {
   display: inline-flex;
   border: 1px solid var(--border);
