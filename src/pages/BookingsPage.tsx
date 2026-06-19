@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import { deleteDoc, doc, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -109,10 +109,20 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
     if (selectedClosed) await deleteDoc(ref);
     else await setDoc(ref, { fullDay: true } as Omit<Closure, 'id'> as Closure);
   }
+  function goToday() {
+    const d = new Date();
+    setView({ y: d.getFullYear(), m: d.getMonth() });
+    setSelected(todayStr());
+  }
 
   return (
     <section>
-      <h1>予約カレンダー</h1>
+      <div className="cal-title-row">
+        <h1>予約カレンダー</h1>
+        <button type="button" className="cal-today-btn" onClick={goToday}>
+          今日
+        </button>
+      </div>
 
       {/* 月カレンダー（アコーディオン・既定で閉） */}
       <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
@@ -130,17 +140,6 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
             </span>
             <button type="button" onClick={() => goMonth(1)} aria-label="次の月">
               ›
-            </button>
-            <button
-              type="button"
-              className="cal-today-btn"
-              onClick={() => {
-                const d = new Date();
-                setView({ y: d.getFullYear(), m: d.getMonth() });
-                setSelected(todayStr());
-              }}
-            >
-              今日
             </button>
           </div>
           <div className="cal-grid">
@@ -357,11 +356,14 @@ function TimeGrid({
             }}
           />
         ))}
-        {/* 時刻ライン＋ラベル */}
+        {/* 時刻ライン＋ラベル（ラベルは .tg 直下に置き左ガターに配置） */}
         {hours.map((h) => (
-          <div key={h} className="tg-hour" style={{ top: (h - axisStart) * PX_PER_MIN }}>
-            <span className="tg-hour-label">{toHHMM(h)}</span>
-          </div>
+          <Fragment key={h}>
+            <div className="tg-hour" style={{ top: (h - axisStart) * PX_PER_MIN }} />
+            <span className="tg-hour-label" style={{ top: (h - axisStart) * PX_PER_MIN }}>
+              {toHHMM(h)}
+            </span>
+          </Fragment>
         ))}
         {/* 時間列（ガター）の区切り線 */}
         <div className="tg-colsep" style={{ left: '56px' }} />

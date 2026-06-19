@@ -919,6 +919,18 @@ tr.row-link td.chevron-cell {
   border-color: #b42318;
 }
 
+/* ---------- 予約: タイトル行（今日ボタン右寄せ） ---------- */
+.cal-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.cal-title-row h1 {
+  margin: 0;
+}
+
 /* ---------- 予約: 月アコーディオン & 日ナビ ---------- */
 .cal-acc-head {
   display: flex;
