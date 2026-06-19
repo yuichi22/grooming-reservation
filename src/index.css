@@ -269,8 +269,7 @@ label.inline > select {
   order: 0;
   position: absolute;
   left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+  bottom: 8px; /* ログインID（メール）の行あたりに配置 */
 }
 .header-center {
   order: 1;
@@ -354,6 +353,7 @@ label.inline > select {
   display: flex;
   flex-direction: row;
   align-items: center;
+  flex-shrink: 0; /* コンテンツが長いページで flex により潰れて高さが変わるのを防ぐ */
   gap: 8px;
   padding: 12px 14px;
   overflow-x: auto;
