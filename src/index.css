@@ -264,6 +264,7 @@ label.inline > select {
 .topbar {
   flex-direction: column;
   position: relative;
+  padding-top: 24px; /* ロゴ上の余白 */
 }
 .nav-toggle {
   order: 0;
@@ -288,6 +289,7 @@ label.inline > select {
 @media (min-width: 820px) {
   .topbar {
     flex-direction: row;
+    padding-top: 12px;
   }
   .nav-toggle {
     position: static;
