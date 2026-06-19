@@ -808,6 +808,117 @@ tr.row-link td.chevron-cell {
   background: none;
 }
 
+/* ---------- 予約カレンダー（月表示） ---------- */
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 6px 0 14px;
+}
+.cal-title {
+  font-weight: 800;
+  font-size: 1.1rem;
+  min-width: 7.5em;
+  text-align: center;
+}
+.cal-today-btn {
+  margin-left: 8px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-dow {
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 2px 0 4px;
+}
+.cal-dow.sun {
+  color: var(--danger);
+}
+.cal-dow.sat {
+  color: #2563eb;
+}
+.cal-cell {
+  min-height: 58px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 5px;
+  background: var(--surface);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.cal-cell:hover {
+  background: var(--brand-50);
+}
+.cal-cell.other {
+  opacity: 0.38;
+}
+.cal-cell.today {
+  border-color: var(--brand);
+}
+.cal-cell.selected {
+  box-shadow: 0 0 0 2px var(--brand);
+  background: var(--brand-50);
+}
+.cal-cell.closed {
+  background: var(--danger-50);
+}
+.cal-daynum {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.cal-daynum.sun {
+  color: var(--danger);
+}
+.cal-daynum.sat {
+  color: #2563eb;
+}
+.cal-badge {
+  align-self: flex-start;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.cal-badge.count {
+  background: var(--brand-100);
+  color: var(--brand-dark);
+}
+.cal-badge.closed {
+  background: #fde2e0;
+  color: var(--danger);
+}
+.cal-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 22px 0 8px;
+}
+.cal-detail-head h2 {
+  margin: 0;
+}
+.btn-closed {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+.btn-closed:hover {
+  background: #b42318;
+  border-color: #b42318;
+}
+
 /* ---------- LIFF (顧客) ---------- */
 .liff-shell {
   max-width: 480px;
