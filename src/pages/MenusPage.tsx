@@ -86,12 +86,24 @@ function PricingTab({
     setServiceId('');
   }
 
-  async function move(index: number, dir: -1 | 1) {
+  // 犬種ごとにグループ化（各グループ内は order 順）
+  const groups = useMemo(() => {
+    const m = new Map<string, PriceEntry[]>();
+    for (const p of sorted) {
+      if (!m.has(p.breedId)) m.set(p.breedId, []);
+      m.get(p.breedId)!.push(p);
+    }
+    return [...m.entries()]
+      .map(([bid, entries]) => ({ breedId: bid, breedName: breedName.get(bid) ?? bid, entries }))
+      .sort((a, b) => a.breedName.localeCompare(b.breedName, 'ja'));
+  }, [sorted, breedName]);
+
+  // 同じ犬種内でサービス行を並べ替え（order を書き戻す）
+  async function moveWithin(entries: PriceEntry[], index: number, dir: -1 | 1) {
     const next = index + dir;
-    if (next < 0 || next >= sorted.length) return;
-    const arr = [...sorted];
+    if (next < 0 || next >= entries.length) return;
+    const arr = [...entries];
     [arr[index], arr[next]] = [arr[next], arr[index]];
-    // 並び替え後の順序を全カードに書き戻す
     const batch = writeBatch(db);
     arr.forEach((p, i) => batch.update(doc(pricingCol(tenantId), p.id), { order: i }));
     await batch.commit();
@@ -99,7 +111,7 @@ function PricingTab({
 
   return (
     <>
-      <p className="muted">犬種とサービスを選び、金額・所要時間を入力して「追加」。カードは編集・並べ替えできます。</p>
+      <p className="muted">犬種とサービスを選び、金額・所要時間を入力して「追加」。犬種ごとにカードで表示されます。</p>
       <form className="row-form" onSubmit={add}>
         <select value={breedId} onChange={(e) => setBreedId(e.target.value)}>
           <option value="">犬種</option>
@@ -124,29 +136,64 @@ function PricingTab({
       {msg && <p className="error">{msg}</p>}
 
       <div className="price-cards">
-        {sorted.map((p, i) => (
-          <PriceCard
-            key={p.id}
+        {groups.map((g) => (
+          <BreedCard
+            key={g.breedId}
             tenantId={tenantId}
-            entry={p}
-            breedName={breedName.get(p.breedId) ?? p.breedId}
-            serviceName={serviceName.get(p.serviceId) ?? p.serviceId}
-            canUp={i > 0}
-            canDown={i < sorted.length - 1}
-            onUp={() => move(i, -1)}
-            onDown={() => move(i, 1)}
+            breedName={g.breedName}
+            entries={g.entries}
+            serviceName={serviceName}
+            onMove={moveWithin}
           />
         ))}
-        {sorted.length === 0 && <p className="muted">料金表が空です。上のフォームから追加してください。</p>}
+        {groups.length === 0 && <p className="muted">料金表が空です。上のフォームから追加してください。</p>}
       </div>
     </>
   );
 }
 
-function PriceCard({
+/** 犬種カード: ヘッダーに犬種名、本体にサービス行リスト。 */
+function BreedCard({
+  tenantId,
+  breedName,
+  entries,
+  serviceName,
+  onMove,
+}: {
+  tenantId: string;
+  breedName: string;
+  entries: PriceEntry[];
+  serviceName: Map<string, string>;
+  onMove: (entries: PriceEntry[], index: number, dir: -1 | 1) => void;
+}) {
+  return (
+    <div className="price-card">
+      <div className="price-card-head">
+        <span className="price-card-title">{breedName}</span>
+        <span className="muted">{entries.length}件</span>
+      </div>
+      <ul className="svc-list">
+        {entries.map((e, i) => (
+          <ServiceRow
+            key={e.id}
+            tenantId={tenantId}
+            entry={e}
+            serviceName={serviceName.get(e.serviceId) ?? e.serviceId}
+            canUp={i > 0}
+            canDown={i < entries.length - 1}
+            onUp={() => onMove(entries, i, -1)}
+            onDown={() => onMove(entries, i, 1)}
+          />
+        ))}
+        {entries.length === 0 && <li className="muted">サービス未設定</li>}
+      </ul>
+    </div>
+  );
+}
+
+function ServiceRow({
   tenantId,
   entry,
-  breedName,
   serviceName,
   canUp,
   canDown,
@@ -155,7 +202,6 @@ function PriceCard({
 }: {
   tenantId: string;
   entry: PriceEntry;
-  breedName: string;
   serviceName: string;
   canUp: boolean;
   canDown: boolean;
@@ -171,54 +217,37 @@ function PriceCard({
     setEditing(false);
   }
   async function remove() {
-    if (confirm(`「${breedName} × ${serviceName}」を削除しますか？`)) {
+    if (confirm(`「${serviceName}」を削除しますか？`)) {
       await deleteDoc(doc(pricingCol(tenantId), entry.id));
     }
   }
 
+  if (editing) {
+    return (
+      <li className="svc-row">
+        <span className="svc-name">{serviceName}</span>
+        <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} style={{ width: 90 }} />
+        <input type="number" min={5} step={5} value={durationMin} onChange={(e) => setDuration(Number(e.target.value))} style={{ width: 70 }} />
+        <span className="svc-actions">
+          <button type="button" onClick={save}>保存</button>
+          <button type="button" onClick={() => setEditing(false)}>取消</button>
+        </span>
+      </li>
+    );
+  }
+
   return (
-    <div className="price-card">
-      <div className="price-card-head">
-        <span className="price-card-title">
-          {breedName} <span className="muted">×</span> {serviceName}
-        </span>
-        <span className="price-card-reorder">
-          <button onClick={onUp} disabled={!canUp} aria-label="上へ">
-            ↑
-          </button>
-          <button onClick={onDown} disabled={!canDown} aria-label="下へ">
-            ↓
-          </button>
-        </span>
-      </div>
-      {editing ? (
-        <div className="row-form" style={{ margin: '8px 0 0' }}>
-          <label className="inline">
-            ¥
-            <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
-          </label>
-          <label className="inline">
-            分
-            <input type="number" min={5} step={5} value={durationMin} onChange={(e) => setDuration(Number(e.target.value))} />
-          </label>
-          <button type="button" onClick={save}>
-            保存
-          </button>
-          <button type="button" onClick={() => setEditing(false)}>
-            取消
-          </button>
-        </div>
-      ) : (
-        <div className="price-card-body">
-          <span className="price-card-price">¥{entry.price.toLocaleString()}</span>
-          <span className="muted">{entry.durationMin}分</span>
-          <span className="price-card-actions">
-            <button onClick={() => setEditing(true)}>編集</button>
-            <button onClick={remove}>削除</button>
-          </span>
-        </div>
-      )}
-    </div>
+    <li className="svc-row">
+      <span className="svc-name">{serviceName}</span>
+      <span className="svc-price">¥{entry.price.toLocaleString()}</span>
+      <span className="muted">{entry.durationMin}分</span>
+      <span className="svc-actions">
+        <button onClick={onUp} disabled={!canUp} aria-label="上へ">↑</button>
+        <button onClick={onDown} disabled={!canDown} aria-label="下へ">↓</button>
+        <button onClick={() => setEditing(true)}>編集</button>
+        <button onClick={remove}>削除</button>
+      </span>
+    </li>
   );
 }
 

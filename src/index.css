@@ -412,49 +412,69 @@ legend {
 /* ---------- price cards (料金表) ---------- */
 .price-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+  grid-template-columns: 1fr;
+  gap: 14px;
   margin-top: 14px;
+}
+@media (min-width: 680px) {
+  .price-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .price-card {
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
+  border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 .price-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 12px 14px;
+  background: var(--brand-50);
+  border-bottom: 1px solid var(--border);
 }
 .price-card-title {
-  font-weight: 700;
+  font-weight: 800;
+  color: var(--brand-dark);
+  font-size: 1.05rem;
 }
-.price-card-reorder button {
-  min-height: 30px;
-  padding: 2px 9px;
-  margin-left: 4px;
+.svc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.price-card-body {
+.svc-row {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-top: 8px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
-.price-card-price {
-  font-size: 1.25rem;
+.svc-row:last-child {
+  border-bottom: none;
+}
+.svc-name {
+  font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+.svc-price {
   font-weight: 800;
   color: var(--brand-dark);
 }
-.price-card-actions {
+.svc-actions {
   margin-left: auto;
+  display: flex;
+  gap: 4px;
 }
-.price-card-actions button {
+.svc-actions button {
   min-height: 32px;
-  padding: 4px 12px;
+  padding: 3px 10px;
 }
 
 /* ---------- LIFF (顧客) ---------- */
