@@ -946,17 +946,37 @@ tr.row-link td.chevron-cell {
 }
 .day-nav {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  flex-wrap: wrap;
   margin: 18px 0 4px;
+}
+.day-nav .day-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 .day-nav .day-label {
   font-weight: 800;
   font-size: 1.05rem;
   min-width: 11.5em;
   text-align: center;
+}
+/* 広い画面: 日付を中央・時間/リストを右端へ */
+@media (min-width: 560px) {
+  .day-nav {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+  }
+  .day-nav .day-center {
+    grid-column: 2;
+  }
+  .day-nav .view-toggle {
+    grid-column: 3;
+    justify-self: end;
+  }
 }
 
 /* ---------- 予約: 日の時間軸グリッド ---------- */

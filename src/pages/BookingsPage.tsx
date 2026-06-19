@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { deleteDoc, doc, query, setDoc, updateDoc, where } from 'firebase/firestore';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
   bookingsCol,
@@ -116,7 +116,7 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
 
       {/* 月カレンダー（アコーディオン・既定で閉） */}
       <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
-        {monthOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+        {monthOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         {view.y}年 {view.m + 1}月（月カレンダー）
       </button>
       {monthOpen && (
@@ -183,13 +183,15 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
 
       {/* 日ナビ */}
       <div className="day-nav">
-        <button type="button" onClick={() => shiftDay(-1)} aria-label="前日">
-          ‹
-        </button>
-        <span className="day-label">{formatDateJa(selected)}</span>
-        <button type="button" onClick={() => shiftDay(1)} aria-label="翌日">
-          ›
-        </button>
+        <div className="day-center">
+          <button type="button" onClick={() => shiftDay(-1)} aria-label="前日">
+            ‹
+          </button>
+          <span className="day-label">{formatDateJa(selected)}</span>
+          <button type="button" onClick={() => shiftDay(1)} aria-label="翌日">
+            ›
+          </button>
+        </div>
         <div className="view-toggle">
           <button type="button" className={dayView === 'time' ? 'active' : ''} onClick={() => setDayView('time')}>
             時間
