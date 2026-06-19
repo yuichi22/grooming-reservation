@@ -231,7 +231,7 @@ label.inline > select {
   color: #fff;
 }
 .header-center {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -260,34 +260,48 @@ label.inline > select {
   color: var(--muted);
   font-size: 0.85rem;
 }
-/* ヘッダー要素の並び（モバイル: ロゴが上、予約/カルテは下段） */
+/* ヘッダーの並び。モバイル: ロゴ → 予約/カルテ → ログインID を縦に中央寄せ */
+.topbar {
+  flex-direction: column;
+  position: relative;
+}
 .nav-toggle {
   order: 0;
+  position: absolute;
+  left: 18px;
+  top: 12px;
 }
 .header-center {
   order: 1;
 }
-.topbar .user {
-  order: 2;
-}
 .header-quick {
-  order: 3;
-  flex: 1 0 100%;
+  order: 2;
   display: flex;
   justify-content: center;
   gap: 10px;
 }
-/* デスクトップ: 予約/カルテはロゴの左（従来の横並び） */
+.topbar .user {
+  order: 3;
+  text-align: center;
+}
+/* デスクトップ: ＜ | 予約/カルテ | ロゴ中央 | ログインID の横並び */
 @media (min-width: 820px) {
+  .topbar {
+    flex-direction: row;
+  }
+  .nav-toggle {
+    position: static;
+  }
   .header-quick {
     order: 1;
-    flex: 0 0 auto;
   }
   .header-center {
     order: 2;
+    flex: 1 1 auto;
   }
   .topbar .user {
     order: 3;
+    text-align: left;
   }
 }
 .nav-icon {
