@@ -79,12 +79,14 @@ button:hover {
 button:active {
   transform: translateY(0.5px);
 }
-button[type='submit'] {
+button[type='submit'],
+button.btn-primary {
   background: var(--brand);
   color: #fff;
   border-color: var(--brand);
 }
-button[type='submit']:hover {
+button[type='submit']:hover,
+button.btn-primary:hover {
   background: var(--brand-dark);
   border-color: var(--brand-dark);
 }

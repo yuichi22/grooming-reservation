@@ -8,6 +8,17 @@ import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import type { Breed, Customer, Dog, Option, PriceEntry, Service, ServiceRecord } from '../lib/types';
 
+/** 順序非依存で number マップを比較。 */
+function sameMap(a: Record<string, number>, b: Record<string, number>): boolean {
+  const ak = Object.keys(a);
+  if (ak.length !== Object.keys(b).length) return false;
+  return ak.every((k) => a[k] === b[k]);
+}
+/** 0 のエントリを除いたマップ（サービス別加算は 0 を未設定とみなす）。 */
+function nonZero(m: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(m).filter(([, v]) => v !== 0));
+}
+
 export default function DogDetailPage() {
   const { claims } = useAuth();
   const { dogId } = useParams<{ dogId: string }>();
@@ -72,13 +83,28 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const shownOptions = activeOptions.filter((o) => setOptionIds.includes(o.id));
   const addableOptions = activeOptions.filter((o) => !setOptionIds.includes(o.id));
 
+  // 編集あり（保存済みの値と差分があるか）
+  const dirty =
+    (form.breedId ?? null) !== (dog.breedId ?? null) ||
+    (form.notes ?? '') !== (dog.notes ?? '') ||
+    (form.allergies ?? '') !== (dog.allergies ?? '') ||
+    !sameMap(nonZero(serviceAdj), nonZero(dog.serviceAdjustments ?? {})) ||
+    !sameMap(optAdj, dog.optionAdjustments ?? {});
+
+  function cancelEdit() {
+    setForm({ breedId: dog?.breedId ?? null, notes: dog?.notes ?? '', allergies: dog?.allergies ?? '' });
+    setServiceAdj(dog?.serviceAdjustments ?? {});
+    setOptAdj(dog?.optionAdjustments ?? {});
+    setMsg(null);
+  }
+
   async function saveDog() {
     setMsg(null);
     await updateDoc(doc(dogsCol(tenantId), dogId), {
       breedId: form.breedId ?? null,
       notes: form.notes ?? '',
       allergies: form.allergies ?? '',
-      serviceAdjustments: serviceAdj,
+      serviceAdjustments: nonZero(serviceAdj),
       optionAdjustments: optAdj,
     });
     setMsg('保存しました');
@@ -104,8 +130,13 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
         </Link>
         <h1>{dog.name}</h1>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          {msg && <span className="muted">{msg}</span>}
-          <button type="button" onClick={saveDog}>
+          {!dirty && msg && <span className="muted">{msg}</span>}
+          {dirty && (
+            <button type="button" onClick={cancelEdit}>
+              キャンセル
+            </button>
+          )}
+          <button type="button" className={dirty ? 'btn-primary' : ''} disabled={!dirty} onClick={saveDog}>
             保存
           </button>
         </div>
