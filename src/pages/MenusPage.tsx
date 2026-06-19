@@ -476,33 +476,22 @@ function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Optio
   );
 }
 
-/** 犬種マスタ: 名前 + 標準作業時間（分）。確定時間/料金計算の基準。 */
+/** 犬種マスタ: 名前のみ。時間は料金表(犬種×サービス)で決まる。 */
 function BreedMaster({ tenantId, breeds }: { tenantId: string; breeds: Breed[] }) {
   const [name, setName] = useState('');
-  const [std, setStd] = useState(60);
 
   async function add(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    await addDoc(breedsCol(tenantId), {
-      name: name.trim(),
-      active: true,
-      standardDurationMin: std,
-    } as Omit<Breed, 'id'> as Breed);
+    await addDoc(breedsCol(tenantId), { name: name.trim(), active: true } as Omit<Breed, 'id'> as Breed);
     setName('');
   }
 
   return (
     <div style={{ marginTop: 18 }}>
       <h2>犬種マスタ</h2>
-      <p className="muted">標準作業時間は、カルテで犬種を選んだときの確定作業時間の基準になります。</p>
       <form className="row-form" onSubmit={add}>
         <input placeholder="例: トイプードル" value={name} onChange={(e) => setName(e.target.value)} />
-        <label className="inline">
-          標準作業時間
-          <input type="number" min={5} step={5} value={std} onChange={(e) => setStd(Number(e.target.value))} style={{ width: 80 }} />
-          分
-        </label>
         <button type="submit">追加</button>
       </form>
       <div className="table-wrap">
@@ -510,7 +499,6 @@ function BreedMaster({ tenantId, breeds }: { tenantId: string; breeds: Breed[] }
           <thead>
             <tr>
               <th>名前</th>
-              <th>標準作業時間</th>
               <th>状態</th>
               <th></th>
             </tr>
@@ -519,11 +507,20 @@ function BreedMaster({ tenantId, breeds }: { tenantId: string; breeds: Breed[] }
             {[...breeds]
               .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
               .map((b) => (
-                <BreedRow key={b.id} tenantId={tenantId} breed={b} />
+                <tr key={b.id}>
+                  <td>{b.name}</td>
+                  <td>{b.active ? '有効' : '無効'}</td>
+                  <td>
+                    <button onClick={() => updateDoc(doc(breedsCol(tenantId), b.id), { active: !b.active })}>
+                      {b.active ? '無効化' : '有効化'}
+                    </button>
+                    <button onClick={() => deleteDoc(doc(breedsCol(tenantId), b.id))}>削除</button>
+                  </td>
+                </tr>
               ))}
             {breeds.length === 0 && (
               <tr>
-                <td colSpan={4} className="muted">
+                <td colSpan={3} className="muted">
                   未登録
                 </td>
               </tr>
@@ -532,58 +529,6 @@ function BreedMaster({ tenantId, breeds }: { tenantId: string; breeds: Breed[] }
         </table>
       </div>
     </div>
-  );
-}
-
-function BreedRow({ tenantId, breed }: { tenantId: string; breed: Breed }) {
-  const [editing, setEditing] = useState(false);
-  const [std, setStd] = useState(breed.standardDurationMin ?? 60);
-
-  async function save() {
-    await updateDoc(doc(breedsCol(tenantId), breed.id), { standardDurationMin: std });
-    setEditing(false);
-  }
-
-  return (
-    <tr>
-      <td>{breed.name}</td>
-      <td>
-        {editing ? (
-          <>
-            <input
-              type="number"
-              min={5}
-              step={5}
-              value={std}
-              onChange={(e) => setStd(Number(e.target.value))}
-              style={{ width: 70 }}
-            />
-            分
-          </>
-        ) : breed.standardDurationMin != null ? (
-          `${breed.standardDurationMin}分`
-        ) : (
-          <span className="muted">未設定</span>
-        )}
-      </td>
-      <td>{breed.active ? '有効' : '無効'}</td>
-      <td>
-        {editing ? (
-          <>
-            <button onClick={save}>保存</button>
-            <button onClick={() => setEditing(false)}>取消</button>
-          </>
-        ) : (
-          <>
-            <button onClick={() => setEditing(true)}>時間編集</button>
-            <button onClick={() => updateDoc(doc(breedsCol(tenantId), breed.id), { active: !breed.active })}>
-              {breed.active ? '無効化' : '有効化'}
-            </button>
-            <button onClick={() => deleteDoc(doc(breedsCol(tenantId), breed.id))}>削除</button>
-          </>
-        )}
-      </td>
-    </tr>
   );
 }
 

@@ -169,15 +169,24 @@ export default function BookingPage() {
   const priceFor = (svcId: string) =>
     options?.pricing.find((p) => p.breedId === selectedDog?.breedId && p.serviceId === svcId) ?? null;
 
-  // ② 合計時間/料金 = カルテ確定（基準）＋ 選択オプション（犬ごとの個別追加時間込み）
+  // 合計時間/料金 = 基準(料金表セル + 個別加算) ＋ 選択オプション（個別追加込み）
+  // 加算料金 = 単価(標準料金÷標準時間) × 個別追加分 を50円切上げ
+  const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
   const allOptions = options?.options ?? [];
   const optAdj = (id: string) => selectedDog?.optionAdjustments?.[id] ?? 0;
+  const addMin = selectedDog?.additionalDurationMin ?? 0;
+  const cell = priceFor(serviceId);
+  const baseStdDur = cell?.durationMin ?? null;
+  const baseStdAmt = cell?.price ?? null;
+  const baseDur = baseStdDur != null ? baseStdDur + addMin : null;
+  const baseAmt =
+    baseStdAmt != null ? baseStdAmt + ceil50((baseStdDur ? baseStdAmt / baseStdDur : 0) * addMin) : null;
   const optEffDur = (o: { id: string; durationMin: number }) => o.durationMin + optAdj(o.id);
+  const optEffAmt = (o: { id: string; price: number; durationMin: number }) =>
+    o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * optAdj(o.id));
   const chosenOptions = allOptions.filter((o) => optionIds.includes(o.id));
-  const baseDur = selectedDog?.confirmedDurationMin ?? priceFor(serviceId)?.durationMin ?? null;
-  const baseAmt = selectedDog?.confirmedPrice ?? priceFor(serviceId)?.price ?? null;
   const optDur = chosenOptions.reduce((s, o) => s + optEffDur(o), 0);
-  const optAmt = chosenOptions.reduce((s, o) => s + o.price, 0);
+  const optAmt = chosenOptions.reduce((s, o) => s + optEffAmt(o), 0);
   const estDur = baseDur != null ? baseDur + optDur : null;
   const estAmt = baseAmt != null || optAmt > 0 ? (baseAmt ?? 0) + optAmt : null;
   function toggleOption(id: string) {
@@ -262,7 +271,7 @@ export default function BookingPage() {
                 <input type="checkbox" checked={optionIds.includes(o.id)} onChange={() => toggleOption(o.id)} />
                 {o.name}
                 <span className="opt-meta">
-                  +¥{o.price.toLocaleString()} / +{optEffDur(o)}分
+                  +¥{optEffAmt(o).toLocaleString()} / +{optEffDur(o)}分
                 </span>
               </label>
             ))}

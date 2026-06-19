@@ -3,10 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { addDoc, doc, updateDoc } from 'firebase/firestore';
 import { ChevronLeft, MessageCircle, Phone } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { breedsCol, customersCol, dogsCol, optionsCol, recordsCol, servicesCol } from '../lib/firestore';
+import { breedsCol, customersCol, dogsCol, optionsCol, pricingCol, recordsCol, servicesCol } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import type { Breed, Customer, Dog, Option, Service, ServiceRecord } from '../lib/types';
+import type { Breed, Customer, Dog, Option, PriceEntry, Service, ServiceRecord } from '../lib/types';
 
 export default function DogDetailPage() {
   const { claims } = useAuth();
@@ -23,6 +23,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
   const { data: services } = useCollection<Service>(servicesCol(tenantId), [tenantId]);
   const { data: optionItems } = useCollection<Option>(optionsCol(tenantId), [tenantId]);
+  const { data: pricing } = useCollection<PriceEntry>(pricingCol(tenantId), [tenantId]);
   const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
   const customerId = dog?.customerId || '__none__';
   const { data: customer } = useDocument<Customer>(doc(customersCol(tenantId), customerId), [tenantId, customerId]);
@@ -34,9 +35,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     allergies: '',
   });
   const [additionalMin, setAdditionalMin] = useState(0);
-  const [basePrice, setBasePrice] = useState(0);
-  const [chargeAuto, setChargeAuto] = useState(true); // 加算料金を自動計算に追従させるか
-  const [chargeManual, setChargeManual] = useState(0); // 手入力した加算料金
+  const [baseServiceId, setBaseServiceId] = useState(''); // 確認用の基準サービス（料金表の引当先）
   const [optAdj, setOptAdj] = useState<Record<string, number>>({}); // オプション別の個別追加時間
   const [msg, setMsg] = useState<string | null>(null);
   const [cust, setCust] = useState({ ownerName: '', phone: '' });
@@ -45,12 +44,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   useEffect(() => {
     if (!dog) return;
     setForm({ breedId: dog.breedId ?? null, notes: dog.notes ?? '', allergies: dog.allergies ?? '' });
-    const base = dog.basePrice ?? dog.confirmedPrice ?? 0;
-    setBasePrice(base);
     setAdditionalMin(dog.additionalDurationMin ?? 0);
-    // 既に basePrice を保存済みなら、保存時の確定料金を保持（手入力扱い）。新規は自動。
-    setChargeAuto(dog.basePrice == null);
-    setChargeManual(Math.max(0, (dog.confirmedPrice ?? base) - base));
     setOptAdj(dog.optionAdjustments ?? {});
   }, [dog]);
 
@@ -62,13 +56,18 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   if (!dog) return <p className="error">カルテが見つかりません。</p>;
 
   const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
-  const selectedBreed = breeds.find((b) => b.id === form.breedId);
-  const standardMin = selectedBreed?.standardDurationMin ?? 0;
-  const totalMin = standardMin + additionalMin;
-  const unitPerMin = standardMin > 0 ? basePrice / standardMin : 0;
-  const autoCharge = standardMin > 0 ? ceil50(unitPerMin * additionalMin) : 0;
-  const effectiveCharge = chargeAuto ? autoCharge : chargeManual;
-  const totalPrice = basePrice + effectiveCharge;
+  // 基準サービス: 未選択なら、この犬種に料金表があるサービスの先頭を既定にする
+  const cellFor = (svcId: string) =>
+    pricing.find((p) => p.breedId === form.breedId && p.serviceId === svcId) ?? null;
+  const activeServices = services.filter((s) => s.active);
+  const effBaseServiceId = baseServiceId || activeServices.find((s) => cellFor(s.id))?.id || '';
+  const cell = effBaseServiceId ? cellFor(effBaseServiceId) : null;
+  const baseTime = cell?.durationMin ?? null;
+  const baseStd = cell?.price ?? null;
+  const unitPerMin = baseTime && baseStd != null ? baseStd / baseTime : 0;
+  const addCharge = baseTime && baseStd != null ? ceil50(unitPerMin * additionalMin) : 0;
+  const totalMin = baseTime != null ? baseTime + additionalMin : null;
+  const totalPrice = baseStd != null ? baseStd + addCharge : null;
 
   async function saveDog(e: FormEvent) {
     e.preventDefault();
@@ -78,9 +77,6 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
       notes: form.notes ?? '',
       allergies: form.allergies ?? '',
       additionalDurationMin: additionalMin,
-      basePrice,
-      confirmedDurationMin: totalMin > 0 ? totalMin : null,
-      confirmedPrice: totalPrice > 0 ? totalPrice : null,
       optionAdjustments: optAdj,
     });
     setMsg('保存しました');
@@ -160,18 +156,29 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
             {breeds.filter((b) => b.active).map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
-                {b.standardDurationMin != null ? `（標準${b.standardDurationMin}分）` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="inline">
+          基準サービス（料金表の引当先）
+          <select value={effBaseServiceId} onChange={(e) => setBaseServiceId(e.target.value)}>
+            <option value="">選択</option>
+            {activeServices.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {cellFor(s.id) ? '' : '（料金表未設定）'}
               </option>
             ))}
           </select>
         </label>
 
         <fieldset>
-          <legend>作業時間（§6 カレンダー占有 / §7）</legend>
+          <legend>作業時間（§6 カレンダー占有）</legend>
           <div className="calc-grid">
-            <span className="calc-label">標準作業時間（犬種）</span>
+            <span className="calc-label">標準作業時間（犬種×サービス）</span>
             <span className="calc-val">
-              {standardMin > 0 ? `${standardMin}分` : <span className="muted">犬種マスタに未設定</span>}
+              {baseTime != null ? `${baseTime}分` : <span className="muted">料金表に未設定</span>}
             </span>
 
             <label className="calc-label" htmlFor="addmin">個別加算時間</label>
@@ -190,62 +197,30 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
             </span>
 
             <span className="calc-label">確定作業時間</span>
-            <span className="calc-val calc-total">{totalMin > 0 ? `${totalMin}分` : '未確定'}</span>
+            <span className="calc-val calc-total">{totalMin != null ? `${totalMin}分` : '未確定'}</span>
           </div>
         </fieldset>
 
         <fieldset>
           <legend>料金</legend>
           <div className="calc-grid">
-            <label className="calc-label" htmlFor="baseprice">基本料金</label>
+            <span className="calc-label">標準料金（犬種×サービス）</span>
             <span className="calc-val">
-              ¥
-              <input
-                id="baseprice"
-                type="number"
-                min={0}
-                step={100}
-                value={basePrice}
-                onChange={(e) => setBasePrice(Math.max(0, Number(e.target.value)))}
-                style={{ width: 110 }}
-              />
+              {baseStd != null ? `¥${baseStd.toLocaleString()}` : <span className="muted">料金表に未設定</span>}
             </span>
 
             <span className="calc-label">
               加算料金
               <span className="muted" style={{ fontWeight: 400 }}>
-                {standardMin > 0
-                  ? `（単価¥${Math.round(unitPerMin).toLocaleString()}/分 × ${additionalMin}分 → 50円切上 ¥${autoCharge.toLocaleString()}）`
-                  : '（犬種の標準時間が必要）'}
+                {baseTime && baseStd != null
+                  ? `（単価¥${Math.round(unitPerMin).toLocaleString()}/分 × ${additionalMin}分 → 50円切上）`
+                  : '（料金表が必要）'}
               </span>
             </span>
-            <span className="calc-val">
-              ¥
-              <input
-                type="number"
-                min={0}
-                step={50}
-                value={effectiveCharge}
-                onChange={(e) => {
-                  setChargeManual(Math.max(0, Number(e.target.value)));
-                  setChargeAuto(false);
-                }}
-                style={{ width: 110 }}
-              />
-              {!chargeAuto && (
-                <button
-                  type="button"
-                  className="link-btn"
-                  onClick={() => setChargeAuto(true)}
-                  style={{ marginLeft: 8 }}
-                >
-                  自動計算に戻す
-                </button>
-              )}
-            </span>
+            <span className="calc-val">{baseStd != null ? `¥${addCharge.toLocaleString()}` : '—'}</span>
 
             <span className="calc-label">確定料金</span>
-            <span className="calc-val calc-total">¥{totalPrice.toLocaleString()}</span>
+            <span className="calc-val calc-total">{totalPrice != null ? `¥${totalPrice.toLocaleString()}` : '—'}</span>
           </div>
         </fieldset>
 
@@ -258,11 +233,15 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
                 .filter((o) => o.active)
                 .map((o) => {
                   const add = optAdj[o.id] ?? 0;
+                  const unit = o.durationMin > 0 ? o.price / o.durationMin : 0;
+                  const effPrice = o.price + ceil50(unit * add);
                   return (
                     <Fragment key={o.id}>
                       <span className="calc-label">
                         {o.name}
-                        <span className="muted" style={{ fontWeight: 400 }}>（標準{o.durationMin}分）</span>
+                        <span className="muted" style={{ fontWeight: 400 }}>
+                          （標準{o.durationMin}分 / ¥{o.price.toLocaleString()}）
+                        </span>
                       </span>
                       <span className="calc-val">
                         ＋
@@ -278,7 +257,9 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
                           style={{ width: 80 }}
                         />
                         分
-                        <span className="muted" style={{ marginLeft: 8 }}>→ 合計 {o.durationMin + add}分</span>
+                        <span className="muted" style={{ marginLeft: 8 }}>
+                          → 合計 {o.durationMin + add}分 / ¥{effPrice.toLocaleString()}
+                        </span>
                       </span>
                     </Fragment>
                   );

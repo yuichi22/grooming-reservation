@@ -167,8 +167,8 @@ const DEFAULT_DURATION_MIN = 60;
 
 interface DogInfo {
   breedId: string | null;
-  confirmedDurationMin: number | null;
-  confirmedPrice: number | null;
+  /** 個別加算時間（分）。料金表の標準時間に上乗せ */
+  additionalDurationMin: number;
   optionAdjustments: Record<string, number>;
   name: string;
 }
@@ -179,10 +179,29 @@ async function loadDog(tenantId: string, dogId?: string): Promise<DogInfo | null
   const d = snap.data() ?? {};
   return {
     breedId: (d.breedId ?? null) as string | null,
-    confirmedDurationMin: (d.confirmedDurationMin ?? null) as number | null,
-    confirmedPrice: (d.confirmedPrice ?? null) as number | null,
+    additionalDurationMin: (d.additionalDurationMin ?? 0) as number,
     optionAdjustments: (d.optionAdjustments ?? {}) as Record<string, number>,
     name: (d.name as string) ?? 'ワンちゃん',
+  };
+}
+
+/** 50円単位で切り上げ。 */
+const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
+
+/**
+ * 「標準（時間・料金）＋ 個別追加時間」の実効値。
+ * 追加料金 = 単価(標準料金 ÷ 標準時間) × 個別追加時間 を 50円切上げ。
+ */
+function effectiveItem(
+  stdDurationMin: number,
+  stdPrice: number | null,
+  addMin: number,
+): { durationMin: number; price: number | null } {
+  const unit = stdPrice != null && stdDurationMin > 0 ? stdPrice / stdDurationMin : 0;
+  const addCharge = ceil50(unit * addMin);
+  return {
+    durationMin: stdDurationMin + addMin,
+    price: stdPrice == null ? null : stdPrice + addCharge,
   };
 }
 
@@ -193,8 +212,9 @@ interface OptionSnapshot {
   durationMin: number;
 }
 /**
- * オプションマスタ(options)から選択分を取り出し、時間・料金を合計する（②トータル時間）。
- * 各オプションの所要時間は「マスタ時間 + 犬ごとの個別追加時間(optionAdjustments)」。
+ * オプションマスタ(options)から選択分を取り出し、時間・料金を合計する。
+ * 各オプションの実効値 = 「マスタ時間/料金 + 犬ごとの個別追加時間(optionAdjustments)」。
+ * 個別追加時間ぶんの料金は 単価(料金÷時間)×追加分 を50円切上げで加算。
  */
 async function loadSelectedOptions(
   tenantId: string,
@@ -209,8 +229,8 @@ async function loadSelectedOptions(
     .filter((s) => s.exists)
     .map((s) => {
       const o = s.data() ?? {};
-      const effDur = ((o.durationMin ?? 0) as number) + (adjustments[s.id] ?? 0);
-      return { id: s.id, name: (o.name ?? '') as string, price: (o.price ?? 0) as number, durationMin: effDur };
+      const eff = effectiveItem((o.durationMin ?? 0) as number, (o.price ?? 0) as number, adjustments[s.id] ?? 0);
+      return { id: s.id, name: (o.name ?? '') as string, price: eff.price ?? 0, durationMin: eff.durationMin };
     });
   return {
     options: picked,
@@ -237,14 +257,15 @@ async function loadPriceCell(tenantId: string, breedId: string | null, serviceId
   return { price: (p.price ?? 0) as number, durationMin: (p.durationMin ?? DEFAULT_DURATION_MIN) as number };
 }
 
-/** 実効所要時間: 犬ごとの確定(§7)があればそれ、無ければ料金表セル、無ければ既定。 */
-function effectiveDurationMin(dog: DogInfo | null, cell: PriceCell | null): number {
-  return dog?.confirmedDurationMin ?? cell?.durationMin ?? DEFAULT_DURATION_MIN;
-}
-
-/** 実効基本料金: 犬ごとの確定料金があればそれ、無ければ料金表セル。 */
-function effectivePrice(dog: DogInfo | null, cell: PriceCell | null): number | null {
-  return dog?.confirmedPrice ?? cell?.price ?? null;
+/**
+ * 基準（犬種×サービス）の実効値。
+ * 標準時間/料金は料金表セル（無ければ既定時間・料金なし）。これに犬の個別加算時間を上乗せし、
+ * 個別加算ぶんの料金は 単価(セル料金÷セル時間)×加算分 を50円切上げで加算する。
+ */
+function effectiveBase(dog: DogInfo | null, cell: PriceCell | null): { durationMin: number; price: number | null } {
+  const stdDuration = cell?.durationMin ?? DEFAULT_DURATION_MIN;
+  const stdPrice = cell?.price ?? null;
+  return effectiveItem(stdDuration, stdPrice, dog?.additionalDurationMin ?? 0);
 }
 
 interface BookingRow {
@@ -346,10 +367,10 @@ export const getAvailability = onCall<{
   const [settings, dog] = await Promise.all([loadSettings(tenantId), loadDog(tenantId, dogId)]);
   const opts = await loadSelectedOptions(tenantId, optionIds, dog?.optionAdjustments ?? {});
   const cell = await loadPriceCell(tenantId, dog?.breedId ?? null, serviceId);
-  // ②トータル時間 = カルテ確定作業時間（基準）+ オプション所要時間の合計（犬ごとの個別追加込み）
-  const durationMin = effectiveDurationMin(dog, cell) + opts.durationMin;
-  const basePrice = effectivePrice(dog, cell);
-  const price = basePrice == null && opts.price === 0 ? null : (basePrice ?? 0) + opts.price;
+  // トータル時間 = 基準(料金表セル + 犬の個別加算) + オプション（個別追加込み）
+  const base = effectiveBase(dog, cell);
+  const durationMin = base.durationMin + opts.durationMin;
+  const price = base.price == null && opts.price === 0 ? null : (base.price ?? 0) + opts.price;
 
   // 臨時休業/祝日は空きなし (§11)
   if (await isClosedDate(tenantId, date)) {
@@ -425,8 +446,8 @@ export const createBooking = onCall<{
   const [settings, dog] = await Promise.all([loadSettings(tenantId), loadDog(tenantId, dogId)]);
   const opts = await loadSelectedOptions(tenantId, optionIds, dog?.optionAdjustments ?? {});
   const cell = await loadPriceCell(tenantId, dog?.breedId ?? null, serviceId);
-  // ②トータル時間 = カルテ確定作業時間（基準）+ オプション所要時間（犬ごとの個別追加込み）
-  const durationMin = effectiveDurationMin(dog, cell) + opts.durationMin;
+  // トータル時間 = 基準(料金表セル + 犬の個別加算) + オプション（個別追加込み）
+  const durationMin = effectiveBase(dog, cell).durationMin + opts.durationMin;
   const bufferMin = settings.bufferMin;
   const slotEnd = toTimeStr(toMinutes(startTime) + durationMin + bufferMin);
 
@@ -510,8 +531,7 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
       id: d.id,
       name: d.data().name,
       breedId: (d.data().breedId ?? null) as string | null,
-      confirmedDurationMin: (d.data().confirmedDurationMin ?? null) as number | null,
-      confirmedPrice: (d.data().confirmedPrice ?? null) as number | null,
+      additionalDurationMin: (d.data().additionalDurationMin ?? 0) as number,
       optionAdjustments: (d.data().optionAdjustments ?? {}) as Record<string, number>,
     })),
     // 料金表: breedId×serviceId → {price, durationMin}。クライアントで金額表示に使う。
