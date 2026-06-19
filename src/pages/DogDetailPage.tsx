@@ -25,6 +25,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
   const customerId = dog?.customerId || '__none__';
   const { data: customer } = useDocument<Customer>(doc(customersCol(tenantId), customerId), [tenantId, customerId]);
+  const { data: customers } = useCollection<Customer>(customersCol(tenantId), [tenantId]);
 
   const [form, setForm] = useState<Partial<Dog>>({});
   const [msg, setMsg] = useState<string | null>(null);
@@ -123,7 +124,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
           )}
         </div>
       ) : (
-        <p className="muted">顧客未登録</p>
+        <AttachCustomer tenantId={tenantId} dogId={dogId} customers={customers} />
       )}
 
       <form onSubmit={saveDog}>
@@ -222,6 +223,104 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
         </tbody>
       </table></div>
     </section>
+  );
+}
+
+/** 顧客未登録の犬（店頭でカルテ先行作成・旧データ等）に飼い主を紐づける。 */
+function AttachCustomer({
+  tenantId,
+  dogId,
+  customers,
+}: {
+  tenantId: string;
+  dogId: string;
+  customers: Customer[];
+}) {
+  const [mode, setMode] = useState<'new' | 'existing'>('new');
+  const [ownerName, setOwnerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [pick, setPick] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const active = customers.filter((c) => !c.mergedInto);
+
+  async function attach(customerId: string) {
+    await updateDoc(doc(dogsCol(tenantId), dogId), { customerId });
+  }
+
+  async function createAndAttach() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const trimmedPhone = phone.trim();
+      let customerId = '';
+      if (trimmedPhone) {
+        const ex = active.find((c) => c.phone === trimmedPhone); // 同番号があれば再利用
+        if (ex) customerId = ex.id;
+      }
+      if (!customerId) {
+        const cref = await addDoc(customersCol(tenantId), {
+          memberId: null,
+          ownerName: ownerName.trim(),
+          phone: trimmedPhone || null,
+          lineUserId: null,
+          createdAt: new Date().toISOString(),
+        } as Omit<Customer, 'id'> as Customer);
+        customerId = cref.id;
+      }
+      await attach(customerId);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="customer-card" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+      <strong>顧客が未登録です</strong>
+      <span className="muted">
+        飼い主を登録/紐づけると、同じ電話番号で LINE 登録したとき自動で連携されます（§3）。
+      </span>
+      <div className="tabs" style={{ margin: '6px 0' }}>
+        <button type="button" className={`tab${mode === 'new' ? ' active' : ''}`} onClick={() => setMode('new')}>
+          新規作成
+        </button>
+        <button
+          type="button"
+          className={`tab${mode === 'existing' ? ' active' : ''}`}
+          onClick={() => setMode('existing')}
+        >
+          既存から選択
+        </button>
+      </div>
+      {mode === 'new' ? (
+        <div className="row-form" style={{ margin: 0 }}>
+          <input placeholder="飼い主名" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+          <input placeholder="電話番号" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <button
+            type="button"
+            onClick={createAndAttach}
+            disabled={busy || (!ownerName.trim() && !phone.trim())}
+          >
+            {busy ? '登録中…' : '登録して紐づけ'}
+          </button>
+        </div>
+      ) : (
+        <div className="row-form" style={{ margin: 0 }}>
+          <select value={pick} onChange={(e) => setPick(e.target.value)}>
+            <option value="">顧客を選択</option>
+            {active.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.ownerName || '(名前なし)'}
+                {c.phone ? ` / ${c.phone}` : ''}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={() => pick && attach(pick)} disabled={!pick || busy}>
+            この顧客に紐づけ
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
