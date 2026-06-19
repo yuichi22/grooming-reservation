@@ -127,7 +127,7 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
       {/* 月カレンダー（アコーディオン・既定で閉） */}
       <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
         {monthOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-        {view.y}年 {view.m + 1}月（月カレンダー）
+        月カレンダー
       </button>
       {monthOpen && (
         <div className="cal-acc-body">
