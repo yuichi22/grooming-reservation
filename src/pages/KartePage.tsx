@@ -1,10 +1,11 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore';
+import { ChevronRight, Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { breedsCol, dogsCol } from '../lib/firestore';
+import { breedsCol, customersCol, dogsCol } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
-import type { Breed, Dog } from '../lib/types';
+import type { Breed, Customer, Dog } from '../lib/types';
 
 export default function KartePage() {
   const { claims } = useAuth();
@@ -14,31 +15,59 @@ export default function KartePage() {
 }
 
 function KarteInner({ tenantId }: { tenantId: string }) {
+  const navigate = useNavigate();
   const { data: dogs, loading } = useCollection<Dog>(dogsCol(tenantId), [tenantId]);
   const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
+  const { data: customers } = useCollection<Customer>(customersCol(tenantId), [tenantId]);
   const breedName = useMemo(() => new Map(breeds.map((b) => [b.id, b.name])), [breeds]);
+  const customerName = useMemo(() => new Map(customers.map((c) => [c.id, c.ownerName])), [customers]);
 
   const [name, setName] = useState('');
   const [breedId, setBreedId] = useState('');
-  const [customerId, setCustomerId] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [busy, setBusy] = useState(false);
 
+  // §3 名寄せは電話番号で行うため、店頭でカルテを作るときに顧客（名前＋電話）も作成/再利用しておく。
+  // 同じ電話で顧客が後から LINE 登録すると自動的にこの犬が紐づく。
   async function onAdd(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
-    await addDoc(dogsCol(tenantId), {
-      customerId: customerId.trim(),
-      name: name.trim(),
-      breedId: breedId || null,
-      confirmedDurationMin: null, // 初回は未確定 (§7)
-    } as Omit<Dog, 'id'> as Dog);
-    setName('');
-    setBreedId('');
-    setCustomerId('');
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    try {
+      const trimmedPhone = phone.trim();
+      let customerId = '';
+      if (trimmedPhone) {
+        const existing = customers.find((c) => !c.mergedInto && c.phone === trimmedPhone);
+        if (existing) customerId = existing.id;
+      }
+      if (!customerId) {
+        const cref = await addDoc(customersCol(tenantId), {
+          memberId: null,
+          ownerName: ownerName.trim(),
+          phone: trimmedPhone || null,
+          lineUserId: null,
+          createdAt: new Date().toISOString(),
+        } as Omit<Customer, 'id'> as Customer);
+        customerId = cref.id;
+      }
+      const dref = await addDoc(dogsCol(tenantId), {
+        customerId,
+        name: name.trim(),
+        breedId: breedId || null,
+        confirmedDurationMin: null, // 初回は未確定 (§7)
+      } as Omit<Dog, 'id'> as Dog);
+      // 追加したら詳細（カルテ）を開く
+      navigate(`/karte/${dref.id}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <section>
       <h1>カルテ（犬）</h1>
+
       <form className="row-form" onSubmit={onAdd}>
         <input placeholder="犬の名前" value={name} onChange={(e) => setName(e.target.value)} />
         <select value={breedId} onChange={(e) => setBreedId(e.target.value)}>
@@ -49,9 +78,16 @@ function KarteInner({ tenantId }: { tenantId: string }) {
             </option>
           ))}
         </select>
-        <input placeholder="顧客ID" value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
-        <button type="submit">追加</button>
+        <input placeholder="飼い主名（任意）" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+        <input placeholder="電話番号（任意）" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <button type="submit" disabled={busy}>
+          <Plus size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+          {busy ? '作成中…' : 'カルテを追加'}
+        </button>
       </form>
+      <p className="muted">
+        電話番号を入れておくと、その方が同じ番号で LINE 登録したときに自動でこの犬が紐づきます（§3）。
+      </p>
 
       {loading ? (
         <p>読み込み中…</p>
@@ -61,24 +97,26 @@ function KarteInner({ tenantId }: { tenantId: string }) {
             <tr>
               <th>名前</th>
               <th>犬種</th>
+              <th>飼い主</th>
               <th>確定作業時間</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {dogs.map((d) => (
-              <tr key={d.id}>
+              <tr key={d.id} className="row-link" onClick={() => navigate(`/karte/${d.id}`)}>
                 <td>{d.name}</td>
                 <td>{(d.breedId && breedName.get(d.breedId)) || d.breed || '—'}</td>
+                <td>{customerName.get(d.customerId) || '—'}</td>
                 <td>{d.confirmedDurationMin != null ? `${d.confirmedDurationMin}分` : '未確定'}</td>
-                <td>
-                  <Link to={`/karte/${d.id}`}>開く</Link>
+                <td className="chevron-cell">
+                  <ChevronRight size={18} />
                 </td>
               </tr>
             ))}
             {dogs.length === 0 && (
               <tr>
-                <td colSpan={4} className="muted">
+                <td colSpan={5} className="muted">
                   カルテ未登録
                 </td>
               </tr>

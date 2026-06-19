@@ -186,13 +186,27 @@ label.inline > select {
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
 }
+/* 角丸アイコンボタン（lucide アイコン用・添付デザイン準拠） */
+.icon-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: #3f4654;
+  box-shadow: var(--shadow-sm);
+}
+.icon-btn:hover {
+  background: var(--brand-50);
+}
 .nav-toggle {
   flex: 0 0 auto;
-  min-height: 38px;
-  padding: 6px 12px;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--brand-dark);
 }
 .header-btn {
   flex: 0 0 auto;
@@ -506,6 +520,113 @@ legend {
 .svc-actions button {
   min-height: 32px;
   padding: 3px 10px;
+}
+
+/* ---------- 行クリックで開く（一覧UI統一） ---------- */
+tr.row-link {
+  cursor: pointer;
+}
+tr.row-link:hover td {
+  background: var(--brand-50);
+}
+tr.row-link td.chevron-cell {
+  width: 1%;
+  white-space: nowrap;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ---------- 詳細ヘッダー（戻る + タイトル） ---------- */
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.detail-head h1 {
+  margin: 0;
+}
+.back-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: #3f4654;
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+}
+.back-btn:hover {
+  background: var(--brand-50);
+}
+
+/* ---------- 顧客カード（カルテ詳細） ---------- */
+.customer-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px;
+  background: var(--brand-50);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin: 8px 0 18px;
+}
+.customer-card .cust-name {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.customer-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.line-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.line-badge.linked {
+  background: #def7e6;
+  color: #067a3a;
+}
+.line-badge.unlinked {
+  background: #f1f0ee;
+  color: var(--muted);
+}
+.line-btn,
+.tel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-decoration: none;
+  padding: 9px 15px;
+  min-height: 40px;
+}
+.line-btn {
+  background: #06c755;
+  color: #fff;
+  border: 1px solid #06c755;
+}
+.line-btn:hover {
+  background: #05b14b;
+}
+.tel-btn {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+.tel-btn:hover {
+  background: #f7f9fa;
 }
 
 /* ---------- LIFF (顧客) ---------- */

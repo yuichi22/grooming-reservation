@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
 import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
@@ -35,8 +36,8 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="nav-toggle" onClick={() => setNavOpen((o) => !o)} aria-label="メニュー開閉">
-          {navOpen ? '＜' : '＞'}
+        <button className="nav-toggle icon-btn" onClick={() => setNavOpen((o) => !o)} aria-label="メニュー開閉">
+          {navOpen ? <ChevronLeft size={20} strokeWidth={2.25} /> : <ChevronRight size={20} strokeWidth={2.25} />}
         </button>
         <NavLink to="/bookings" className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
           予約

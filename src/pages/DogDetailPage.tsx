@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { addDoc, doc, updateDoc } from 'firebase/firestore';
+import { ChevronLeft, MessageCircle, Phone } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { breedsCol, dogsCol, recordsCol, servicesCol } from '../lib/firestore';
+import { breedsCol, customersCol, dogsCol, recordsCol, servicesCol } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import type { Breed, Dog, Service, ServiceRecord } from '../lib/types';
+import type { Breed, Customer, Dog, Service, ServiceRecord } from '../lib/types';
 
 export default function DogDetailPage() {
   const { claims } = useAuth();
@@ -22,9 +23,13 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
   const { data: services } = useCollection<Service>(servicesCol(tenantId), [tenantId]);
   const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
+  const customerId = dog?.customerId || '__none__';
+  const { data: customer } = useDocument<Customer>(doc(customersCol(tenantId), customerId), [tenantId, customerId]);
 
   const [form, setForm] = useState<Partial<Dog>>({});
   const [msg, setMsg] = useState<string | null>(null);
+  const [cust, setCust] = useState({ ownerName: '', phone: '' });
+  const [custMsg, setCustMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (dog) {
@@ -37,6 +42,10 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
       });
     }
   }, [dog]);
+
+  useEffect(() => {
+    if (customer) setCust({ ownerName: customer.ownerName ?? '', phone: customer.phone ?? '' });
+  }, [customer]);
 
   if (loading) return <p>読み込み中…</p>;
   if (!dog) return <p className="error">カルテが見つかりません。</p>;
@@ -54,13 +63,68 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     setMsg('保存しました');
   }
 
+  async function saveCustomer() {
+    if (!dog?.customerId) return;
+    setCustMsg(null);
+    await updateDoc(doc(customersCol(tenantId), dog.customerId), {
+      ownerName: cust.ownerName.trim(),
+      phone: cust.phone.trim() || null,
+    });
+    setCustMsg('保存しました');
+  }
+
+  const lineLinked = !!customer?.lineUserId;
+
   return (
     <section>
-      <p>
-        <Link to="/karte">← カルテ一覧</Link>
-      </p>
-      <h1>{dog.name}</h1>
-      <p className="muted">顧客ID: {dog.customerId || '—'}</p>
+      <div className="detail-head">
+        <Link to="/karte" className="back-btn" aria-label="カルテ一覧へ戻る">
+          <ChevronLeft size={22} strokeWidth={2.25} />
+        </Link>
+        <h1>{dog.name}</h1>
+      </div>
+
+      {dog.customerId ? (
+        <div className="customer-card">
+          <input
+            value={cust.ownerName}
+            placeholder="飼い主名"
+            onChange={(e) => setCust((c) => ({ ...c, ownerName: e.target.value }))}
+            style={{ flex: '1 1 140px', fontWeight: 700 }}
+          />
+          <input
+            value={cust.phone}
+            type="tel"
+            placeholder="電話番号"
+            onChange={(e) => setCust((c) => ({ ...c, phone: e.target.value }))}
+            style={{ flex: '1 1 140px' }}
+          />
+          <span className={`line-badge ${lineLinked ? 'linked' : 'unlinked'}`}>
+            {lineLinked ? 'LINE連携済み' : 'LINE未連携'}
+          </span>
+          <div className="customer-actions">
+            <button type="button" onClick={saveCustomer}>
+              顧客情報を保存
+            </button>
+            {cust.phone.trim() && (
+              <a className="tel-btn" href={`tel:${cust.phone.trim()}`}>
+                <Phone size={16} /> 電話
+              </a>
+            )}
+            <a className="line-btn" href="https://line.me/R/nv/chat" target="_blank" rel="noopener noreferrer">
+              <MessageCircle size={16} /> LINEで連絡
+            </a>
+          </div>
+          {custMsg && <span className="muted" style={{ flexBasis: '100%' }}>{custMsg}</span>}
+          {!lineLinked && (
+            <span className="muted" style={{ flexBasis: '100%' }}>
+              この電話番号で LINE 登録されると、自動でこの犬が紐づきます（§3）。
+            </span>
+          )}
+        </div>
+      ) : (
+        <p className="muted">顧客未登録</p>
+      )}
 
       <form onSubmit={saveDog}>
         <label className="inline">
