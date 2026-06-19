@@ -260,6 +260,36 @@ label.inline > select {
   color: var(--muted);
   font-size: 0.85rem;
 }
+/* ヘッダー要素の並び（モバイル: ロゴが上、予約/カルテは下段） */
+.nav-toggle {
+  order: 0;
+}
+.header-center {
+  order: 1;
+}
+.topbar .user {
+  order: 2;
+}
+.header-quick {
+  order: 3;
+  flex: 1 0 100%;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+/* デスクトップ: 予約/カルテはロゴの左（従来の横並び） */
+@media (min-width: 820px) {
+  .header-quick {
+    order: 1;
+    flex: 0 0 auto;
+  }
+  .header-center {
+    order: 2;
+  }
+  .topbar .user {
+    order: 3;
+  }
+}
 .nav-icon {
   margin-right: 7px;
 }

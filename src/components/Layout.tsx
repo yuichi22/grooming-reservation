@@ -10,8 +10,7 @@ type NavItem = { to: string; label: string; icon: string; end?: boolean; admin?:
 
 const NAV: NavItem[] = [
   { to: '/', label: 'ダッシュボード', icon: '🏠', end: true },
-  { to: '/bookings', label: '予約', icon: '📅' },
-  { to: '/karte', label: 'カルテ', icon: '🐶' },
+  // 予約・カルテはヘッダーのボタンに集約（サイドバーからは除外）
   { to: '/menus', label: 'メニュー', icon: '✂️', admin: true },
   { to: '/staff', label: 'スタッフ', icon: '👤', admin: true },
   { to: '/customers', label: '顧客', icon: '👥', admin: true },
@@ -39,12 +38,6 @@ export default function Layout() {
         <button className="nav-toggle icon-btn" onClick={() => setNavOpen((o) => !o)} aria-label="メニュー開閉">
           {navOpen ? <ChevronLeft size={20} strokeWidth={2.25} /> : <ChevronRight size={20} strokeWidth={2.25} />}
         </button>
-        <NavLink to="/bookings" className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
-          予約
-        </NavLink>
-        <NavLink to="/karte" className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
-          カルテ
-        </NavLink>
         <div className="header-center">
           {logoUrl && <img className="store-logo" src={logoUrl} alt={storeName} />}
           <span className="powered">CONNECTED BY AKUTO</span>
@@ -53,6 +46,14 @@ export default function Layout() {
           {user?.email}
           {claims.role ? `（${claims.role}）` : claims.superAdmin ? '（superAdmin）' : ''}
         </span>
+        <div className="header-quick">
+          <NavLink to="/bookings" className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+            予約
+          </NavLink>
+          <NavLink to="/karte" className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+            カルテ
+          </NavLink>
+        </div>
       </header>
       <div className={`app-body${navOpen ? '' : ' nav-collapsed'}`}>
         <nav className="sidenav">
