@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
 import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
@@ -36,7 +36,17 @@ export default function Layout() {
     <div className="app-shell">
       <header className="topbar">
         <button className="nav-toggle icon-btn" onClick={() => setNavOpen((o) => !o)} aria-label="メニュー開閉">
-          {navOpen ? <ChevronLeft size={20} strokeWidth={2.25} /> : <ChevronRight size={20} strokeWidth={2.25} />}
+          {navOpen ? (
+            <>
+              <ChevronLeft className="ico-desktop" size={20} strokeWidth={2.25} />
+              <ChevronUp className="ico-mobile" size={20} strokeWidth={2.25} />
+            </>
+          ) : (
+            <>
+              <ChevronRight className="ico-desktop" size={20} strokeWidth={2.25} />
+              <ChevronDown className="ico-mobile" size={20} strokeWidth={2.25} />
+            </>
+          )}
         </button>
         <div className="header-center">
           {logoUrl && <img className="store-logo" src={logoUrl} alt={storeName} />}

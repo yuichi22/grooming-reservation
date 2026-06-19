@@ -309,9 +309,25 @@ label.inline > select {
 .nav-icon {
   margin-right: 7px;
 }
-/* サイドバー最下部のログアウト */
+/* トグルのアイコン: モバイル=上下、デスクトップ=左右 */
+.ico-mobile {
+  display: inline-flex;
+}
+.ico-desktop {
+  display: none;
+}
+@media (min-width: 820px) {
+  .ico-mobile {
+    display: none;
+  }
+  .ico-desktop {
+    display: inline-flex;
+  }
+}
+/* サイドバー最下部のログアウト（デスクトップの縦並びでのみ最下部へ） */
 .nav-logout {
-  margin-top: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
   color: var(--danger);
   font-weight: 700;
 }
@@ -337,6 +353,7 @@ label.inline > select {
 .sidenav {
   display: flex;
   flex-direction: row;
+  align-items: center;
   gap: 8px;
   padding: 12px 14px;
   overflow-x: auto;
@@ -498,6 +515,10 @@ legend {
   }
   .sidenav a:hover {
     background: var(--brand-50);
+  }
+  /* 縦並びのときだけログアウトを最下部へ押し下げ */
+  .nav-logout {
+    margin-top: auto;
   }
   .content {
     padding: 28px 28px 60px;
