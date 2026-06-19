@@ -268,8 +268,9 @@ label.inline > select {
 .nav-toggle {
   order: 0;
   position: absolute;
-  left: 18px;
-  top: 12px;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 .header-center {
   order: 1;
@@ -291,6 +292,7 @@ label.inline > select {
   }
   .nav-toggle {
     position: static;
+    transform: none;
   }
   .header-quick {
     order: 1;
