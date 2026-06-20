@@ -66,7 +66,6 @@ export default function BookingPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [staffId, setStaffId] = useState('');
-  const [staffPicker, setStaffPicker] = useState(false);
 
   const [date, setDate] = useState(todayStr());
   const [monthOpen, setMonthOpen] = useState(false);
@@ -362,7 +361,7 @@ export default function BookingPage() {
     );
   }
 
-  const dogs = options?.dogs ?? [];
+  const dogs = (options?.dogs ?? []).filter((d, i, a) => a.findIndex((x) => x.id === d.id) === i);
   const services = options?.services ?? [];
   const staffList = options?.staff ?? [];
   const allOptions = options?.options ?? [];
@@ -403,13 +402,6 @@ export default function BookingPage() {
           </span>
         )}
       </button>
-
-      {/* 指名（カート全体で同じ担当） */}
-      <div className="book-pills">
-        <button type="button" className={staffId ? 'set' : ''} onClick={() => setStaffPicker(true)}>
-          指名：{staffId ? staffName(staffId) : 'なし'}
-        </button>
-      </div>
 
       {/* 月カレンダー（アコーディオン・既定で閉） */}
       <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
@@ -469,14 +461,14 @@ export default function BookingPage() {
           <button type="button" onClick={() => shiftDay(-1)} aria-label="前日" disabled={date <= today}>
             ‹
           </button>
-          <span className="day-label">{formatDateJa(date)}</span>
+          <span className="day-label">
+            {formatDateJa(date)}
+            {date === today && <span className="day-today">今日</span>}
+          </span>
           <button type="button" onClick={() => shiftDay(1)} aria-label="翌日">
             ›
           </button>
         </div>
-        <button type="button" className="cal-today-btn" onClick={() => setDate(todayStr())}>
-          今日
-        </button>
       </div>
 
       {/* カレンダー（空き時間・合計時間ぶん） */}
@@ -529,29 +521,39 @@ export default function BookingPage() {
             </form>
           </details>
 
-          {/* メニュー（犬選択後） */}
-          {draft.dogId && (
-            <>
-              <h3 className="pick-head">メニュー</h3>
-              <div className="opt-list">
-                {services.map((s) => {
-                  const c = priceCell(dogById(draft.dogId)?.breedId ?? null, s.id);
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      className={`opt-item${draft.serviceId === s.id ? ' set' : ''}`}
-                      style={{ textAlign: 'left', cursor: 'pointer' }}
-                      onClick={() => setDraft((dr) => (dr ? { ...dr, serviceId: s.id } : dr))}
-                    >
-                      {s.name}
-                      <span className="opt-meta">{c ? `¥${c.price.toLocaleString()} / ${c.durationMin}分` : '料金未設定'}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
+          {/* メニュー（犬選択後・料金設定済みのみ） */}
+          {draft.dogId &&
+            (() => {
+              const breedId = dogById(draft.dogId)?.breedId ?? null;
+              const menuServices = services
+                .map((s) => ({ s, c: priceCell(breedId, s.id) }))
+                .filter((x) => x.c);
+              return (
+                <>
+                  <h3 className="pick-head">メニュー</h3>
+                  {menuServices.length === 0 ? (
+                    <p className="muted">このワンちゃんで予約できるメニューがありません。</p>
+                  ) : (
+                    <div className="opt-list">
+                      {menuServices.map(({ s, c }) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className={`opt-item${draft.serviceId === s.id ? ' set' : ''}`}
+                          style={{ textAlign: 'left', cursor: 'pointer' }}
+                          onClick={() => setDraft((dr) => (dr ? { ...dr, serviceId: s.id } : dr))}
+                        >
+                          {s.name}
+                          <span className="opt-meta">
+                            ¥{c!.price.toLocaleString()} / {c!.durationMin}分
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
           {/* オプション（メニュー選択後） */}
           {draft.dogId && draft.serviceId && allOptions.length > 0 && (
@@ -576,9 +578,39 @@ export default function BookingPage() {
             </>
           )}
 
+          {/* トリマー指名（任意・全頭共通） */}
+          {draft.dogId && draft.serviceId && (
+            <>
+              <h3 className="pick-head">トリマー指名（任意）</h3>
+              <p className="muted" style={{ margin: '0 0 6px' }}>指名は予約するすべての子で同じ担当になります。</p>
+              <div className="opt-list">
+                <button
+                  type="button"
+                  className={`opt-item${!staffId ? ' set' : ''}`}
+                  style={{ textAlign: 'left', cursor: 'pointer' }}
+                  onClick={() => setStaffId('')}
+                >
+                  指名なし（空いているスタッフ）
+                </button>
+                {staffList.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`opt-item${staffId === s.id ? ' set' : ''}`}
+                    style={{ textAlign: 'left', cursor: 'pointer' }}
+                    onClick={() => setStaffId(s.id)}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
           {draftEst && (
             <div className="book-summary" style={{ marginTop: 12 }}>
               この子：{draftEst.dur}分{draftEst.amt != null ? ` / ¥${draftEst.amt.toLocaleString()}` : ''}
+              {staffId ? ` ・ 指名: ${staffName(staffId)}` : ''}
             </div>
           )}
           <div className="modal-actions">
@@ -636,40 +668,6 @@ export default function BookingPage() {
             <button type="button" className="primary" onClick={() => setCartOpen(false)}>
               この内容で時間を選ぶ
             </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* 指名 */}
-      {staffPicker && (
-        <Modal title="指名（任意）" onClose={() => setStaffPicker(false)}>
-          <p className="muted" style={{ marginTop: 0 }}>複数頭は同じ担当が続けて担当します。</p>
-          <div className="opt-list">
-            <button
-              type="button"
-              className={`opt-item${!staffId ? ' set' : ''}`}
-              style={{ textAlign: 'left', cursor: 'pointer' }}
-              onClick={() => {
-                setStaffId('');
-                setStaffPicker(false);
-              }}
-            >
-              指名なし（空いているスタッフ）
-            </button>
-            {staffList.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                className={`opt-item${staffId === s.id ? ' set' : ''}`}
-                style={{ textAlign: 'left', cursor: 'pointer' }}
-                onClick={() => {
-                  setStaffId(s.id);
-                  setStaffPicker(false);
-                }}
-              >
-                {s.name}
-              </button>
-            ))}
           </div>
         </Modal>
       )}

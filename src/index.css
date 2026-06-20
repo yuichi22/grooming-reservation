@@ -753,6 +753,12 @@ tr.row-link td.chevron-cell {
   border-radius: var(--radius-sm);
   font-weight: 500;
 }
+.opt-item.set {
+  background: var(--brand-50);
+  border-color: var(--brand);
+  color: var(--brand-dark);
+  font-weight: 700;
+}
 .opt-item input {
   width: 18px;
   height: 18px;
@@ -975,6 +981,16 @@ tr.row-link td.chevron-cell {
   font-size: 1.05rem;
   min-width: 11.5em;
   text-align: center;
+}
+.day-nav .day-today {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: middle;
 }
 /* 広い画面: 日付を中央・時間/リストを右端へ */
 @media (min-width: 560px) {
