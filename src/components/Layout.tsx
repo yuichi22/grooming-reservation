@@ -17,6 +17,9 @@ const NAV: NavItem[] = [
   { to: '/settings', label: '設定', icon: '⚙️', admin: true },
 ];
 
+// サイドバーの各ページのパス。モバイルでこれらを開いた状態でメニューを閉じたら予約画面に戻す。
+const SIDEBAR_PATHS = NAV.map((n) => n.to);
+
 export default function Layout() {
   const { user, claims, logout } = useAuth();
   const isAdmin = useIsAdmin();
@@ -24,11 +27,14 @@ export default function Layout() {
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
 
-  // モバイルでメニューを閉じる操作。設定を開いていた場合は予約画面に戻す。
+  // モバイルでメニューを閉じる操作。サイドバーの各ページを開いていた場合は予約画面に戻す。
   function toggleNav() {
     const next = !navOpen;
     setNavOpen(next);
-    if (!next && window.innerWidth < 820 && location.pathname.startsWith('/settings')) {
+    const onSidebarPage = SIDEBAR_PATHS.some(
+      (p) => location.pathname === p || location.pathname.startsWith(p + '/'),
+    );
+    if (!next && window.innerWidth < 820 && onSidebarPage) {
       navigate('/bookings');
     }
   }
