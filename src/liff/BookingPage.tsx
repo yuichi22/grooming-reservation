@@ -381,8 +381,11 @@ export default function BookingPage() {
             {cart.length}頭：{cart.map((c) => dogById(c.dogId)?.name).filter(Boolean).join('・')}
           </p>
           <p className="muted">前日にLINEでリマインドをお送りします (§9)。</p>
-          <button type="button" className="done-back" onClick={startOver}>
-            戻る
+          <button type="button" className="done-back primary" onClick={closeOrBack}>
+            LINEに戻る
+          </button>
+          <button type="button" className="done-again" onClick={startOver}>
+            続けて予約する
           </button>
         </div>
       </div>

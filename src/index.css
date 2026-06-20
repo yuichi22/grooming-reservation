@@ -1205,6 +1205,23 @@ tr.row-link td.chevron-cell {
   width: 100%;
   margin-top: 16px;
 }
+.done-back.primary {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.done-back.primary:hover {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+.done-again {
+  width: 100%;
+  margin-top: 8px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--brand-dark);
+  font-weight: 700;
+}
 .modal-actions {
   display: flex;
   justify-content: flex-end;
