@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronDown, ChevronUp, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
 import { getAccessToken, getProfile, initLiff, isDevMode } from './liff';
 import {
   createGroupBooking,
@@ -172,6 +172,11 @@ export default function BookingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, view.y, view.m]);
 
+  // カートが空になったら一覧モーダルを自動で閉じる
+  useEffect(() => {
+    if (cartOpen && cart.length === 0) setCartOpen(false);
+  }, [cartOpen, cart.length]);
+
   async function submitPhone(e: FormEvent) {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
@@ -313,6 +318,16 @@ export default function BookingPage() {
     }
   }
 
+  // 完了画面から予約画面に戻る（カートをリセットして新規予約へ）
+  function startOver() {
+    setCart([]);
+    setConfirmation(null);
+    setConfirmSlot(null);
+    setStaffId('');
+    setDate(todayStr());
+    setPhase('ready');
+  }
+
   if (phase === 'init') return <Center>読み込み中…</Center>;
   if (phase === 'error')
     return (
@@ -348,16 +363,24 @@ export default function BookingPage() {
 
   if (phase === 'done' && confirmation) {
     return (
-      <Center>
-        <h2>予約が完了しました</h2>
-        <p>
-          {formatDateJa(date)} {confirmation.startTime}〜{confirmation.slotEnd}
-        </p>
-        <p className="muted">
-          {cart.length}頭：{cart.map((c) => dogById(c.dogId)?.name).filter(Boolean).join('・')}
-        </p>
-        <p className="muted">前日にLINEでリマインドをお送りします (§9)。</p>
-      </Center>
+      <div className="liff-shell">
+        <div className="done-card">
+          <button type="button" className="modal-close done-close" onClick={startOver} aria-label="閉じる">
+            <X size={20} />
+          </button>
+          <h2>予約が完了しました</h2>
+          <p>
+            {formatDateJa(date)} {confirmation.startTime}〜{confirmation.slotEnd}
+          </p>
+          <p className="muted">
+            {cart.length}頭：{cart.map((c) => dogById(c.dogId)?.name).filter(Boolean).join('・')}
+          </p>
+          <p className="muted">前日にLINEでリマインドをお送りします (§9)。</p>
+          <button type="button" className="done-back" onClick={startOver}>
+            戻る
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -824,7 +847,12 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>{title}</h2>
+        <div className="modal-head">
+          <h2>{title}</h2>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="閉じる">
+            <X size={20} />
+          </button>
+        </div>
         {children}
       </div>
     </div>

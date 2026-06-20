@@ -1154,6 +1154,57 @@ tr.row-link td.chevron-cell {
 .modal h2 {
   margin-top: 0;
 }
+.modal-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--surface);
+  margin: 0 -18px 8px;
+  padding: 0 18px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.modal-close {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 2px;
+  line-height: 0;
+  cursor: pointer;
+}
+.modal-close:hover {
+  color: var(--fg);
+}
+/* 完了画面 */
+.done-card {
+  position: relative;
+  margin-top: 24px;
+  padding: 24px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.done-card h2 {
+  margin-top: 0;
+}
+.done-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.done-back {
+  width: 100%;
+  margin-top: 16px;
+}
 .modal-actions {
   display: flex;
   justify-content: flex-end;
