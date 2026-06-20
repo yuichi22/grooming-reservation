@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { getAccessToken, getProfile, initLiff, isDevMode } from './liff';
 import {
   createBooking,
@@ -48,6 +49,11 @@ export default function BookingPage() {
   const [optionIds, setOptionIds] = useState<string[]>([]);
   const [staffId, setStaffId] = useState('');
   const [date, setDate] = useState(todayStr());
+  const [monthOpen, setMonthOpen] = useState(false);
+  const [view, setView] = useState(() => {
+    const d = new Date();
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
 
   // 空き状況
   const [slots, setSlots] = useState<string[] | null>(null);
@@ -184,6 +190,17 @@ export default function BookingPage() {
     const [y, m, d] = date.split('-').map(Number);
     setDate(fmt(new Date(y, m - 1, d + delta)));
   }
+  function goMonth(delta: number) {
+    setView((v) => {
+      const d = new Date(v.y, v.m + delta, 1);
+      return { y: d.getFullYear(), m: d.getMonth() };
+    });
+  }
+  function pickDay(d: Date) {
+    setDate(fmt(d));
+    setMonthOpen(false);
+    if (d.getMonth() !== view.m || d.getFullYear() !== view.y) setView({ y: d.getFullYear(), m: d.getMonth() });
+  }
 
   async function confirm() {
     if (!confirmSlot) return;
@@ -245,6 +262,15 @@ export default function BookingPage() {
   const dogs = options?.dogs ?? [];
   const services = options?.services ?? [];
   const staffList = options?.staff ?? [];
+  const today = todayStr();
+  const first = new Date(view.y, view.m, 1);
+  const gridStart = new Date(first);
+  gridStart.setDate(1 - first.getDay());
+  const gridDays = Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    return d;
+  });
 
   return (
     <div className="liff-shell">
@@ -286,10 +312,59 @@ export default function BookingPage() {
         </div>
       )}
 
+      {/* 月カレンダー（アコーディオン・既定で閉） */}
+      <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
+        {monthOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        月カレンダー
+      </button>
+      {monthOpen && (
+        <div className="cal-acc-body">
+          <div className="cal-head">
+            <button type="button" onClick={() => goMonth(-1)} aria-label="前の月">
+              ‹
+            </button>
+            <span className="cal-title">
+              {view.y}年 {view.m + 1}月
+            </span>
+            <button type="button" onClick={() => goMonth(1)} aria-label="次の月">
+              ›
+            </button>
+          </div>
+          <div className="cal-grid">
+            {DOW.map((w, i) => (
+              <div key={w} className={`cal-dow${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}`}>
+                {w}
+              </div>
+            ))}
+            {gridDays.map((d) => {
+              const ds = fmt(d);
+              const dow = d.getDay();
+              const past = ds < today;
+              const cls = ['cal-cell'];
+              if (d.getMonth() !== view.m) cls.push('other');
+              if (ds === today) cls.push('today');
+              if (ds === date) cls.push('selected');
+              if (past) cls.push('other');
+              return (
+                <button
+                  key={ds}
+                  type="button"
+                  className={cls.join(' ')}
+                  disabled={past}
+                  onClick={() => pickDay(d)}
+                >
+                  <span className={`cal-daynum${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}`}>{d.getDate()}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 日ナビ */}
       <div className="day-nav">
         <div className="day-center">
-          <button type="button" onClick={() => shiftDay(-1)} aria-label="前日" disabled={date <= todayStr()}>
+          <button type="button" onClick={() => shiftDay(-1)} aria-label="前日" disabled={date <= today}>
             ‹
           </button>
           <span className="day-label">{formatDateJa(date)}</span>
