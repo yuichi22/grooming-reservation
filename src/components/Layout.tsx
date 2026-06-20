@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
 import { tenantDoc } from '../lib/firestore';
@@ -21,7 +21,17 @@ export default function Layout() {
   const { user, claims, logout } = useAuth();
   const isAdmin = useIsAdmin();
   const navigate = useNavigate();
+  const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+
+  // モバイルでメニューを閉じる操作。設定を開いていた場合は予約画面に戻す。
+  function toggleNav() {
+    const next = !navOpen;
+    setNavOpen(next);
+    if (!next && window.innerWidth < 820 && location.pathname.startsWith('/settings')) {
+      navigate('/bookings');
+    }
+  }
   const { data: tenant } = useDocument<Tenant>(tenantDoc(claims.tenantId ?? '__none__'), [claims.tenantId]);
 
   const storeName = tenant?.name ?? 'サロン';
@@ -35,7 +45,7 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="nav-toggle icon-btn" onClick={() => setNavOpen((o) => !o)} aria-label="メニュー開閉">
+        <button className="nav-toggle icon-btn" onClick={toggleNav} aria-label="メニュー開閉">
           {navOpen ? (
             <>
               <ChevronLeft className="ico-desktop" size={20} strokeWidth={2.25} />
