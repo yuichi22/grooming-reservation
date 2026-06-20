@@ -1,23 +1,38 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import { getAccessToken, getProfile, initLiff, isDevMode } from './liff';
 import {
-  createBooking,
+  createGroupBooking,
   customerSession,
-  getAvailability,
   getBookingOptions,
   getClosedDates,
+  getGroupAvailability,
   registerDog,
   type BookingOptions,
 } from './customerApi';
 
 type Phase = 'init' | 'needPhone' | 'ready' | 'done' | 'error';
-type Picker = null | 'dog' | 'service' | 'option' | 'staff';
+
+/** カート1項目 = 犬×メニュー×オプション（id はローカル編集用） */
+interface CartItem {
+  id: string;
+  dogId: string;
+  serviceId: string;
+  optionIds: string[];
+}
+/** 追加/編集中の下書き（id が null なら新規） */
+interface Draft {
+  id: string | null;
+  dogId: string;
+  serviceId: string;
+  optionIds: string[];
+}
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const PX_PER_MIN = 1;
 const EDGE_PAD = 30;
+const rid = () => Math.random().toString(36).slice(2, 10);
 
 function fmt(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -34,6 +49,7 @@ const toMin = (t: string) => {
   return h * 60 + m;
 };
 const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
 
 export default function BookingPage() {
   const [params] = useSearchParams();
@@ -45,11 +61,13 @@ export default function BookingPage() {
   const [options, setOptions] = useState<BookingOptions | null>(null);
   const [storeInfo, setStoreInfo] = useState<{ name: string; logoUrl: string | null } | null>(null);
 
-  // 予約選択
-  const [dogId, setDogId] = useState('');
-  const [serviceId, setServiceId] = useState('');
-  const [optionIds, setOptionIds] = useState<string[]>([]);
+  // 予約カート（複数頭）＋ 共通の指名
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
   const [staffId, setStaffId] = useState('');
+  const [staffPicker, setStaffPicker] = useState(false);
+
   const [date, setDate] = useState(todayStr());
   const [monthOpen, setMonthOpen] = useState(false);
   const [view, setView] = useState(() => {
@@ -58,15 +76,15 @@ export default function BookingPage() {
   });
   const [closedMonth, setClosedMonth] = useState<Set<string>>(new Set());
 
-  // 空き状況
+  // 空き状況（カート合計時間ぶん）
   const [slots, setSlots] = useState<string[] | null>(null);
   const [businessHours, setBusinessHours] = useState<{ start: string; end: string }[] | null>(null);
   const [closedDay, setClosedDay] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
-  const [picker, setPicker] = useState<Picker>(null);
   const [selectPrompt, setSelectPrompt] = useState(false);
   const [confirmSlot, setConfirmSlot] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<{ startTime: string; slotEnd: string } | null>(null);
 
   async function loadOptions(cid: string) {
@@ -97,9 +115,10 @@ export default function BookingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 犬・サービス選択時に空き状況を自動取得
+  // カート（合計時間）の空き状況を自動取得
+  const cartKey = cart.map((c) => `${c.dogId}:${c.serviceId}:${c.optionIds.join('|')}`).join(',');
   useEffect(() => {
-    if (phase !== 'ready' || !dogId || !serviceId) {
+    if (phase !== 'ready' || cart.length === 0) {
       setSlots(null);
       setBusinessHours(null);
       return;
@@ -108,14 +127,12 @@ export default function BookingPage() {
     setLoadingSlots(true);
     (async () => {
       try {
-        const res = await getAvailability({
+        const res = await getGroupAvailability({
           tenantId,
           accessToken: getAccessToken(),
           date,
-          serviceId,
-          dogId,
+          items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
           staffId: staffId || undefined,
-          optionIds,
         });
         if (cancelled) return;
         setSlots(res.data.slots);
@@ -131,7 +148,7 @@ export default function BookingPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, dogId, serviceId, staffId, date, optionIds.join(',')]);
+  }, [phase, cartKey, staffId, date]);
 
   // 月カレンダー表示範囲の休業日を取得（顧客はFirestore直読み不可のため関数経由）
   useEffect(() => {
@@ -172,7 +189,8 @@ export default function BookingPage() {
     }
   }
 
-  async function addDog(e: FormEvent) {
+  // 下書きモーダル内でワンちゃんを新規登録 → その子を選択
+  async function addDogToDraft(e: FormEvent) {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const name = (form.elements.namedItem('dogName') as HTMLInputElement).value.trim();
@@ -180,43 +198,77 @@ export default function BookingPage() {
     if (!name) return;
     const res = await registerDog({ tenantId, accessToken: getAccessToken(), customerId, name, breedId: breedId || undefined });
     await loadOptions(customerId);
-    setDogId(res.data.dogId);
+    setDraft((dr) => (dr ? { ...dr, dogId: res.data.dogId } : dr));
     form.reset();
-    setPicker(null);
   }
 
-  // ---- 派生 ----
-  const selectedDog = options?.dogs.find((d) => d.id === dogId);
-  const breedName = (id: string | null) => options?.breeds.find((b) => b.id === id)?.name;
+  // ---- 表示ヘルパ ----
+  const dogById = (id: string) => options?.dogs.find((d) => d.id === id);
+  const breedName = (id: string | null | undefined) => options?.breeds.find((b) => b.id === id)?.name;
   const serviceName = (id: string) => options?.services.find((s) => s.id === id)?.name;
   const staffName = (id: string) => options?.staff.find((s) => s.id === id)?.name;
-  const priceFor = (svcId: string) =>
-    options?.pricing.find((p) => p.breedId === selectedDog?.breedId && p.serviceId === svcId) ?? null;
+  const priceCell = (breedId: string | null | undefined, svcId: string) =>
+    options?.pricing.find((p) => p.breedId === breedId && p.serviceId === svcId) ?? null;
 
-  const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
-  const allOptions = options?.options ?? [];
-  const optAdj = (id: string) => selectedDog?.optionAdjustments?.[id] ?? 0;
-  const addMin = selectedDog?.serviceAdjustments?.[serviceId] ?? 0;
-  const cell = priceFor(serviceId);
-  const baseStdDur = cell?.durationMin ?? null;
-  const baseStdAmt = cell?.price ?? null;
-  const baseDur = baseStdDur != null ? baseStdDur + addMin : null;
-  const baseAmt = baseStdAmt != null ? baseStdAmt + ceil50((baseStdDur ? baseStdAmt / baseStdDur : 0) * addMin) : null;
-  const optEffDur = (o: { id: string; durationMin: number }) => o.durationMin + optAdj(o.id);
-  const optEffAmt = (o: { id: string; price: number; durationMin: number }) =>
-    o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * optAdj(o.id));
-  const chosenOptions = allOptions.filter((o) => optionIds.includes(o.id));
-  const optDur = chosenOptions.reduce((s, o) => s + optEffDur(o), 0);
-  const optAmt = chosenOptions.reduce((s, o) => s + optEffAmt(o), 0);
-  const estDur = baseDur != null ? baseDur + optDur : null;
-  const estAmt = baseAmt != null || optAmt > 0 ? (baseAmt ?? 0) + optAmt : null;
-
-  function toggleOption(id: string) {
-    setOptionIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // 1項目（犬×メニュー×オプション）の所要時間・料金の見積り
+  function estimateItem(it: { dogId: string; serviceId: string; optionIds: string[] }): {
+    dur: number | null;
+    amt: number | null;
+  } {
+    const dog = dogById(it.dogId);
+    const cell = priceCell(dog?.breedId ?? null, it.serviceId);
+    const addMin = dog?.serviceAdjustments?.[it.serviceId] ?? 0;
+    const stdDur = cell?.durationMin ?? null;
+    const stdAmt = cell?.price ?? null;
+    const baseDur = stdDur != null ? stdDur + addMin : null;
+    const baseAmt = stdAmt != null ? stdAmt + ceil50((stdDur ? stdAmt / stdDur : 0) * addMin) : null;
+    const opts = (options?.options ?? []).filter((o) => it.optionIds.includes(o.id));
+    const optAdj = (id: string) => dog?.optionAdjustments?.[id] ?? 0;
+    const optDur = opts.reduce((s, o) => s + o.durationMin + optAdj(o.id), 0);
+    const optAmt = opts.reduce((s, o) => s + o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * optAdj(o.id)), 0);
+    const dur = baseDur != null ? baseDur + optDur : null;
+    const amt = baseAmt != null || optAmt > 0 ? (baseAmt ?? 0) + optAmt : null;
+    return { dur, amt };
   }
-  // 犬・メニュー未選択なら日付操作をブロックして案内モーダルを出す
+
+  const cartEstimates = cart.map((it) => ({ it, ...estimateItem(it) }));
+  const totalDur = cartEstimates.reduce((s, e) => s + (e.dur ?? 0), 0);
+  const totalAmt = cartEstimates.reduce((s, e) => s + (e.amt ?? 0), 0);
+  const hasUnpriced = cartEstimates.some((e) => e.amt == null);
+
+  // ---- カート操作 ----
+  function openNewItem() {
+    setCartOpen(false);
+    setDraft({ id: null, dogId: '', serviceId: '', optionIds: [] });
+  }
+  function openEditItem(it: CartItem) {
+    setCartOpen(false);
+    setDraft({ id: it.id, dogId: it.dogId, serviceId: it.serviceId, optionIds: [...it.optionIds] });
+  }
+  function toggleDraftOption(id: string) {
+    setDraft((dr) =>
+      dr ? { ...dr, optionIds: dr.optionIds.includes(id) ? dr.optionIds.filter((x) => x !== id) : [...dr.optionIds, id] } : dr,
+    );
+  }
+  function saveDraft() {
+    if (!draft || !draft.dogId || !draft.serviceId) return;
+    setCart((prev) => {
+      if (draft.id) {
+        return prev.map((it) =>
+          it.id === draft.id ? { id: it.id, dogId: draft.dogId, serviceId: draft.serviceId, optionIds: draft.optionIds } : it,
+        );
+      }
+      return [...prev, { id: rid(), dogId: draft.dogId, serviceId: draft.serviceId, optionIds: draft.optionIds }];
+    });
+    setDraft(null);
+  }
+  function removeItem(id: string) {
+    setCart((prev) => prev.filter((it) => it.id !== id));
+  }
+
+  // 予約する子が未登録なら日付操作をブロックして案内
   function ensureSelected(): boolean {
-    if (!dogId || !serviceId) {
+    if (cart.length === 0) {
       setSelectPrompt(true);
       return false;
     }
@@ -241,20 +293,25 @@ export default function BookingPage() {
   }
 
   async function confirm() {
-    if (!confirmSlot) return;
-    const res = await createBooking({
-      tenantId,
-      accessToken: getAccessToken(),
-      customerId,
-      dogId,
-      serviceId,
-      date,
-      startTime: confirmSlot,
-      staffId: staffId || undefined,
-      optionIds,
-    });
-    setConfirmation({ startTime: confirmSlot, slotEnd: res.data.slotEnd });
-    setPhase('done');
+    if (!confirmSlot || cart.length === 0 || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await createGroupBooking({
+        tenantId,
+        accessToken: getAccessToken(),
+        customerId,
+        date,
+        startTime: confirmSlot,
+        items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
+        staffId: staffId || undefined,
+      });
+      setConfirmation({ startTime: confirmSlot, slotEnd: res.data.slotEnd });
+      setPhase('done');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '予約に失敗しました');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (phase === 'init') return <Center>読み込み中…</Center>;
@@ -297,6 +354,9 @@ export default function BookingPage() {
         <p>
           {formatDateJa(date)} {confirmation.startTime}〜{confirmation.slotEnd}
         </p>
+        <p className="muted">
+          {cart.length}頭：{cart.map((c) => dogById(c.dogId)?.name).filter(Boolean).join('・')}
+        </p>
         <p className="muted">前日にLINEでリマインドをお送りします (§9)。</p>
       </Center>
     );
@@ -305,6 +365,7 @@ export default function BookingPage() {
   const dogs = options?.dogs ?? [];
   const services = options?.services ?? [];
   const staffList = options?.staff ?? [];
+  const allOptions = options?.options ?? [];
   const today = todayStr();
   const first = new Date(view.y, view.m, 1);
   const gridStart = new Date(first);
@@ -315,37 +376,40 @@ export default function BookingPage() {
     return d;
   });
 
+  const draftEst = draft && draft.dogId && draft.serviceId ? estimateItem(draft) : null;
+
   return (
     <div className="liff-shell">
       <StoreLogo store={options?.store ?? storeInfo} />
       {isDevMode && <p className="muted" style={{ textAlign: 'center' }}>（開発モード: モックの LINE ユーザ）</p>}
 
-      {/* 予約するワンちゃん */}
+      {/* 予約する子を追加 */}
       <div className="book-quick">
-        <button type="button" className={selectedDog ? 'set' : ''} onClick={() => setPicker('dog')}>
-          🐶 {selectedDog ? `${selectedDog.name}${breedName(selectedDog.breedId) ? `（${breedName(selectedDog.breedId)}）` : ''}` : '予約するワンちゃんを選択・登録'}
+        <button type="button" onClick={openNewItem}>
+          <Plus size={18} style={{ verticalAlign: '-3px', marginRight: 4 }} />
+          予約するワンちゃんを追加
         </button>
       </div>
 
-      {/* 常時表示ピル */}
+      {/* カート */}
+      <button type="button" className={`cart-bar${cart.length ? ' set' : ''}`} onClick={() => cart.length && setCartOpen(true)}>
+        <ShoppingCart size={18} />
+        <span className="cart-bar-main">
+          {cart.length ? `ご予約リスト（${cart.length}頭）` : 'まだ追加されていません'}
+        </span>
+        {cart.length > 0 && (
+          <span className="cart-bar-sum">
+            {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
+          </span>
+        )}
+      </button>
+
+      {/* 指名（カート全体で同じ担当） */}
       <div className="book-pills">
-        <button type="button" className={serviceId ? 'set' : ''} onClick={() => setPicker('service')}>
-          メニュー：{serviceId ? serviceName(serviceId) : '選択'}
-        </button>
-        <button type="button" className={optionIds.length ? 'set' : ''} onClick={() => setPicker('option')}>
-          オプション：{optionIds.length ? `${optionIds.length}件` : '選択'}
-        </button>
-        <button type="button" className={staffId ? 'set' : ''} onClick={() => setPicker('staff')}>
+        <button type="button" className={staffId ? 'set' : ''} onClick={() => setStaffPicker(true)}>
           指名：{staffId ? staffName(staffId) : 'なし'}
         </button>
       </div>
-
-      {/* 合計 */}
-      {serviceId && estDur != null && (
-        <div className="book-summary">
-          合計 {estDur}分{estAmt != null ? ` / ¥${estAmt.toLocaleString()}` : ''}
-        </div>
-      )}
 
       {/* 月カレンダー（アコーディオン・既定で閉） */}
       <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
@@ -415,9 +479,9 @@ export default function BookingPage() {
         </button>
       </div>
 
-      {/* カレンダー（空き時間） */}
-      {!dogId || !serviceId ? (
-        <p className="tg-hint">ワンちゃんとメニューを選ぶと、空き時間が表示されます。</p>
+      {/* カレンダー（空き時間・合計時間ぶん） */}
+      {cart.length === 0 ? (
+        <p className="tg-hint">「予約するワンちゃんを追加」から、犬・メニューを選んでください。</p>
       ) : loadingSlots ? (
         <p className="tg-hint">空き時間を読み込み中…</p>
       ) : (
@@ -430,31 +494,28 @@ export default function BookingPage() {
         />
       )}
 
-      {/* ピッカー（モーダル） */}
-      {picker === 'dog' && (
-        <Modal title="ワンちゃん" onClose={() => setPicker(null)}>
-          {dogs.length > 0 && (
-            <div className="opt-list" style={{ marginBottom: 12 }}>
-              {dogs.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  className={`opt-item${dogId === d.id ? ' set' : ''}`}
-                  style={{ textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => {
-                    setDogId(d.id);
-                    setPicker(null);
-                  }}
-                >
-                  {d.name}
-                  {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
-                </button>
-              ))}
-            </div>
-          )}
-          <details open={dogs.length === 0}>
+      {/* 追加/編集モーダル（犬→メニュー→オプション） */}
+      {draft && (
+        <Modal title={draft.id ? 'ご予約内容の編集' : '予約するワンちゃん'} onClose={() => setDraft(null)}>
+          {/* 犬 */}
+          <h3 className="pick-head">ワンちゃん</h3>
+          <div className="opt-list">
+            {dogs.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                className={`opt-item${draft.dogId === d.id ? ' set' : ''}`}
+                style={{ textAlign: 'left', cursor: 'pointer' }}
+                onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: d.id } : dr))}
+              >
+                {d.name}
+                {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
+              </button>
+            ))}
+          </div>
+          <details open={dogs.length === 0} style={{ marginTop: 8 }}>
             <summary className="muted">＋ ワンちゃんを登録</summary>
-            <form className="row-form" onSubmit={addDog} style={{ marginTop: 8 }}>
+            <form className="row-form" onSubmit={addDogToDraft} style={{ marginTop: 8 }}>
               <input name="dogName" placeholder="名前" required />
               <select name="breedId" defaultValue="">
                 <option value="">犬種を選択</option>
@@ -467,58 +528,122 @@ export default function BookingPage() {
               <button type="submit">登録</button>
             </form>
           </details>
-        </Modal>
-      )}
 
-      {picker === 'service' && (
-        <Modal title="メニュー（サービス）" onClose={() => setPicker(null)}>
-          <div className="opt-list">
-            {services.map((s) => {
-              const c = priceFor(s.id);
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={`opt-item${serviceId === s.id ? ' set' : ''}`}
-                  style={{ textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => {
-                    setServiceId(s.id);
-                    setPicker(null);
-                  }}
-                >
-                  {s.name}
-                  <span className="opt-meta">{c ? `¥${c.price.toLocaleString()} / ${c.durationMin}分` : '料金未設定'}</span>
-                </button>
-              );
-            })}
-          </div>
-        </Modal>
-      )}
+          {/* メニュー（犬選択後） */}
+          {draft.dogId && (
+            <>
+              <h3 className="pick-head">メニュー</h3>
+              <div className="opt-list">
+                {services.map((s) => {
+                  const c = priceCell(dogById(draft.dogId)?.breedId ?? null, s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`opt-item${draft.serviceId === s.id ? ' set' : ''}`}
+                      style={{ textAlign: 'left', cursor: 'pointer' }}
+                      onClick={() => setDraft((dr) => (dr ? { ...dr, serviceId: s.id } : dr))}
+                    >
+                      {s.name}
+                      <span className="opt-meta">{c ? `¥${c.price.toLocaleString()} / ${c.durationMin}分` : '料金未設定'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
-      {picker === 'option' && (
-        <Modal title="オプション（複数選択可）" onClose={() => setPicker(null)}>
-          <div className="opt-list">
-            {allOptions.map((o) => (
-              <label key={o.id} className="opt-item">
-                <input type="checkbox" checked={optionIds.includes(o.id)} onChange={() => toggleOption(o.id)} />
-                {o.name}
-                <span className="opt-meta">
-                  +¥{optEffAmt(o).toLocaleString()} / +{optEffDur(o)}分
-                </span>
-              </label>
-            ))}
-            {allOptions.length === 0 && <p className="muted">オプションはありません。</p>}
-          </div>
+          {/* オプション（メニュー選択後） */}
+          {draft.dogId && draft.serviceId && allOptions.length > 0 && (
+            <>
+              <h3 className="pick-head">オプション（任意・複数可）</h3>
+              <div className="opt-list">
+                {allOptions.map((o) => {
+                  const adj = dogById(draft.dogId)?.optionAdjustments?.[o.id] ?? 0;
+                  const dur = o.durationMin + adj;
+                  const amt = o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * adj);
+                  return (
+                    <label key={o.id} className="opt-item">
+                      <input type="checkbox" checked={draft.optionIds.includes(o.id)} onChange={() => toggleDraftOption(o.id)} />
+                      {o.name}
+                      <span className="opt-meta">
+                        +¥{amt.toLocaleString()} / +{dur}分
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {draftEst && (
+            <div className="book-summary" style={{ marginTop: 12 }}>
+              この子：{draftEst.dur}分{draftEst.amt != null ? ` / ¥${draftEst.amt.toLocaleString()}` : ''}
+            </div>
+          )}
           <div className="modal-actions">
-            <button type="button" onClick={() => setPicker(null)}>
-              決定
+            <button type="button" onClick={() => setDraft(null)}>
+              キャンセル
+            </button>
+            <button type="button" className="primary" disabled={!draft.dogId || !draft.serviceId} onClick={saveDraft}>
+              {draft.id ? '更新' : 'カートに入れる'}
             </button>
           </div>
         </Modal>
       )}
 
-      {picker === 'staff' && (
-        <Modal title="指名（任意）" onClose={() => setPicker(null)}>
+      {/* カート詳細 */}
+      {cartOpen && (
+        <Modal title={`ご予約リスト（${cart.length}頭）`} onClose={() => setCartOpen(false)}>
+          <div className="cart-list">
+            {cartEstimates.map(({ it, dur, amt }) => {
+              const dog = dogById(it.dogId);
+              const opts = allOptions.filter((o) => it.optionIds.includes(o.id));
+              return (
+                <div key={it.id} className="cart-item">
+                  <div className="cart-item-body">
+                    <div className="cart-item-title">
+                      {dog?.name}
+                      {breedName(dog?.breedId) ? `（${breedName(dog?.breedId)}）` : ''}
+                    </div>
+                    <div className="cart-item-meta">
+                      {serviceName(it.serviceId)}
+                      {opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
+                    </div>
+                    <div className="cart-item-meta">
+                      {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ' / 料金未設定'}
+                    </div>
+                  </div>
+                  <div className="cart-item-actions">
+                    <button type="button" aria-label="編集" onClick={() => openEditItem(it)}>
+                      <Pencil size={16} />
+                    </button>
+                    <button type="button" aria-label="削除" onClick={() => removeItem(it.id)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="book-summary" style={{ marginTop: 12 }}>
+            合計 {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
+          </div>
+          <div className="modal-actions">
+            <button type="button" onClick={openNewItem}>
+              <Plus size={16} style={{ verticalAlign: '-3px' }} /> 追加
+            </button>
+            <button type="button" className="primary" onClick={() => setCartOpen(false)}>
+              この内容で時間を選ぶ
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* 指名 */}
+      {staffPicker && (
+        <Modal title="指名（任意）" onClose={() => setStaffPicker(false)}>
+          <p className="muted" style={{ marginTop: 0 }}>複数頭は同じ担当が続けて担当します。</p>
           <div className="opt-list">
             <button
               type="button"
@@ -526,7 +651,7 @@ export default function BookingPage() {
               style={{ textAlign: 'left', cursor: 'pointer' }}
               onClick={() => {
                 setStaffId('');
-                setPicker(null);
+                setStaffPicker(false);
               }}
             >
               指名なし（空いているスタッフ）
@@ -539,7 +664,7 @@ export default function BookingPage() {
                 style={{ textAlign: 'left', cursor: 'pointer' }}
                 onClick={() => {
                   setStaffId(s.id);
-                  setPicker(null);
+                  setStaffPicker(false);
                 }}
               >
                 {s.name}
@@ -549,33 +674,21 @@ export default function BookingPage() {
         </Modal>
       )}
 
-      {/* 犬・メニュー未選択の案内 */}
+      {/* 予約する子が未登録の案内 */}
       {selectPrompt && (
         <Modal title="ご予約の準備" onClose={() => setSelectPrompt(false)}>
-          <p>先にワンちゃんとメニューを選択してください。</p>
+          <p>先に「予約するワンちゃんを追加」から、犬とメニューを選択してください。</p>
           <div className="modal-actions">
-            {!dogId && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectPrompt(false);
-                  setPicker('dog');
-                }}
-              >
-                ワンちゃんを選ぶ
-              </button>
-            )}
-            {!serviceId && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectPrompt(false);
-                  setPicker('service');
-                }}
-              >
-                メニューを選ぶ
-              </button>
-            )}
+            <button
+              type="button"
+              className="primary"
+              onClick={() => {
+                setSelectPrompt(false);
+                openNewItem();
+              }}
+            >
+              ワンちゃんを追加
+            </button>
             <button type="button" onClick={() => setSelectPrompt(false)}>
               閉じる
             </button>
@@ -587,28 +700,42 @@ export default function BookingPage() {
       {confirmSlot && (
         <Modal title="この内容で予約しますか？" onClose={() => setConfirmSlot(null)}>
           <p>
-            <strong>{selectedDog?.name}</strong>
-            {breedName(selectedDog?.breedId ?? null) ? `（${breedName(selectedDog?.breedId ?? null)}）` : ''}
+            {formatDateJa(date)} {confirmSlot}〜{toHHMM(toMin(confirmSlot) + totalDur)}
           </p>
-          <p>
-            {formatDateJa(date)} {confirmSlot}〜
-          </p>
+          <div className="cart-list">
+            {cartEstimates.map(({ it, dur, amt }) => {
+              const dog = dogById(it.dogId);
+              const opts = allOptions.filter((o) => it.optionIds.includes(o.id));
+              return (
+                <div key={it.id} className="cart-item">
+                  <div className="cart-item-body">
+                    <div className="cart-item-title">
+                      {dog?.name}
+                      {breedName(dog?.breedId) ? `（${breedName(dog?.breedId)}）` : ''}
+                    </div>
+                    <div className="cart-item-meta">
+                      {serviceName(it.serviceId)}
+                      {opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
+                      {' ・ '}
+                      {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ''}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           <p className="muted">
-            {serviceName(serviceId)}
-            {chosenOptions.length ? `＋ ${chosenOptions.map((o) => o.name).join('・')}` : ''}
-            {staffId ? `／指名: ${staffName(staffId)}` : ''}
+            {staffId ? `指名: ${staffName(staffId)}` : '指名なし（空いているスタッフ）'}
           </p>
-          {estAmt != null && (
-            <p>
-              所要 {estDur}分 / <strong>¥{estAmt.toLocaleString()}</strong>
-            </p>
-          )}
+          <div className="book-summary">
+            合計 {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
+          </div>
           <div className="modal-actions">
             <button type="button" onClick={() => setConfirmSlot(null)}>
               戻る
             </button>
-            <button type="submit" onClick={confirm}>
-              予約する
+            <button type="button" className="primary" disabled={submitting} onClick={confirm}>
+              {submitting ? '送信中…' : '予約する'}
             </button>
           </div>
         </Modal>

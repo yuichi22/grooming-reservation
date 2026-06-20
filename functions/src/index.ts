@@ -511,6 +511,181 @@ export const createBooking = onCall<{
   return { bookingId: ref.id, staffId: assigned, slotEnd };
 });
 
+// ===== 複数頭まとめ予約（カート）: 同じ担当が連続で施術する v1（連続ブロック） =====
+
+interface GroupItemInput {
+  dogId: string;
+  serviceId: string;
+  optionIds?: string[];
+}
+interface ComputedGroupItem {
+  dogId: string;
+  serviceId: string;
+  optionIds: string[];
+  durationMin: number;
+  price: number | null;
+  options: OptionSnapshot[];
+}
+/** カート各項目の所要時間・料金・オプションスナップショットを算出（getAvailability と同じ規則）。 */
+async function computeGroupItems(tenantId: string, items: GroupItemInput[]): Promise<ComputedGroupItem[]> {
+  return Promise.all(
+    items.map(async (it) => {
+      const dog = await loadDog(tenantId, it.dogId);
+      const cell = await loadPriceCell(tenantId, dog?.breedId ?? null, it.serviceId);
+      const opts = await loadSelectedOptions(tenantId, it.optionIds, dog?.optionAdjustments ?? {});
+      const base = effectiveBase(dog, cell, it.serviceId);
+      return {
+        dogId: it.dogId,
+        serviceId: it.serviceId,
+        optionIds: it.optionIds ?? [],
+        durationMin: base.durationMin + opts.durationMin,
+        price: base.price == null ? null : base.price + opts.price,
+        options: opts.options,
+      };
+    }),
+  );
+}
+
+/** 複数頭の合計時間で空きを返す。指名ありはその担当、なしは全担当の和集合（1人が合計時間ぶん連続で空いている枠）。 */
+export const getGroupAvailability = onCall<{
+  tenantId: string;
+  accessToken: string;
+  date: string;
+  items: GroupItemInput[];
+  staffId?: string;
+}>({ minInstances: minInstancesParam }, async (request) => {
+  const { tenantId, accessToken, date, items, staffId } = request.data;
+  if (!tenantId || !date || !items?.length) throw new HttpsError('invalid-argument', 'tenantId, date, items required');
+  await verifyLineAccessToken(accessToken); // 顧客認証ゲート
+
+  const settings = await loadSettings(tenantId);
+  const computed = await computeGroupItems(tenantId, items);
+  const durationMin = computed.reduce((s, c) => s + c.durationMin, 0);
+  const price = computed.some((c) => c.price == null) ? null : computed.reduce((s, c) => s + (c.price ?? 0), 0);
+
+  if (await isClosedDate(tenantId, date)) {
+    return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours, closed: true };
+  }
+
+  const bookings = await loadDayBookings(tenantId, date);
+  let slots: string[];
+  if (staffId) {
+    slots = availability({
+      businessHours: settings.businessHours,
+      bufferMin: settings.bufferMin,
+      durationMin,
+      occupied: occupiedFor(bookings, staffId),
+    });
+  } else {
+    const staffIds = await loadActiveStaffIds(tenantId);
+    if (staffIds.length === 0) {
+      slots = availability({
+        businessHours: settings.businessHours,
+        bufferMin: settings.bufferMin,
+        durationMin,
+        occupied: bookings.map((b) => ({ start: b.startTime, end: b.slotEnd })),
+      });
+    } else {
+      slots = unionStarts(
+        staffIds.map((sid) =>
+          availability({
+            businessHours: settings.businessHours,
+            bufferMin: settings.bufferMin,
+            durationMin,
+            occupied: occupiedFor(bookings, sid),
+          }),
+        ),
+      );
+    }
+  }
+
+  return { slots, durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours };
+});
+
+/** 複数頭をまとめて確定。同じ担当が startTime から連続で施術し、頭数ぶんの予約を groupId で束ねて作成。 */
+export const createGroupBooking = onCall<{
+  tenantId: string;
+  accessToken: string;
+  customerId: string;
+  date: string;
+  startTime: string;
+  items: GroupItemInput[];
+  staffId?: string;
+}>({ minInstances: minInstancesParam }, async (request) => {
+  const { tenantId, accessToken, customerId, date, startTime, items, staffId } = request.data;
+  if (!tenantId || !customerId || !date || !startTime || !items?.length) {
+    throw new HttpsError('invalid-argument', 'missing required fields');
+  }
+  const { lineUserId } = await verifyLineAccessToken(accessToken);
+  await assertCustomerOwnership(tenantId, customerId, lineUserId);
+
+  if (await isClosedDate(tenantId, date)) {
+    throw new HttpsError('failed-precondition', 'the salon is closed on this date');
+  }
+
+  const settings = await loadSettings(tenantId);
+  const computed = await computeGroupItems(tenantId, items);
+  const totalDuration = computed.reduce((s, c) => s + c.durationMin, 0);
+  const bufferMin = settings.bufferMin;
+  const bookings = await loadDayBookings(tenantId, date);
+
+  // 合計時間ぶん連続で空いている担当を確定（指名ありはその担当のみ）
+  function isFree(sid: string): boolean {
+    return availability({
+      businessHours: settings.businessHours,
+      bufferMin,
+      durationMin: totalDuration,
+      occupied: occupiedFor(bookings, sid),
+    }).includes(startTime);
+  }
+  let assigned: string | null = null;
+  if (staffId) {
+    if (!isFree(staffId)) throw new HttpsError('failed-precondition', 'nominated staff is not available');
+    assigned = staffId;
+  } else {
+    const staffIds = await loadActiveStaffIds(tenantId);
+    assigned = staffIds.find((sid) => isFree(sid)) ?? null;
+    if (staffIds.length > 0 && assigned == null) {
+      throw new HttpsError('failed-precondition', 'no staff available at this time');
+    }
+  }
+
+  const bookingsRef = db.collection('tenants').doc(tenantId).collection('bookings');
+  const groupId = bookingsRef.doc().id;
+  let cursor = toMinutes(startTime);
+  const bookingIds: string[] = [];
+  for (let i = 0; i < computed.length; i++) {
+    const c = computed[i];
+    const isLast = i === computed.length - 1;
+    const bBuffer = isLast ? bufferMin : 0; // 占有はブロック末尾にだけバッファを足す
+    const bStart = toTimeStr(cursor);
+    const slotEnd = toTimeStr(cursor + c.durationMin + bBuffer);
+    const ref = await bookingsRef.add({
+      dogId: c.dogId,
+      customerId,
+      serviceId: c.serviceId,
+      optionIds: c.optionIds,
+      options: c.options,
+      groupId,
+      staffId: assigned,
+      date,
+      startTime: bStart,
+      durationMin: c.durationMin,
+      bufferMin: bBuffer,
+      slotEnd,
+      status: 'reserved',
+      createdAt: FieldValue.serverTimestamp(),
+      // 確認メッセージは先頭の1件のみ送信（2件目以降は送信済み扱いで抑止）
+      ...(i > 0 ? { confirmationSentAt: FieldValue.serverTimestamp() } : {}),
+    });
+    bookingIds.push(ref.id);
+    cursor += c.durationMin;
+  }
+
+  const slotEnd = toTimeStr(toMinutes(startTime) + totalDuration + bufferMin);
+  return { bookingIds, groupId, staffId: assigned, slotEnd, startTime, durationMin: totalDuration };
+});
+
 /** スタッフ（管理者/トリマー）による予約作成。LINE トークン不要・Firebase Auth で認可。 */
 export const createBookingByStaff = onCall<{
   tenantId: string;

@@ -1242,6 +1242,100 @@ tr.row-link td.chevron-cell {
   border-radius: var(--radius-sm);
   font-weight: 700;
 }
+/* 予約する子を追加（主ボタン） */
+.book-quick button {
+  width: 100%;
+}
+/* カートバー */
+.cart-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 700;
+  text-align: left;
+}
+.cart-bar.set {
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--brand-dark);
+  cursor: pointer;
+}
+.cart-bar-main {
+  flex: 1 1 auto;
+}
+.cart-bar-sum {
+  flex: 0 0 auto;
+  font-size: 0.9rem;
+}
+/* カート内の各項目 */
+.cart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cart-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.cart-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cart-item-title {
+  font-weight: 800;
+  color: var(--brand-dark);
+}
+.cart-item-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.cart-item-actions {
+  display: flex;
+  gap: 4px;
+}
+.cart-item-actions button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.cart-item-actions button:hover {
+  color: var(--brand-dark);
+  border-color: var(--brand-100);
+}
+/* モーダル内の見出し */
+.pick-head {
+  margin: 14px 0 6px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--brand-dark);
+}
+.pick-head:first-of-type {
+  margin-top: 4px;
+}
+/* モーダル内の主ボタン */
+.modal-actions .primary {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.modal-actions .primary:disabled {
+  opacity: 0.5;
+}
 /* LIFF 初回登録のカード */
 .liff-shell > section {
   background: var(--surface);

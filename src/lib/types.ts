@@ -198,6 +198,8 @@ export interface Booking {
   optionIds?: string[];
   /** 予約時点のオプション内容スナップショット（後の料金表変更に影響されない） */
   options?: ServiceOption[];
+  /** 複数頭まとめ予約のグループ識別子（同時予約を束ねる） */
+  groupId?: string;
   /** 指名なしは null。確定時に割当 (§8) */
   staffId: string | null;
   date: DateStr;

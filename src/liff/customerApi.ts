@@ -77,6 +77,38 @@ export const getAvailability = httpsCallable<
   }
 >(functions, 'getAvailability');
 
+/** カート（複数頭まとめ予約）の1項目 = 犬×メニュー×オプション */
+export interface GroupItem {
+  dogId: string;
+  serviceId: string;
+  optionIds?: string[];
+}
+
+export const getGroupAvailability = httpsCallable<
+  { tenantId: string; accessToken: string; date: string; items: GroupItem[]; staffId?: string },
+  {
+    slots: string[];
+    durationMin: number;
+    bufferMin: number;
+    price: number | null;
+    businessHours: { start: string; end: string }[];
+    closed?: boolean;
+  }
+>(functions, 'getGroupAvailability');
+
+export const createGroupBooking = httpsCallable<
+  {
+    tenantId: string;
+    accessToken: string;
+    customerId: string;
+    date: string;
+    startTime: string;
+    items: GroupItem[];
+    staffId?: string;
+  },
+  { bookingIds: string[]; groupId: string; staffId: string | null; slotEnd: string; startTime: string; durationMin: number }
+>(functions, 'createGroupBooking');
+
 export const cancelBookingByCustomer = httpsCallable<
   { tenantId: string; accessToken: string; bookingId: string },
   { bookingId: string; status: 'canceled' }
