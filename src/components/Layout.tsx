@@ -43,6 +43,11 @@ export default function Layout() {
   const storeName = tenant?.name ?? 'サロン';
   const logoUrl = tenant?.settings?.logoUrl;
 
+  // 予約・カルテへ移動するときはモバイルのサイドバー（ダッシュボード〜設定）を閉じる。
+  function closeNavOnMobile() {
+    if (window.innerWidth < 820) setNavOpen(false);
+  }
+
   async function onLogout() {
     await logout();
     navigate('/login', { replace: true });
@@ -77,10 +82,10 @@ export default function Layout() {
           {claims.role ? `（${claims.role}）` : claims.superAdmin ? '（superAdmin）' : ''}
         </span>
         <div className="header-quick">
-          <NavLink to="/bookings" className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+          <NavLink to="/bookings" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
             予約
           </NavLink>
-          <NavLink to="/karte" className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+          <NavLink to="/karte" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
             カルテ
           </NavLink>
         </div>
