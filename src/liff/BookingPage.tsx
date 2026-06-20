@@ -65,6 +65,7 @@ export default function BookingPage() {
   const [loadingSlots, setLoadingSlots] = useState(false);
 
   const [picker, setPicker] = useState<Picker>(null);
+  const [selectPrompt, setSelectPrompt] = useState(false);
   const [confirmSlot, setConfirmSlot] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{ startTime: string; slotEnd: string } | null>(null);
 
@@ -213,7 +214,16 @@ export default function BookingPage() {
   function toggleOption(id: string) {
     setOptionIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
+  // 犬・メニュー未選択なら日付操作をブロックして案内モーダルを出す
+  function ensureSelected(): boolean {
+    if (!dogId || !serviceId) {
+      setSelectPrompt(true);
+      return false;
+    }
+    return true;
+  }
   function shiftDay(delta: number) {
+    if (!ensureSelected()) return;
     const [y, m, d] = date.split('-').map(Number);
     setDate(fmt(new Date(y, m - 1, d + delta)));
   }
@@ -224,6 +234,7 @@ export default function BookingPage() {
     });
   }
   function pickDay(d: Date) {
+    if (!ensureSelected()) return;
     setDate(fmt(d));
     setMonthOpen(false);
     if (d.getMonth() !== view.m || d.getFullYear() !== view.y) setView({ y: d.getFullYear(), m: d.getMonth() });
@@ -534,6 +545,40 @@ export default function BookingPage() {
                 {s.name}
               </button>
             ))}
+          </div>
+        </Modal>
+      )}
+
+      {/* 犬・メニュー未選択の案内 */}
+      {selectPrompt && (
+        <Modal title="ご予約の準備" onClose={() => setSelectPrompt(false)}>
+          <p>先にワンちゃんとメニューを選択してください。</p>
+          <div className="modal-actions">
+            {!dogId && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectPrompt(false);
+                  setPicker('dog');
+                }}
+              >
+                ワンちゃんを選ぶ
+              </button>
+            )}
+            {!serviceId && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectPrompt(false);
+                  setPicker('service');
+                }}
+              >
+                メニューを選ぶ
+              </button>
+            )}
+            <button type="button" onClick={() => setSelectPrompt(false)}>
+              閉じる
+            </button>
           </div>
         </Modal>
       )}

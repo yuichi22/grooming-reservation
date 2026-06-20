@@ -1256,6 +1256,8 @@ tr.row-link td.chevron-cell {
   max-width: 480px;
   margin: 0 auto;
   padding: 20px;
+  background: #fff;
+  min-height: 100vh;
 }
 .liff-shell select,
 .liff-shell input[type='date'] {
