@@ -49,7 +49,11 @@ export default function Layout() {
           )}
         </button>
         <div className="header-center">
-          {logoUrl && <img className="store-logo" src={logoUrl} alt={storeName} />}
+          {logoUrl ? (
+            <img className="store-logo" src={logoUrl} alt={storeName} />
+          ) : (
+            <span className="store-name">{storeName}</span>
+          )}
           <span className="powered">CONNECTED BY AKUTO</span>
         </div>
         <span className="user">

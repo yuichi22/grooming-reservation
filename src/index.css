@@ -1157,11 +1157,15 @@ tr.row-link td.chevron-cell {
   height: 38px;
   max-width: 200px;
 }
-.book-logo .store-name {
+.store-name {
   font-weight: 800;
   font-size: 1.15rem;
   color: var(--brand-dark);
   letter-spacing: 0.04em;
+}
+/* ヘッダー（管理画面）内ではロゴ高さに合わせて少し小さく */
+.header-center .store-name {
+  font-size: 1.05rem;
 }
 .book-quick {
   display: flex;
