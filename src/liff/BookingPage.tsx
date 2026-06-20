@@ -376,6 +376,8 @@ export default function BookingPage() {
   });
 
   const draftEst = draft && draft.dogId && draft.serviceId ? estimateItem(draft) : null;
+  // 追加用の犬リスト: 既にカートに入っている子は隠す（編集中のその子は残す）
+  const availDogs = dogs.filter((d) => !cart.some((c) => c.dogId === d.id) || d.id === draft?.dogId);
 
   return (
     <div className="liff-shell">
@@ -489,23 +491,28 @@ export default function BookingPage() {
       {/* 追加/編集モーダル（犬→メニュー→オプション） */}
       {draft && (
         <Modal title={draft.id ? 'ご予約内容の編集' : '予約するワンちゃん'} onClose={() => setDraft(null)}>
-          {/* 犬 */}
+          {/* 犬（カート済みの子は非表示。編集中のその子は残す） */}
           <h3 className="pick-head">ワンちゃん</h3>
-          <div className="opt-list">
-            {dogs.map((d) => (
-              <button
-                key={d.id}
-                type="button"
-                className={`opt-item${draft.dogId === d.id ? ' set' : ''}`}
-                style={{ textAlign: 'left', cursor: 'pointer' }}
-                onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: d.id } : dr))}
-              >
-                {d.name}
-                {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
-              </button>
-            ))}
-          </div>
-          <details open={dogs.length === 0} style={{ marginTop: 8 }}>
+          {availDogs.length > 0 && (
+            <div className="opt-list">
+              {availDogs.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  className={`opt-item${draft.dogId === d.id ? ' set' : ''}`}
+                  style={{ textAlign: 'left', cursor: 'pointer' }}
+                  onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: d.id } : dr))}
+                >
+                  {d.name}
+                  {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
+                </button>
+              ))}
+            </div>
+          )}
+          {availDogs.length === 0 && dogs.length > 0 && (
+            <p className="muted">追加できるワンちゃんは全て追加済みです。新しい子は下から登録できます。</p>
+          )}
+          <details open={availDogs.length === 0} style={{ marginTop: 8 }}>
             <summary className="muted">＋ ワンちゃんを登録</summary>
             <form className="row-form" onSubmit={addDogToDraft} style={{ marginTop: 8 }}>
               <input name="dogName" placeholder="名前" required />
@@ -565,7 +572,7 @@ export default function BookingPage() {
                   const dur = o.durationMin + adj;
                   const amt = o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * adj);
                   return (
-                    <label key={o.id} className="opt-item">
+                    <label key={o.id} className={`opt-item${draft.optionIds.includes(o.id) ? ' set' : ''}`}>
                       <input type="checkbox" checked={draft.optionIds.includes(o.id)} onChange={() => toggleDraftOption(o.id)} />
                       {o.name}
                       <span className="opt-meta">
