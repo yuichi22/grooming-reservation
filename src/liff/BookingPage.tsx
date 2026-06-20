@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronDown, ChevronUp, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
-import { getAccessToken, getProfile, initLiff, isDevMode } from './liff';
+import { closeLiff, getAccessToken, getProfile, initLiff, isDevMode } from './liff';
 import {
   createGroupBooking,
   customerSession,
@@ -328,6 +328,11 @@ export default function BookingPage() {
     setPhase('ready');
   }
 
+  // 完了画面の閉じる: LIFF を閉じて LINE に戻す（開発モード等で閉じられなければ予約画面へ）
+  function closeOrBack() {
+    if (!closeLiff()) startOver();
+  }
+
   if (phase === 'init') return <Center>読み込み中…</Center>;
   if (phase === 'error')
     return (
@@ -365,7 +370,7 @@ export default function BookingPage() {
     return (
       <div className="liff-shell">
         <div className="done-card">
-          <button type="button" className="modal-close done-close" onClick={startOver} aria-label="閉じる">
+          <button type="button" className="modal-close done-close" onClick={closeOrBack} aria-label="閉じてLINEに戻る">
             <X size={20} />
           </button>
           <h2>予約が完了しました</h2>

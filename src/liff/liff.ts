@@ -35,6 +35,20 @@ export async function getProfile(): Promise<LiffProfile> {
   return { userId: p.userId, displayName: p.displayName };
 }
 
+/**
+ * LIFF ウィンドウを閉じて LINE に戻る。
+ * 開発モードや（外部ブラウザ等で）閉じられない環境では false を返す＝呼び出し側でフォールバック。
+ */
+export function closeLiff(): boolean {
+  if (isDevMode) return false;
+  try {
+    liff.closeWindow();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Cloud Functions に渡すアクセストークン。開発モードでは "dev:<userId>"。 */
 export function getAccessToken(): string {
   if (isDevMode) return `dev:${DEV_USER_ID}`;
