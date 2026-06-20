@@ -647,6 +647,20 @@ export const getBookingOptions = onCall<{ tenantId: string; accessToken: string;
   },
 );
 
+/** 休業日の一覧（顧客カレンダー表示用）。指定範囲 [from, to] の終日休業の日付を返す。 */
+export const getClosedDates = onCall<{ tenantId: string; accessToken: string; from: string; to: string }>(
+  async (request) => {
+    const { tenantId, accessToken, from, to } = request.data;
+    if (!tenantId || !from || !to) throw new HttpsError('invalid-argument', 'tenantId, from, to required');
+    await verifyLineAccessToken(accessToken); // 顧客認証ゲート
+    const snap = await db.collection('tenants').doc(tenantId).collection('closures').get();
+    const dates = snap.docs
+      .filter((d) => d.id >= from && d.id <= to && d.data()?.fullDay !== false)
+      .map((d) => d.id);
+    return { dates };
+  },
+);
+
 /** 顧客が自分の犬を登録 (§7 初回は confirmedDurationMin=null)。 */
 export const registerDog = onCall<{
   tenantId: string;

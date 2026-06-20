@@ -7,6 +7,7 @@ import {
   customerSession,
   getAvailability,
   getBookingOptions,
+  getClosedDates,
   registerDog,
   type BookingOptions,
 } from './customerApi';
@@ -54,6 +55,7 @@ export default function BookingPage() {
     const d = new Date();
     return { y: d.getFullYear(), m: d.getMonth() };
   });
+  const [closedMonth, setClosedMonth] = useState<Set<string>>(new Set());
 
   // 空き状況
   const [slots, setSlots] = useState<string[] | null>(null);
@@ -127,6 +129,29 @@ export default function BookingPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, dogId, serviceId, staffId, date, optionIds.join(',')]);
+
+  // 月カレンダー表示範囲の休業日を取得（顧客はFirestore直読み不可のため関数経由）
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    const first = new Date(view.y, view.m, 1);
+    const gs = new Date(first);
+    gs.setDate(1 - first.getDay());
+    const ge = new Date(gs);
+    ge.setDate(gs.getDate() + 41);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getClosedDates({ tenantId, accessToken: getAccessToken(), from: fmt(gs), to: fmt(ge) });
+        if (!cancelled) setClosedMonth(new Set(res.data.dates));
+      } catch {
+        /* 表示用なので失敗は無視 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, view.y, view.m]);
 
   async function submitPhone(e: FormEvent) {
     e.preventDefault();
@@ -340,20 +365,23 @@ export default function BookingPage() {
               const ds = fmt(d);
               const dow = d.getDay();
               const past = ds < today;
+              const closed = closedMonth.has(ds);
               const cls = ['cal-cell'];
               if (d.getMonth() !== view.m) cls.push('other');
               if (ds === today) cls.push('today');
               if (ds === date) cls.push('selected');
               if (past) cls.push('other');
+              if (closed) cls.push('closed');
               return (
                 <button
                   key={ds}
                   type="button"
                   className={cls.join(' ')}
-                  disabled={past}
+                  disabled={past || closed}
                   onClick={() => pickDay(d)}
                 >
                   <span className={`cal-daynum${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}`}>{d.getDate()}</span>
+                  {closed && <span className="cal-badge closed">休</span>}
                 </button>
               );
             })}

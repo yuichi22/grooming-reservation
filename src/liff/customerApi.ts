@@ -41,6 +41,11 @@ export const getBookingOptions = httpsCallable<
   BookingOptions
 >(functions, 'getBookingOptions');
 
+export const getClosedDates = httpsCallable<
+  { tenantId: string; accessToken: string; from: string; to: string },
+  { dates: string[] }
+>(functions, 'getClosedDates');
+
 export const registerDog = httpsCallable<
   { tenantId: string; accessToken: string; customerId: string; name: string; breedId?: string },
   { dogId: string }
