@@ -1211,13 +1211,15 @@ tr.row-link td.chevron-cell {
   position: absolute;
   left: 58px;
   right: 12px;
+  display: flex;
+  align-items: center;
   background: #def7e6;
   border: 1px solid #9fe3b8;
   color: #067a3a;
-  border-radius: 6px;
-  font-size: 0.74rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 2px 10px;
   cursor: pointer;
   overflow: hidden;
 }

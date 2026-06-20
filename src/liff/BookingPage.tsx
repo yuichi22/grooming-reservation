@@ -594,8 +594,13 @@ function AvailabilityGrid({
   const hours: number[] = [];
   for (let h = Math.ceil(axisStart / 60) * 60; h <= axisEnd; h += 60) hours.push(h);
 
-  const sorted = useMemo(() => [...slots].sort(), [slots]);
-  const step = sorted.length > 1 ? Math.max(15, toMin(sorted[1]) - toMin(sorted[0])) : 30;
+  // 見やすさ優先で30分刻みに間引く（30分始まりが無ければ全件）
+  const sorted = useMemo(() => {
+    const all = [...slots].sort();
+    const half = all.filter((s) => toMin(s) % 30 === 0);
+    return half.length ? half : all;
+  }, [slots]);
+  const SLOT_H = 28; // スロットの高さ(px)
 
   return (
     <div className="tg" style={{ height }}>
@@ -622,7 +627,7 @@ function AvailabilityGrid({
               key={s}
               type="button"
               className={`tg-slot${selected === s ? ' selected' : ''}`}
-              style={{ top: top + 1, height: Math.max(16, step * PX_PER_MIN - 2) }}
+              style={{ top: top - SLOT_H / 2, height: SLOT_H }}
               onClick={() => onPick(s)}
             >
               {s}
