@@ -43,6 +43,7 @@ export default function BookingPage() {
   const [error, setError] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState('');
   const [options, setOptions] = useState<BookingOptions | null>(null);
+  const [storeInfo, setStoreInfo] = useState<{ name: string; logoUrl: string | null } | null>(null);
 
   // 予約選択
   const [dogId, setDogId] = useState('');
@@ -79,6 +80,7 @@ export default function BookingPage() {
         await getProfile();
         const res = await customerSession({ tenantId, accessToken: getAccessToken() });
         setCustomerId(res.data.customerId);
+        setStoreInfo(res.data.store);
         if (res.data.needsPhone) {
           setPhase('needPhone');
         } else {
@@ -254,21 +256,26 @@ export default function BookingPage() {
 
   if (phase === 'needPhone') {
     return (
-      <Center>
-        <h2>初回登録</h2>
-        <p className="muted">ご予約には電話番号の登録が必要です (§3 初回電話番号取得)。</p>
-        <form onSubmit={submitPhone}>
-          <label>
-            お名前
-            <input name="ownerName" required />
-          </label>
-          <label>
-            電話番号
-            <input name="phone" type="tel" required />
-          </label>
-          <button type="submit">登録して進む</button>
-        </form>
-      </Center>
+      <div className="liff-shell">
+        <StoreLogo store={storeInfo} />
+        <section style={{ marginTop: 4 }}>
+          <h2>はじめてのご予約</h2>
+          <p className="muted">ご予約にはお名前と電話番号の登録が必要です（初回のみ）。</p>
+          <form onSubmit={submitPhone}>
+            <label>
+              お名前
+              <input name="ownerName" placeholder="例: 山田 花子" required />
+            </label>
+            <label>
+              電話番号
+              <input name="phone" type="tel" placeholder="例: 09012345678" required />
+            </label>
+            <button type="submit" style={{ width: '100%', marginTop: 8 }}>
+              登録して予約に進む
+            </button>
+          </form>
+        </section>
+      </div>
     );
   }
 
@@ -299,15 +306,7 @@ export default function BookingPage() {
 
   return (
     <div className="liff-shell">
-      {/* ロゴ */}
-      <div className="book-logo">
-        {options?.store.logoUrl ? (
-          <img className="store-logo" src={options.store.logoUrl} alt={options.store.name} />
-        ) : (
-          <span className="store-name">{options?.store.name || 'ご予約'}</span>
-        )}
-        <span className="powered">CONNECTED BY AKUTO</span>
-      </div>
+      <StoreLogo store={options?.store ?? storeInfo} />
       {isDevMode && <p className="muted" style={{ textAlign: 'center' }}>（開発モード: モックの LINE ユーザ）</p>}
 
       {/* 予約するワンちゃん */}
@@ -651,6 +650,19 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         <h2>{title}</h2>
         {children}
       </div>
+    </div>
+  );
+}
+
+function StoreLogo({ store }: { store: { name: string; logoUrl: string | null } | null }) {
+  return (
+    <div className="book-logo">
+      {store?.logoUrl ? (
+        <img className="store-logo" src={store.logoUrl} alt={store.name} />
+      ) : (
+        <span className="store-name">{store?.name || 'ご予約'}</span>
+      )}
+      <span className="powered">CONNECTED BY AKUTO</span>
     </div>
   );
 }

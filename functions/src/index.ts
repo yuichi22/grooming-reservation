@@ -354,7 +354,13 @@ export const customerSession = onCall<{
   const needsPhone = !finalPhone;
   // 起動時の往復削減 (B): 電話登録済みなら予約オプションも同梱して返す（追加の getBookingOptions 呼び出しを省く）
   const options = needsPhone ? null : await fetchBookingOptions(tenantId, customerId);
-  return { customerId, lineUserId, needsPhone, options };
+  // 店舗情報（登録画面でもロゴ表示できるよう常に返す）
+  const tSnap = await db.collection('tenants').doc(tenantId).get();
+  const store = {
+    name: (tSnap.data()?.name ?? '') as string,
+    logoUrl: (tSnap.data()?.settings?.logoUrl ?? null) as string | null,
+  };
+  return { customerId, lineUserId, needsPhone, options, store };
 });
 
 /** 空きスロット取得 (§6 + §8 指名スコープ)。所要時間は犬種×サービスの料金表セルから。 */

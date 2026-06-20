@@ -1238,6 +1238,14 @@ tr.row-link td.chevron-cell {
   border-radius: var(--radius-sm);
   font-weight: 700;
 }
+/* LIFF 初回登録のカード */
+.liff-shell > section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 16px;
+}
 
 /* ---------- LIFF (顧客) ---------- */
 .liff-shell {

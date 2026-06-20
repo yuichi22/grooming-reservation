@@ -33,7 +33,13 @@ export interface BookingOptions {
 export const customerSession = httpsCallable<
   { tenantId: string; accessToken: string; ownerName?: string; phone?: string },
   // options は電話登録済みのとき同梱（起動時の getBookingOptions 呼び出しを省く B）
-  { customerId: string; lineUserId: string; needsPhone: boolean; options: BookingOptions | null }
+  {
+    customerId: string;
+    lineUserId: string;
+    needsPhone: boolean;
+    options: BookingOptions | null;
+    store: { name: string; logoUrl: string | null };
+  }
 >(functions, 'customerSession');
 
 export const getBookingOptions = httpsCallable<
