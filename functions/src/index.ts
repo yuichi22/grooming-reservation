@@ -381,7 +381,7 @@ export const getAvailability = onCall<{
 
   // 臨時休業/祝日は空きなし (§11)
   if (await isClosedDate(tenantId, date)) {
-    return { slots: [], durationMin, bufferMin: settings.bufferMin, price, closed: true };
+    return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours, closed: true };
   }
 
   const bookings = await loadDayBookings(tenantId, date);
@@ -419,7 +419,7 @@ export const getAvailability = onCall<{
     }
   }
 
-  return { slots, durationMin, bufferMin: settings.bufferMin, price };
+  return { slots, durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours };
 });
 
 /** 予約確定 (§6/§7/§8)。サーバで空きを再検証し、指名なしは空きスタッフを割当。 */
@@ -592,7 +592,8 @@ async function assertCustomerOwnership(tenantId: string, customerId: string, lin
 /** 予約画面の選択肢（サービス・犬種・指名候補スタッフ・自分の犬・料金表）。customerSession でも再利用。 */
 async function fetchBookingOptions(tenantId: string, customerId: string) {
   const base = db.collection('tenants').doc(tenantId);
-  const [servicesSnap, optionsSnap, breedsSnap, staffSnap, dogsSnap, pricingSnap] = await Promise.all([
+  const [tenantSnap, servicesSnap, optionsSnap, breedsSnap, staffSnap, dogsSnap, pricingSnap] = await Promise.all([
+    base.get(),
     base.collection('services').where('active', '==', true).get(),
     base.collection('options').where('active', '==', true).get(),
     base.collection('breeds').where('active', '==', true).get(),
@@ -600,7 +601,12 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
     base.collection('dogs').where('customerId', '==', customerId).get(),
     base.collection('pricing').get(),
   ]);
+  const tdata = tenantSnap.data() ?? {};
   return {
+    store: {
+      name: (tdata.name ?? '') as string,
+      logoUrl: (tdata.settings?.logoUrl ?? null) as string | null,
+    },
     services: servicesSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
     options: optionsSnap.docs.map((d) => ({
       id: d.id,

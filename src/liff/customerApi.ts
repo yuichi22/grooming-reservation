@@ -15,6 +15,7 @@ export interface ServiceOption {
   durationMin: number;
 }
 export interface BookingOptions {
+  store: { name: string; logoUrl: string | null };
   services: { id: string; name: string }[];
   options: ServiceOption[];
   breeds: { id: string; name: string }[];
@@ -55,7 +56,14 @@ export const getAvailability = httpsCallable<
     staffId?: string;
     optionIds?: string[];
   },
-  { slots: string[]; durationMin: number; bufferMin: number; price: number | null; closed?: boolean }
+  {
+    slots: string[];
+    durationMin: number;
+    bufferMin: number;
+    price: number | null;
+    businessHours: { start: string; end: string }[];
+    closed?: boolean;
+  }
 >(functions, 'getAvailability');
 
 export const cancelBookingByCustomer = httpsCallable<

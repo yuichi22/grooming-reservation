@@ -1145,6 +1145,98 @@ tr.row-link td.chevron-cell {
   margin-top: 16px;
 }
 
+/* ---------- LIFF 顧客: 管理画面風レイアウト ---------- */
+.book-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0 12px;
+}
+.book-logo .store-logo {
+  height: 38px;
+  max-width: 200px;
+}
+.book-logo .store-name {
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--brand-dark);
+  letter-spacing: 0.04em;
+}
+.book-quick {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.book-quick button {
+  border-radius: 999px;
+  background: var(--brand-50);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-weight: 700;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+}
+.book-quick button.set {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.book-pills {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+.book-pills button {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-weight: 700;
+  font-size: 0.84rem;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+.book-pills button.set {
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--brand-dark);
+}
+/* 空きスロット（時間軸グリッド内） */
+.tg-slot {
+  position: absolute;
+  left: 58px;
+  right: 12px;
+  background: #def7e6;
+  border: 1px solid #9fe3b8;
+  color: #067a3a;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.tg-slot:hover {
+  background: #cdeed8;
+}
+.tg-slot.selected {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.book-summary {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--brand-50);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
 /* ---------- LIFF (顧客) ---------- */
 .liff-shell {
   max-width: 480px;
