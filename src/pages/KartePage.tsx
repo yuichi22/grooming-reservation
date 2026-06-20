@@ -22,11 +22,21 @@ function KarteInner({ tenantId }: { tenantId: string }) {
   const breedName = useMemo(() => new Map(breeds.map((b) => [b.id, b.name])), [breeds]);
   const customerName = useMemo(() => new Map(customers.map((c) => [c.id, c.ownerName])), [customers]);
 
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [breedId, setBreedId] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
+
+  function closeModal() {
+    if (busy) return;
+    setOpen(false);
+    setName('');
+    setBreedId('');
+    setOwnerName('');
+    setPhone('');
+  }
 
   // §3 名寄せは電話番号で行うため、店頭でカルテを作るときに顧客（名前＋電話）も作成/再利用しておく。
   // 同じ電話で顧客が後から LINE 登録すると自動的にこの犬が紐づく。
@@ -58,6 +68,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
         confirmedDurationMin: null, // 初回は未確定 (§7)
       } as Omit<Dog, 'id'> as Dog);
       // 追加したら詳細（カルテ）を開く
+      setOpen(false);
       navigate(`/karte/${dref.id}`);
     } finally {
       setBusy(false);
@@ -66,28 +77,57 @@ function KarteInner({ tenantId }: { tenantId: string }) {
 
   return (
     <section>
-      <h1>カルテ（犬）</h1>
-
-      <form className="row-form" onSubmit={onAdd}>
-        <input placeholder="犬の名前" value={name} onChange={(e) => setName(e.target.value)} />
-        <select value={breedId} onChange={(e) => setBreedId(e.target.value)}>
-          <option value="">犬種を選択</option>
-          {breeds.filter((b) => b.active).map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-        <input placeholder="飼い主名（任意）" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
-        <input placeholder="電話番号（任意）" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        <button type="submit" disabled={busy}>
+      <div className="page-head">
+        <h1>カルテ（犬）</h1>
+        <button type="button" onClick={() => setOpen(true)}>
           <Plus size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
-          {busy ? '作成中…' : 'カルテを追加'}
+          カルテを追加
         </button>
-      </form>
-      <p className="muted">
-        電話番号を入れておくと、その方が同じ番号で LINE 登録したときに自動でこの犬が紐づきます（§3）。
-      </p>
+      </div>
+
+      {open && (
+        <div className="modal-backdrop" onClick={closeModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>カルテを追加</h2>
+            <form onSubmit={onAdd}>
+              <label>
+                犬の名前
+                <input placeholder="犬の名前" value={name} onChange={(e) => setName(e.target.value)} />
+              </label>
+              <label>
+                犬種
+                <select value={breedId} onChange={(e) => setBreedId(e.target.value)}>
+                  <option value="">犬種を選択</option>
+                  {breeds.filter((b) => b.active).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                飼い主名（任意）
+                <input placeholder="飼い主名（任意）" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+              </label>
+              <label>
+                電話番号（任意）
+                <input placeholder="電話番号（任意）" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </label>
+              <p className="muted">
+                電話番号を入れておくと、その方が同じ番号で LINE 登録したときに自動でこの犬が紐づきます（§3）。
+              </p>
+              <div className="modal-actions">
+                <button type="button" onClick={closeModal} disabled={busy}>
+                  キャンセル
+                </button>
+                <button type="submit" disabled={busy || !name.trim()}>
+                  {busy ? '作成中…' : 'カルテを追加'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p>読み込み中…</p>

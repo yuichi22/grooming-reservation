@@ -120,6 +120,23 @@ textarea {
   min-height: 72px;
 }
 
+/* 数字入力のスピンボタン（上下矢印）は全廃 */
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* モバイルで readOnly 化した number 入力もタップ可能・通常表示に見せる */
+input[type='number'][readonly] {
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+}
+
 label {
   display: block;
   margin: 12px 0;
@@ -424,6 +441,67 @@ label.inline > select {
   border-radius: var(--radius-sm);
   margin-top: 14px;
 }
+
+/* 作業時間・料金テーブルの「個別加算」セル（＋ 入力 分） */
+.karte-time-table td.kt-adj {
+  white-space: nowrap;
+}
+.karte-time-table td.kt-adj input {
+  width: 64px;
+}
+
+/* 作業時間・料金テーブル：スマホ幅では1サービス=カード（2行×3列）に再構成。
+   横スクロールせずに全項目（特に編集する個別加算）が見えるようにする。 */
+@media (max-width: 600px) {
+  .karte-time-table thead {
+    display: none;
+  }
+  .karte-time-table,
+  .karte-time-table tbody {
+    display: block;
+  }
+  .karte-time-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px 10px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .karte-time-table tbody tr:last-child {
+    border-bottom: none;
+  }
+  .karte-time-table td {
+    display: block;
+    padding: 0;
+    border: none;
+    white-space: normal;
+    min-width: 0;
+  }
+  /* 各セルの上にヘッダ名（data-label）を小さく表示 */
+  .karte-time-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .karte-time-table td.kt-name {
+    grid-column: 1 / -1;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  /* カード時は「＋ 入力 分」が1行に収まるよう入力欄を細く */
+  .karte-time-table td.kt-adj {
+    white-space: nowrap;
+  }
+  .karte-time-table td.kt-adj input {
+    width: 64px;
+    max-width: 100%;
+    padding-left: 8px;
+    padding-right: 4px;
+  }
+}
 table {
   border-collapse: collapse;
   width: 100%;
@@ -476,6 +554,9 @@ fieldset {
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   margin: 14px 0;
+  /* fieldset 既定の min-inline-size:min-content を解除。
+     これが無いと内部の .table-wrap(横スクロール)が縮まず表がはみ出す。 */
+  min-width: 0;
 }
 legend {
   font-weight: 700;
@@ -934,6 +1015,18 @@ tr.row-link td.chevron-cell {
   margin-bottom: 6px;
 }
 .cal-title-row h1 {
+  margin: 0;
+}
+
+/* ページ見出し＋右側アクションボタンの汎用レイアウト */
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.page-head h1 {
   margin: 0;
 }
 
@@ -1449,6 +1542,69 @@ tr.row-link td.chevron-cell {
   gap: 8px;
 }
 .slot.selected {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+
+/* ---------- モバイル用 数字キーパッド ---------- */
+.numpad-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+}
+.numpad {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow-md);
+  padding: 14px 14px calc(16px + env(safe-area-inset-bottom));
+}
+.numpad-display {
+  text-align: right;
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--fg);
+  background: var(--brand-50);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  min-height: 1.5em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.numpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.numpad-grid button {
+  font-size: 1.5rem;
+  font-weight: 700;
+  padding: 14px 0;
+  min-height: 58px;
+}
+.numpad-grid .numpad-fn {
+  color: var(--brand-dark);
+  background: var(--brand-50);
+}
+.numpad-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.numpad-actions button {
+  flex: 1;
+  min-height: 54px;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.numpad-ok {
   background: var(--brand);
   color: #fff;
   border-color: var(--brand);

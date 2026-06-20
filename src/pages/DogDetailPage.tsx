@@ -208,7 +208,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
             <p className="muted">この犬種の料金表が未設定です。メニューの料金表で登録してください。</p>
           ) : (
             <div className="table-wrap">
-              <table>
+              <table className="karte-time-table">
                 <thead>
                   <tr>
                     <th>サービス</th>
@@ -224,10 +224,10 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
                     const cell = cellFor(s.id)!;
                     return (
                       <tr key={s.id}>
-                        <td>{s.name}</td>
-                        <td className="muted">{cell.durationMin}分</td>
-                        <td className="muted">¥{cell.price.toLocaleString()}</td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
+                        <td data-label="サービス" className="kt-name">{s.name}</td>
+                        <td data-label="標準時間" className="muted">{cell.durationMin}分</td>
+                        <td data-label="標準料金" className="muted">¥{cell.price.toLocaleString()}</td>
+                        <td data-label="個別加算" className="kt-adj">
                           ＋
                           <input
                             type="number"
@@ -238,14 +238,13 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
                               const v = Math.max(0, Number(e.target.value));
                               setServiceAdj((m) => ({ ...m, [s.id]: v }));
                             }}
-                            style={{ width: 64 }}
                           />
                           分
                         </td>
-                        <td>
+                        <td data-label="確定時間">
                           <strong>{confirmTime(s.id, cell.durationMin)}分</strong>
                         </td>
-                        <td>
+                        <td data-label="確定料金">
                           <strong>¥{confirmPrice(s.id, cell.price, cell.durationMin).toLocaleString()}</strong>
                         </td>
                       </tr>

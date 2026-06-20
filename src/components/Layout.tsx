@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
+import MobileNumpad from './MobileNumpad';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
 import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
@@ -108,6 +109,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      <MobileNumpad />
     </div>
   );
 }
