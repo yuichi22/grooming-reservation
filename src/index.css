@@ -1278,6 +1278,29 @@ tr.row-link td.chevron-cell {
 .modal-close:hover {
   color: var(--fg);
 }
+/* 予約QR モーダル */
+.qr-modal {
+  max-width: 360px;
+  text-align: center;
+}
+.qr-canvas {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin: 10px 0;
+}
+.qr-url {
+  font-size: 0.78rem;
+  color: var(--muted);
+  word-break: break-all;
+  background: var(--brand-50);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+}
 /* 完了画面 */
 .done-card {
   position: relative;

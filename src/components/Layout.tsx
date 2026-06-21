@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, QrCode } from 'lucide-react';
 import MobileNumpad from './MobileNumpad';
+import BookingQrModal from './BookingQrModal';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
 import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
@@ -27,6 +28,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   // モバイルでメニューを閉じる操作。サイドバーの各ページを開いていた場合は予約画面に戻す。
   function toggleNav() {
@@ -89,6 +91,12 @@ export default function Layout() {
           <NavLink to="/karte" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
             カルテ
           </NavLink>
+          {claims.tenantId && (
+            <button type="button" className="header-btn" onClick={() => setQrOpen(true)}>
+              <QrCode size={15} style={{ verticalAlign: '-2px', marginRight: 3 }} />
+              予約QR
+            </button>
+          )}
         </div>
       </header>
       <div className={`app-body${navOpen ? '' : ' nav-collapsed'}`}>
@@ -110,6 +118,9 @@ export default function Layout() {
         </main>
       </div>
       <MobileNumpad />
+      {qrOpen && claims.tenantId && (
+        <BookingQrModal tenantId={claims.tenantId} storeName={storeName} onClose={() => setQrOpen(false)} />
+      )}
     </div>
   );
 }
