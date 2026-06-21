@@ -261,9 +261,14 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     setDraft({ id: it.id, dogId: it.dogId, serviceId: it.serviceId, optionIds: [...it.optionIds] });
   }
   const isStandaloneOpt = (id: string) => !!options?.options.find((o) => o.id === id)?.standalone;
-  // 本メニュー（サービス）を選択。単品オプション側の選択はクリア（排他）。追加オプションは保持。
+  // 本メニュー（サービス）を選択/解除。選択時は既存の選択(単品含む)を追加オプションとして保持。
+  // 同じメニューを再タップで解除し、単品オプションのみ残す（メニュー無し予約に戻す）。
   function pickService(serviceId: string) {
-    setDraft((dr) => (dr ? { ...dr, serviceId, optionIds: dr.optionIds.filter((x) => !isStandaloneOpt(x)) } : dr));
+    setDraft((dr) => {
+      if (!dr) return dr;
+      if (dr.serviceId === serviceId) return { ...dr, serviceId: '', optionIds: dr.optionIds.filter((x) => isStandaloneOpt(x)) };
+      return { ...dr, serviceId };
+    });
   }
   // 追加オプション（メニュー併用）をトグル。
   function toggleAddon(id: string) {
@@ -588,7 +593,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
               const breedId = dogById(draft.dogId)?.breedId ?? null;
               const menuServices = services.map((s) => ({ s, c: priceCell(breedId, s.id) })).filter((x) => x.c);
               const standaloneOpts = allOptions.filter((o) => o.standalone);
-              const addonOpts = allOptions.filter((o) => !o.standalone);
               const optEff = (o: { id: string; price: number; durationMin: number }) => {
                 const adj = dogById(draft.dogId)?.optionAdjustments?.[o.id] ?? 0;
                 return {
@@ -629,12 +633,12 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                     </>
                   )}
 
-                  {/* 追加オプション（メニュー選択時のみ・複数可） */}
-                  {draft.serviceId && addonOpts.length > 0 && (
+                  {/* 追加オプション（メニュー選択時のみ・複数可）。単品オプションもここに混ぜて同列表示 */}
+                  {draft.serviceId && allOptions.length > 0 && (
                     <>
                       <h3 className="pick-head">オプション（任意・複数可）</h3>
                       <div className="opt-list">
-                        {addonOpts.map((o) => {
+                        {allOptions.map((o) => {
                           const e = optEff(o);
                           const on = draft.optionIds.includes(o.id);
                           return (
@@ -657,8 +661,8 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                     </>
                   )}
 
-                  {/* 単品オプション（メニュー無しで予約・複数可。メニューとは併用不可） */}
-                  {standaloneOpts.length > 0 && (
+                  {/* 単品オプション（メニュー未選択時のみ。メニュー選択時は上のオプションに混在表示） */}
+                  {!draft.serviceId && standaloneOpts.length > 0 && (
                     <>
                       <h3 className="pick-head">単品オプション（メニュー無しで予約・複数可）</h3>
                       <div className="opt-list">
