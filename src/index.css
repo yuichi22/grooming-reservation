@@ -1199,9 +1199,36 @@ tr.row-link td.chevron-cell {
   overflow: hidden;
   box-shadow: var(--shadow-sm);
   border: 1px solid rgba(255, 255, 255, 0.4);
+  /* button 化に伴うリセット（カルテへ遷移） */
+  min-height: 0;
+  text-align: left;
+  cursor: pointer;
+}
+button.tg-block:hover {
+  background: var(--brand);
+  filter: brightness(0.93);
 }
 .tg-block.done {
   background: var(--brand-dark);
+}
+/* テキストリンク風ボタン（カルテへ遷移など） */
+.link-btn {
+  background: transparent;
+  border: none;
+  color: var(--brand-dark);
+  font-weight: 700;
+  padding: 0;
+  min-height: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-btn:hover {
+  background: transparent;
+  color: var(--brand);
+}
+button.tg-block.done:hover {
+  background: var(--brand-dark);
+  filter: brightness(0.93);
 }
 .tg-block .b-time {
   font-weight: 700;

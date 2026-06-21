@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { deleteDoc, doc, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -306,6 +307,7 @@ function TimeGrid({
   closed: boolean;
   onCreateAt: (startTime: string, staffId: string) => void;
 }) {
+  const navigate = useNavigate();
   // 営業時間前後に余白を足した軸
   const axisStart = Math.min(...businessHours.map((h) => toMin(h.start))) - EDGE_PAD;
   const axisEnd = Math.max(...businessHours.map((h) => toMin(h.end))) + EDGE_PAD;
@@ -385,9 +387,12 @@ function TimeGrid({
             const colIndex = columns.findIndex((c) => c.id === b.staffId);
             const spanning = colIndex < 0;
             return (
-              <div
+              <button
                 key={b.id}
+                type="button"
                 className={`tg-block${b.status === 'done' ? ' done' : ''}`}
+                onClick={() => navigate(`/karte/${b.dogId}`)}
+                title="カルテを開く"
                 style={{
                   top: (s - axisStart) * PX_PER_MIN,
                   height: Math.max(18, b.durationMin * PX_PER_MIN - 2),
@@ -400,7 +405,7 @@ function TimeGrid({
                 </div>
                 {dogName.get(b.dogId) ?? b.dogId}
                 <div style={{ opacity: 0.9, fontSize: '0.7rem' }}>{serviceName.get(b.serviceId) ?? ''}</div>
-              </div>
+              </button>
             );
           })}
         {closed && <div className="tg-closed">休業日</div>}
@@ -576,6 +581,7 @@ function ListView({
   staffName: Map<string, string>;
   serviceName: Map<string, string>;
 }) {
+  const navigate = useNavigate();
   return (
     <div className="table-wrap">
       <table>
@@ -595,7 +601,11 @@ function ListView({
               <td>
                 {b.startTime}〜{b.slotEnd}
               </td>
-              <td>{dogName.get(b.dogId) ?? b.dogId}</td>
+              <td>
+                <button type="button" className="link-btn" onClick={() => navigate(`/karte/${b.dogId}`)} title="カルテを開く">
+                  {dogName.get(b.dogId) ?? b.dogId}
+                </button>
+              </td>
               <td>
                 {serviceName.get(b.serviceId) ?? b.serviceId}
                 {b.options && b.options.length > 0 ? `＋${b.options.length}` : ''}
