@@ -491,15 +491,17 @@ label.inline > select {
     font-weight: 700;
     font-size: 1rem;
   }
-  /* カード時は「＋ 入力 分」が1行に収まるよう入力欄を細く */
+  /* カード時は「＋ 入力 分」が1行に収まるよう入力欄を細く（3桁入れば十分） */
   .karte-time-table td.kt-adj {
     white-space: nowrap;
   }
   .karte-time-table td.kt-adj input {
-    width: 64px;
+    width: 44px;
     max-width: 100%;
-    padding-left: 8px;
-    padding-right: 4px;
+    padding: 4px 5px;
+    min-height: 34px;
+    text-align: center;
+    vertical-align: middle;
   }
 }
 table {
