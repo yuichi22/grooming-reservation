@@ -842,6 +842,16 @@ tr.row-link td.chevron-cell {
   color: var(--brand-dark);
   font-weight: 700;
 }
+/* 複数選択オプションのチェック表示（生のcheckboxの代わり） */
+.opt-check {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand);
+}
 .opt-item input {
   width: 18px;
   height: 18px;
@@ -1225,6 +1235,38 @@ button.tg-block:hover {
 .link-btn:hover {
   background: transparent;
   color: var(--brand);
+}
+/* オプション追加フォーム（縦積み・モバイルでも崩れない） */
+.opt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 520px;
+  margin-bottom: 14px;
+}
+.opt-form > label {
+  margin: 0;
+}
+.opt-form-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.opt-form .opt-standalone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+.opt-form .opt-standalone input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+.opt-form button[type='submit'] {
+  align-self: flex-start;
 }
 button.tg-block.done:hover {
   background: var(--brand-dark);

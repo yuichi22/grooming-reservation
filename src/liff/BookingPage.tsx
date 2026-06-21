@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronDown, ChevronUp, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
 import { closeLiff, getAccessToken, getProfile, initLiff, isDevMode } from './liff';
 import {
   createGroupBooking,
@@ -602,14 +602,21 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                   const adj = dogById(draft.dogId)?.optionAdjustments?.[o.id] ?? 0;
                   const dur = o.durationMin + adj;
                   const amt = o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * adj);
+                  const on = draft.optionIds.includes(o.id);
                   return (
-                    <label key={o.id} className={`opt-item${draft.optionIds.includes(o.id) ? ' set' : ''}`}>
-                      <input type="checkbox" checked={draft.optionIds.includes(o.id)} onChange={() => toggleDraftOption(o.id)} />
+                    <button
+                      key={o.id}
+                      type="button"
+                      className={`opt-item${on ? ' set' : ''}`}
+                      style={{ textAlign: 'left', cursor: 'pointer' }}
+                      onClick={() => toggleDraftOption(o.id)}
+                    >
+                      <span className="opt-check" aria-hidden="true">{on ? <Check size={16} strokeWidth={3} /> : null}</span>
                       {o.name}
                       <span className="opt-meta">
                         +¥{amt.toLocaleString()} / +{dur}分
                       </span>
-                    </label>
+                    </button>
                   );
                 })}
               </div>

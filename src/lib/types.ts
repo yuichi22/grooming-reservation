@@ -107,6 +107,11 @@ export interface Option extends ServiceOption {
   active: boolean;
   /** 表示順 */
   order?: number;
+  /**
+   * 単体予約可（オプションのみ可）。true なら予約画面でメニューと同列にも表示し、
+   * メニュー未選択でもこれ単体で予約できる。false/未設定はメニューの追加オプション専用。
+   */
+  standalone?: boolean;
 }
 
 /** tenants/{tenantId}/services/{serviceId} — サービスメニュー マスタ */

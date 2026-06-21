@@ -415,6 +415,7 @@ function OptionMaster({ tenantId, optionItems }: { tenantId: string; optionItems
   const [name, setName] = useState('');
   const [price, setPrice] = useState(0);
   const [dur, setDur] = useState(15);
+  const [standalone, setStandalone] = useState(false);
 
   async function add(e: FormEvent) {
     e.preventDefault();
@@ -424,10 +425,12 @@ function OptionMaster({ tenantId, optionItems }: { tenantId: string; optionItems
       price,
       durationMin: dur,
       active: true,
+      standalone,
     } as Omit<Option, 'id'> as Option);
     setName('');
     setPrice(0);
     setDur(15);
+    setStandalone(false);
   }
 
   return (
@@ -436,13 +439,24 @@ function OptionMaster({ tenantId, optionItems }: { tenantId: string; optionItems
       <p className="muted">
         サービスとは別に選べるオプション（料金・追加時間）。予約時はサービス＋オプションの合計時間で枠を確保します。
       </p>
-      <form className="row-form" onSubmit={add}>
-        <input placeholder="例: 歯磨き / 爪切り" value={name} onChange={(e) => setName(e.target.value)} />
-        <label className="inline">
-          ¥<input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} style={{ width: 90 }} />
+      <form className="opt-form" onSubmit={add}>
+        <label>
+          オプション名
+          <input placeholder="例: 歯磨き / 爪切り" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
-        <label className="inline">
-          +<input type="number" min={0} step={5} value={dur} onChange={(e) => setDur(Number(e.target.value))} style={{ width: 70 }} />分
+        <div className="opt-form-row2">
+          <label>
+            料金（¥）
+            <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+          </label>
+          <label>
+            追加時間（分）
+            <input type="number" min={0} step={5} value={dur} onChange={(e) => setDur(Number(e.target.value))} />
+          </label>
+        </div>
+        <label className="inline opt-standalone">
+          <input type="checkbox" checked={standalone} onChange={(e) => setStandalone(e.target.checked)} />
+          オプションのみ可（予約画面でメニューと同列に表示し、単体でも予約できる）
         </label>
         <button type="submit">オプションを追加</button>
       </form>
@@ -453,6 +467,7 @@ function OptionMaster({ tenantId, optionItems }: { tenantId: string; optionItems
               <th>名前</th>
               <th>料金</th>
               <th>追加時間</th>
+              <th>単体可</th>
               <th>状態</th>
               <th></th>
             </tr>
@@ -465,7 +480,7 @@ function OptionMaster({ tenantId, optionItems }: { tenantId: string; optionItems
               ))}
             {optionItems.length === 0 && (
               <tr>
-                <td colSpan={5} className="muted">
+                <td colSpan={6} className="muted">
                   未登録
                 </td>
               </tr>
@@ -505,6 +520,16 @@ function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Optio
         ) : (
           `+${option.durationMin}分`
         )}
+      </td>
+      <td>
+        <button
+          type="button"
+          className="link-btn"
+          title="オプションのみ可（メニューと同列に表示）を切替"
+          onClick={() => updateDoc(doc(optionsCol(tenantId), option.id), { standalone: !option.standalone })}
+        >
+          {option.standalone ? '✓ 可' : '—'}
+        </button>
       </td>
       <td>{option.active ? '有効' : '無効'}</td>
       <td>
