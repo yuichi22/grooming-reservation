@@ -42,6 +42,23 @@ export const customerSession = httpsCallable<
   }
 >(functions, 'customerSession');
 
+/** このLINEユーザーが利用した店の1件 */
+export interface MyTenant {
+  tenantId: string;
+  name: string;
+  logoUrl: string | null;
+}
+
+export const getMyTenants = httpsCallable<{ accessToken: string }, { tenants: MyTenant[] }>(
+  functions,
+  'getMyTenants',
+);
+
+export const removeMyTenant = httpsCallable<{ accessToken: string; tenantId: string }, { ok: boolean }>(
+  functions,
+  'removeMyTenant',
+);
+
 export const getBookingOptions = httpsCallable<
   { tenantId: string; accessToken: string; customerId: string },
   BookingOptions

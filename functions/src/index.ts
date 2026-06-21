@@ -360,8 +360,55 @@ export const customerSession = onCall<{
     name: (tSnap.data()?.name ?? '') as string,
     logoUrl: (tSnap.data()?.settings?.logoUrl ?? null) as string | null,
   };
+  // 「このLINEユーザーが使った店」をインデックス化（リッチメニューの店選択/直近店に使用）
+  await upsertUserTenant(lineUserId, tenantId, store.name, store.logoUrl);
   return { customerId, lineUserId, needsPhone, options, store };
 });
+
+/**
+ * lineUsers/{lineUserId}/tenants/{tenantId} に「利用した店」を記録（マージ）。
+ * テナント横断のため top-level コレクション。クライアント直読み不可（callable 経由のみ）。
+ */
+async function upsertUserTenant(lineUserId: string, tenantId: string, name: string, logoUrl: string | null) {
+  await db
+    .collection('lineUsers')
+    .doc(lineUserId)
+    .collection('tenants')
+    .doc(tenantId)
+    .set({ tenantId, name, logoUrl, lastUsedAt: FieldValue.serverTimestamp() }, { merge: true });
+}
+
+/** このLINEユーザーが利用した店の一覧（最終利用が新しい順）。リッチメニューの店選択に使用。 */
+export const getMyTenants = onCall<{ accessToken: string }>({ minInstances: minInstancesParam }, async (request) => {
+  const { accessToken } = request.data;
+  const { lineUserId } = await verifyLineAccessToken(accessToken);
+  const snap = await db.collection('lineUsers').doc(lineUserId).collection('tenants').get();
+  const tenants = snap.docs
+    .map((d) => {
+      const x = d.data();
+      return {
+        tenantId: d.id,
+        name: (x.name ?? '') as string,
+        logoUrl: (x.logoUrl ?? null) as string | null,
+        lastUsedAt: (x.lastUsedAt?.toMillis?.() ?? 0) as number,
+      };
+    })
+    .sort((a, b) => b.lastUsedAt - a.lastUsedAt)
+    .map((t) => ({ tenantId: t.tenantId, name: t.name, logoUrl: t.logoUrl }));
+  return { tenants };
+});
+
+/** 店選択リストから1店を外す（自分のリストから削除。店舗側の予約/カルテは残す）。 */
+export const removeMyTenant = onCall<{ accessToken: string; tenantId: string }>(
+  { minInstances: minInstancesParam },
+  async (request) => {
+    const { accessToken, tenantId } = request.data;
+    if (!tenantId) throw new HttpsError('invalid-argument', 'tenantId required');
+    const { lineUserId } = await verifyLineAccessToken(accessToken);
+    await db.collection('lineUsers').doc(lineUserId).collection('tenants').doc(tenantId).delete();
+    return { ok: true };
+  },
+);
 
 /** 空きスロット取得 (§6 + §8 指名スコープ)。所要時間は犬種×サービスの料金表セルから。 */
 export const getAvailability = onCall<{

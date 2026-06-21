@@ -8,8 +8,11 @@ import {
   getBookingOptions,
   getClosedDates,
   getGroupAvailability,
+  getMyTenants,
   registerDog,
+  removeMyTenant,
   type BookingOptions,
+  type MyTenant,
 } from './customerApi';
 
 type Phase = 'init' | 'needPhone' | 'ready' | 'done' | 'error';
@@ -51,10 +54,7 @@ const toMin = (t: string) => {
 const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
 
-export default function BookingPage() {
-  const [params] = useSearchParams();
-  const tenantId = params.get('tenant') ?? (import.meta.env.VITE_DEFAULT_TENANT_ID as string) ?? 'groomhaus';
-
+function BookingPage({ tenantId }: { tenantId: string }) {
   const [phase, setPhase] = useState<Phase>('init');
   const [error, setError] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState('');
@@ -882,4 +882,116 @@ function StoreLogo({ store }: { store: { name: string; logoUrl: string | null } 
 
 function Center({ children }: { children: React.ReactNode }) {
   return <div className="liff-shell">{children}</div>;
+}
+
+/**
+ * /book の入口。
+ * - ?tenant= 指定あり（店ごとQR）→ そのまま予約画面。
+ * - 指定なし（リッチメニュー等）→ 利用店を解決: 0件=案内 / 1件=直行 / 複数=店選択。
+ */
+export default function BookEntry() {
+  const [params] = useSearchParams();
+  const paramTenant = params.get('tenant');
+
+  const [tenantId, setTenantId] = useState<string | null>(paramTenant);
+  const [phase, setPhase] = useState<'init' | 'go' | 'choose' | 'empty' | 'error'>(paramTenant ? 'go' : 'init');
+  const [tenants, setTenants] = useState<MyTenant[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function resolve() {
+    try {
+      await initLiff();
+      await getProfile();
+      const res = await getMyTenants({ accessToken: getAccessToken() });
+      const list = res.data.tenants;
+      if (list.length === 0) {
+        setPhase('empty');
+      } else if (list.length === 1) {
+        setTenantId(list[0].tenantId);
+        setPhase('go');
+      } else {
+        setTenants(list);
+        setPhase('choose');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '読み込みに失敗しました');
+      setPhase('error');
+    }
+  }
+
+  useEffect(() => {
+    if (paramTenant) return; // 店ごとQR は直接予約画面へ
+    resolve();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramTenant]);
+
+  async function onRemove(id: string) {
+    try {
+      await removeMyTenant({ accessToken: getAccessToken(), tenantId: id });
+    } catch {
+      /* 失敗しても表示は更新する */
+    }
+    const left = tenants.filter((t) => t.tenantId !== id);
+    if (left.length === 1) {
+      setTenantId(left[0].tenantId);
+      setPhase('go');
+    } else if (left.length === 0) {
+      setPhase('empty');
+    } else {
+      setTenants(left);
+    }
+  }
+
+  if (phase === 'go' && tenantId) return <BookingPage key={tenantId} tenantId={tenantId} />;
+  if (phase === 'init') return <Center>読み込み中…</Center>;
+  if (phase === 'error')
+    return (
+      <Center>
+        <p className="error">{error}</p>
+      </Center>
+    );
+  if (phase === 'empty')
+    return (
+      <Center>
+        <StoreLogo store={null} />
+        <section style={{ marginTop: 4 }}>
+          <h2>ご予約できる店舗がありません</h2>
+          <p className="muted">店舗で配布されているQRコード（予約リンク）から始めてください。</p>
+        </section>
+      </Center>
+    );
+
+  // choose: 複数店から選ぶ（不要な店は削除できる）
+  return (
+    <div className="liff-shell">
+      <StoreLogo store={null} />
+      <h2 style={{ textAlign: 'center' }}>ご予約する店舗を選択</h2>
+      <div className="cart-list" style={{ marginTop: 12 }}>
+        {tenants.map((t) => (
+          <div key={t.tenantId} className="cart-item">
+            <button
+              type="button"
+              className="cart-item-body"
+              style={{ background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}
+              onClick={() => {
+                setTenantId(t.tenantId);
+                setPhase('go');
+              }}
+            >
+              <div className="cart-item-title">
+                {t.logoUrl ? <img className="store-logo" src={t.logoUrl} alt={t.name} style={{ height: 24, verticalAlign: '-6px', marginRight: 8 }} /> : null}
+                {t.name || t.tenantId}
+              </div>
+            </button>
+            <div className="cart-item-actions">
+              <button type="button" aria-label="リストから削除" onClick={() => onRemove(t.tenantId)}>
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="muted" style={{ marginTop: 12 }}>行かない店舗は削除できます。1店舗だけになると次回から自動で開きます。</p>
+    </div>
+  );
 }
