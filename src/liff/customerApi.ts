@@ -13,6 +13,8 @@ export interface ServiceOption {
   name: string;
   price: number;
   durationMin: number;
+  /** true ならメニューと同列で単体予約も可 */
+  standalone?: boolean;
 }
 export interface BookingOptions {
   store: { name: string; logoUrl: string | null };

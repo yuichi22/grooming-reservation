@@ -578,9 +578,11 @@ async function computeGroupItems(tenantId: string, items: GroupItemInput[]): Pro
   return Promise.all(
     items.map(async (it) => {
       const dog = await loadDog(tenantId, it.dogId);
-      const cell = await loadPriceCell(tenantId, dog?.breedId ?? null, it.serviceId);
       const opts = await loadSelectedOptions(tenantId, it.optionIds, dog?.optionAdjustments ?? {});
-      const base = effectiveBase(dog, cell, it.serviceId);
+      // serviceId 空 = メニュー無し（単体オプション）予約。基準は 0、合計はオプションのみ。
+      const base = it.serviceId
+        ? effectiveBase(dog, await loadPriceCell(tenantId, dog?.breedId ?? null, it.serviceId), it.serviceId)
+        : { durationMin: 0, price: 0 };
       return {
         dogId: it.dogId,
         serviceId: it.serviceId,
@@ -841,6 +843,7 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
       name: d.data().name as string,
       price: (d.data().price ?? 0) as number,
       durationMin: (d.data().durationMin ?? 0) as number,
+      standalone: (d.data().standalone ?? false) as boolean,
     })),
     breeds: breedsSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
     staff: staffSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
@@ -1162,22 +1165,27 @@ export const onBookingCreated = onDocumentCreated('tenants/{tenantId}/bookings/{
 
   const { tenantId } = event.params;
   const base = db.collection('tenants').doc(tenantId);
+  // serviceId 空（単体オプション予約）は services を引かない（doc('') は不正）
   const [tenantSnap, custSnap, dogSnap, serviceSnap] = await Promise.all([
     base.get(),
     base.collection('customers').doc(b.customerId).get(),
     base.collection('dogs').doc(b.dogId).get(),
-    base.collection('services').doc(b.serviceId).get(),
+    b.serviceId ? base.collection('services').doc(b.serviceId).get() : Promise.resolve(null),
   ]);
 
   const lineUserId = custSnap.data()?.lineUserId as string | undefined;
   if (!lineUserId) return; // LINE 未連携は対象外
+
+  // メニュー名: サービスがあればその名前、無ければオプション名（単体予約）
+  const optionNames = Array.isArray(b.options) ? (b.options as { name: string }[]).map((o) => o.name).filter(Boolean) : [];
+  const menuName = (serviceSnap?.data()?.name as string) ?? (optionNames.length ? optionNames.join('・') : 'メニュー');
 
   const token = reminderChannelToken(tenantSnap.data()?.lineConfig);
   const s = (tenantSnap.data()?.settings ?? {}) as StoreSettings;
   const message = buildConfirmationMessage({
     tenantName: (tenantSnap.data()?.name as string) ?? tenantId,
     dogName: (dogSnap.data()?.name as string) ?? 'ワンちゃん',
-    menuName: (serviceSnap.data()?.name as string) ?? 'メニュー',
+    menuName,
     date: b.date as string,
     startTime: b.startTime as string,
     slotEnd: b.slotEnd as string,
