@@ -1095,6 +1095,11 @@ tr.row-link td.chevron-cell {
   text-align: center;
   white-space: nowrap;
 }
+.cal-bar .day-dow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-left: 1px;
+}
 .cal-bar .day-today {
   margin-left: 5px;
   padding: 1px 6px;
