@@ -51,6 +51,11 @@ function formatDateJa(ds: string) {
   const [y, m, d] = ds.split('-').map(Number);
   return `${y}年${m}月${d}日（${DOW[new Date(y, m - 1, d).getDay()]}）`;
 }
+/** 日ナビ用の短い表記（例: 2026/6/22.月） */
+function formatDateShort(ds: string) {
+  const [y, m, d] = ds.split('-').map(Number);
+  return `${y}/${m}/${d}.${DOW[new Date(y, m - 1, d).getDay()]}`;
+}
 const toMin = (t: string) => {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
@@ -470,11 +475,25 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         )}
       </button>
 
-      {/* 月カレンダー（アコーディオン・既定で閉） */}
-      <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
-        {monthOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-        月カレンダー
-      </button>
+      {/* 月表示トグル＋日付ナビを1行に */}
+      <div className="cal-bar">
+        <button type="button" className="cal-toggle" onClick={() => setMonthOpen((o) => !o)} aria-label="月表示の開閉">
+          {monthOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          月表示
+        </button>
+        <div className="day-center">
+          <button type="button" onClick={() => shiftDay(-1)} aria-label="前日" disabled={date <= today}>
+            ‹
+          </button>
+          <span className="day-label">
+            {formatDateShort(date)}
+            {date === today && <span className="day-today">今日</span>}
+          </span>
+          <button type="button" onClick={() => shiftDay(1)} aria-label="翌日">
+            ›
+          </button>
+        </div>
+      </div>
       {monthOpen && (
         <div className="cal-acc-body">
           <div className="cal-head">
@@ -521,22 +540,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           </div>
         </div>
       )}
-
-      {/* 日ナビ */}
-      <div className="day-nav">
-        <div className="day-center">
-          <button type="button" onClick={() => shiftDay(-1)} aria-label="前日" disabled={date <= today}>
-            ‹
-          </button>
-          <span className="day-label">
-            {formatDateJa(date)}
-            {date === today && <span className="day-today">今日</span>}
-          </span>
-          <button type="button" onClick={() => shiftDay(1)} aria-label="翌日">
-            ›
-          </button>
-        </div>
-      </div>
 
       {/* カレンダー（空き時間・合計時間ぶん） */}
       {cart.length === 0 ? (
