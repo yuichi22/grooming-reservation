@@ -49,17 +49,33 @@ export default function MobileNumpad() {
 
   // number 入力のタップでキーパッドを開く
   useEffect(() => {
-    const onClick = (e: Event) => {
+    const open = (el: HTMLInputElement) => {
+      if (targetRef.current === el) return; // 同じタップの別イベントを無視
+      targetRef.current = el;
+      setTarget(el);
+      setDraft(el.value === '0' ? '' : el.value); // 既定の 0 は空から入力できるように
+    };
+    // pointerdown で preventDefault → フォーカスを与えない＝OSキーボードも自動スクロールも起きない
+    const onDown = (e: Event) => {
       if (!isMobile()) return;
       const el = e.target;
       if (el instanceof HTMLInputElement && el.type === 'number') {
-        targetRef.current = el;
-        setTarget(el);
-        setDraft(el.value === '0' ? '' : el.value); // 既定の 0 は空から入力できるように
+        e.preventDefault();
+        open(el);
       }
     };
+    // pointer 非対応環境のフォールバック
+    const onClick = (e: Event) => {
+      if (!isMobile()) return;
+      const el = e.target;
+      if (el instanceof HTMLInputElement && el.type === 'number') open(el);
+    };
+    document.addEventListener('pointerdown', onDown, true);
     document.addEventListener('click', onClick, true);
-    return () => document.removeEventListener('click', onClick, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('click', onClick, true);
+    };
   }, []);
 
   if (!target) return null;
