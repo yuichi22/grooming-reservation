@@ -18,15 +18,14 @@ import {
 type Phase = 'init' | 'needPhone' | 'ready' | 'done' | 'error';
 
 /**
- * カート1項目 = 犬×メニュー×オプション（id はローカル編集用）。
- * serviceId が空のときは「メニュー無し（単体オプション）」予約で、primaryOptionId が主役。
- * optionIds は追加オプション（primaryOptionId は含まない）。
+ * カート1項目 = 犬×（メニュー or 単品オプション）。
+ * - serviceId あり: 本メニュー予約。optionIds は追加オプション（複数可）。
+ * - serviceId 空: 単品オプション予約。optionIds が選んだ単品オプション（複数可）。追加オプションは無し。
  */
 interface CartItem {
   id: string;
   dogId: string;
   serviceId: string;
-  primaryOptionId: string; // 単体オプション予約のときのみ。サービス選択時は ''
   optionIds: string[];
 }
 /** 追加/編集中の下書き（id が null なら新規） */
@@ -34,13 +33,7 @@ interface Draft {
   id: string | null;
   dogId: string;
   serviceId: string;
-  primaryOptionId: string;
   optionIds: string[];
-}
-
-/** 予約計算/送信用の実効オプションid（単体予約は primary を先頭に含める） */
-function mergedOptionIds(it: { primaryOptionId: string; optionIds: string[] }): string[] {
-  return it.primaryOptionId ? [it.primaryOptionId, ...it.optionIds] : it.optionIds;
 }
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
@@ -126,7 +119,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   }, []);
 
   // カート（合計時間）の空き状況を自動取得
-  const cartKey = cart.map((c) => `${c.dogId}:${c.serviceId}:${c.primaryOptionId}:${c.optionIds.join('|')}`).join(',');
+  const cartKey = cart.map((c) => `${c.dogId}:${c.serviceId}:${c.optionIds.join('|')}`).join(',');
   useEffect(() => {
     if (phase !== 'ready' || cart.length === 0) {
       setSlots(null);
@@ -141,7 +134,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           tenantId,
           accessToken: getAccessToken(),
           date,
-          items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: mergedOptionIds(c) })),
+          items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
           staffId: staffId || undefined,
         });
         if (cancelled) return;
@@ -223,27 +216,28 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   const serviceName = (id: string) => options?.services.find((s) => s.id === id)?.name;
   const optionName = (id: string) => options?.options.find((o) => o.id === id)?.name;
   const staffName = (id: string) => options?.staff.find((s) => s.id === id)?.name;
-  // カート/確認のメニュー表示: サービスならサービス名、単体予約ならオプション名
-  const menuLabel = (it: { serviceId: string; primaryOptionId: string }) =>
-    it.serviceId ? serviceName(it.serviceId) : optionName(it.primaryOptionId) ?? 'オプション';
+  // カート/確認のメニュー表示: サービスならサービス名、単品予約なら選んだ単品オプション名（複数可）
+  const menuLabel = (it: { serviceId: string; optionIds: string[] }) =>
+    it.serviceId
+      ? serviceName(it.serviceId)
+      : it.optionIds.map((id) => optionName(id)).filter(Boolean).join('・') || '単品オプション';
   const priceCell = (breedId: string | null | undefined, svcId: string) =>
     options?.pricing.find((p) => p.breedId === breedId && p.serviceId === svcId) ?? null;
 
   // 1項目（犬×メニュー×オプション）の所要時間・料金の見積り
-  function estimateItem(it: { dogId: string; serviceId: string; primaryOptionId: string; optionIds: string[] }): {
+  function estimateItem(it: { dogId: string; serviceId: string; optionIds: string[] }): {
     dur: number | null;
     amt: number | null;
   } {
     const dog = dogById(it.dogId);
-    const standalone = !it.serviceId; // メニュー無し（単体オプション）予約
+    const standalone = !it.serviceId; // メニュー無し（単品オプション）予約
     const cell = priceCell(dog?.breedId ?? null, it.serviceId);
     const addMin = dog?.serviceAdjustments?.[it.serviceId] ?? 0;
     const stdDur = cell?.durationMin ?? null;
     const stdAmt = cell?.price ?? null;
     const baseDur = standalone ? 0 : stdDur != null ? stdDur + addMin : null;
     const baseAmt = standalone ? 0 : stdAmt != null ? stdAmt + ceil50((stdDur ? stdAmt / stdDur : 0) * addMin) : null;
-    const ids = mergedOptionIds(it);
-    const opts = (options?.options ?? []).filter((o) => ids.includes(o.id));
+    const opts = (options?.options ?? []).filter((o) => it.optionIds.includes(o.id));
     const optAdj = (id: string) => dog?.optionAdjustments?.[id] ?? 0;
     const optDur = opts.reduce((s, o) => s + o.durationMin + optAdj(o.id), 0);
     const optAmt = opts.reduce((s, o) => s + o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * optAdj(o.id)), 0);
@@ -260,34 +254,34 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   // ---- カート操作 ----
   function openNewItem() {
     setCartOpen(false);
-    setDraft({ id: null, dogId: '', serviceId: '', primaryOptionId: '', optionIds: [] });
+    setDraft({ id: null, dogId: '', serviceId: '', optionIds: [] });
   }
   function openEditItem(it: CartItem) {
     setCartOpen(false);
-    setDraft({ id: it.id, dogId: it.dogId, serviceId: it.serviceId, primaryOptionId: it.primaryOptionId, optionIds: [...it.optionIds] });
+    setDraft({ id: it.id, dogId: it.dogId, serviceId: it.serviceId, optionIds: [...it.optionIds] });
   }
-  function toggleDraftOption(id: string) {
+  const isStandaloneOpt = (id: string) => !!options?.options.find((o) => o.id === id)?.standalone;
+  // 本メニュー（サービス）を選択。単品オプション側の選択はクリア（排他）。追加オプションは保持。
+  function pickService(serviceId: string) {
+    setDraft((dr) => (dr ? { ...dr, serviceId, optionIds: dr.optionIds.filter((x) => !isStandaloneOpt(x)) } : dr));
+  }
+  // 追加オプション（メニュー併用）をトグル。
+  function toggleAddon(id: string) {
     setDraft((dr) =>
       dr ? { ...dr, optionIds: dr.optionIds.includes(id) ? dr.optionIds.filter((x) => x !== id) : [...dr.optionIds, id] } : dr,
     );
   }
-  // メニュー選択（サービス or 単体オプション）。単体は serviceId 空＋primaryOptionId、追加から重複除去。
-  function pickService(serviceId: string) {
-    setDraft((dr) => (dr ? { ...dr, serviceId, primaryOptionId: '' } : dr));
-  }
-  function pickStandalone(optionId: string) {
-    setDraft((dr) =>
-      dr ? { ...dr, serviceId: '', primaryOptionId: optionId, optionIds: dr.optionIds.filter((x) => x !== optionId) } : dr,
-    );
+  // 単品オプション（メニュー無し・複数可）をトグル。メニュー側はクリア（排他）。
+  function toggleStandalone(id: string) {
+    setDraft((dr) => {
+      if (!dr) return dr;
+      if (dr.serviceId) return { ...dr, serviceId: '', optionIds: [id] }; // メニューから単品へ切替
+      return { ...dr, serviceId: '', optionIds: dr.optionIds.includes(id) ? dr.optionIds.filter((x) => x !== id) : [...dr.optionIds, id] };
+    });
   }
   function saveDraft() {
-    if (!draft || !draft.dogId || (!draft.serviceId && !draft.primaryOptionId)) return;
-    const item = {
-      dogId: draft.dogId,
-      serviceId: draft.serviceId,
-      primaryOptionId: draft.primaryOptionId,
-      optionIds: draft.optionIds,
-    };
+    if (!draft || !draft.dogId || (!draft.serviceId && draft.optionIds.length === 0)) return;
+    const item = { dogId: draft.dogId, serviceId: draft.serviceId, optionIds: draft.optionIds };
     setCart((prev) => {
       if (draft.id) return prev.map((it) => (it.id === draft.id ? { id: it.id, ...item } : it));
       return [...prev, { id: rid(), ...item }];
@@ -334,7 +328,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         customerId,
         date,
         startTime: confirmSlot,
-        items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: mergedOptionIds(c) })),
+        items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
         staffId: staffId || undefined,
       });
       setConfirmation({ startTime: confirmSlot, slotEnd: res.data.slotEnd });
@@ -434,7 +428,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     return d;
   });
 
-  const draftHasMenu = !!draft && (!!draft.serviceId || !!draft.primaryOptionId);
+  const draftHasMenu = !!draft && (!!draft.serviceId || draft.optionIds.length > 0);
   const draftEst = draft && draft.dogId && draftHasMenu ? estimateItem(draft) : null;
   // 追加用の犬リスト: 既にカートに入っている子は隠す（編集中のその子は残す）
   const availDogs = dogs.filter((d) => !cart.some((c) => c.dogId === d.id) || d.id === draft?.dogId);
@@ -594,6 +588,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
               const breedId = dogById(draft.dogId)?.breedId ?? null;
               const menuServices = services.map((s) => ({ s, c: priceCell(breedId, s.id) })).filter((x) => x.c);
               const standaloneOpts = allOptions.filter((o) => o.standalone);
+              const addonOpts = allOptions.filter((o) => !o.standalone);
               const optEff = (o: { id: string; price: number; durationMin: number }) => {
                 const adj = dogById(draft.dogId)?.optionAdjustments?.[o.id] ?? 0;
                 return {
@@ -611,77 +606,87 @@ function BookingPage({ tenantId }: { tenantId: string }) {
               }
               return (
                 <>
-                  <h3 className="pick-head">メニュー</h3>
-                  <div className="opt-list">
-                    {menuServices.map(({ s, c }) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        className={`opt-item${draft.serviceId === s.id ? ' set' : ''}`}
-                        style={{ textAlign: 'left', cursor: 'pointer' }}
-                        onClick={() => pickService(s.id)}
-                      >
-                        {s.name}
-                        <span className="opt-meta">
-                          ¥{c!.price.toLocaleString()} / {c!.durationMin}分
-                        </span>
-                      </button>
-                    ))}
-                    {/* 単体オプションはサービス未選択のときだけメニュー欄に表示（サービス選択後はオプション欄へ） */}
-                    {!draft.serviceId &&
-                      standaloneOpts.map((o) => {
-                        const e = optEff(o);
-                        return (
+                  {/* 本メニュー（1つ選択） */}
+                  {menuServices.length > 0 && (
+                    <>
+                      <h3 className="pick-head">メニュー</h3>
+                      <div className="opt-list">
+                        {menuServices.map(({ s, c }) => (
                           <button
-                            key={o.id}
+                            key={s.id}
                             type="button"
-                            className={`opt-item${draft.primaryOptionId === o.id ? ' set' : ''}`}
+                            className={`opt-item${draft.serviceId === s.id ? ' set' : ''}`}
                             style={{ textAlign: 'left', cursor: 'pointer' }}
-                            onClick={() => pickStandalone(o.id)}
+                            onClick={() => pickService(s.id)}
                           >
-                            {o.name}
+                            {s.name}
                             <span className="opt-meta">
-                              ¥{e.amt.toLocaleString()} / {e.dur}分
+                              ¥{c!.price.toLocaleString()} / {c!.durationMin}分
                             </span>
                           </button>
-                        );
-                      })}
-                  </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* 追加オプション（メニュー選択時のみ・複数可） */}
+                  {draft.serviceId && addonOpts.length > 0 && (
+                    <>
+                      <h3 className="pick-head">オプション（任意・複数可）</h3>
+                      <div className="opt-list">
+                        {addonOpts.map((o) => {
+                          const e = optEff(o);
+                          const on = draft.optionIds.includes(o.id);
+                          return (
+                            <button
+                              key={o.id}
+                              type="button"
+                              className={`opt-item${on ? ' set' : ''}`}
+                              style={{ textAlign: 'left', cursor: 'pointer' }}
+                              onClick={() => toggleAddon(o.id)}
+                            >
+                              <span className="opt-check" aria-hidden="true">{on ? <Check size={16} strokeWidth={3} /> : null}</span>
+                              {o.name}
+                              <span className="opt-meta">
+                                +¥{e.amt.toLocaleString()} / +{e.dur}分
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  {/* 単品オプション（メニュー無しで予約・複数可。メニューとは併用不可） */}
+                  {standaloneOpts.length > 0 && (
+                    <>
+                      <h3 className="pick-head">単品オプション（メニュー無しで予約・複数可）</h3>
+                      <div className="opt-list">
+                        {standaloneOpts.map((o) => {
+                          const e = optEff(o);
+                          const on = !draft.serviceId && draft.optionIds.includes(o.id);
+                          return (
+                            <button
+                              key={o.id}
+                              type="button"
+                              className={`opt-item${on ? ' set' : ''}`}
+                              style={{ textAlign: 'left', cursor: 'pointer' }}
+                              onClick={() => toggleStandalone(o.id)}
+                            >
+                              <span className="opt-check" aria-hidden="true">{on ? <Check size={16} strokeWidth={3} /> : null}</span>
+                              {o.name}
+                              <span className="opt-meta">
+                                ¥{e.amt.toLocaleString()} / {e.dur}分
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </>
               );
             })()}
-
-          {/* オプション（メニュー選択後・任意の追加。単体予約の主オプションは除外） */}
-          {draft.dogId && draftHasMenu && allOptions.filter((o) => o.id !== draft.primaryOptionId).length > 0 && (
-            <>
-              <h3 className="pick-head">オプション（任意・複数可）</h3>
-              <div className="opt-list">
-                {allOptions
-                  .filter((o) => o.id !== draft.primaryOptionId)
-                  .map((o) => {
-                    const adj = dogById(draft.dogId)?.optionAdjustments?.[o.id] ?? 0;
-                    const dur = o.durationMin + adj;
-                    const amt = o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * adj);
-                    const on = draft.optionIds.includes(o.id);
-                    return (
-                    <button
-                      key={o.id}
-                      type="button"
-                      className={`opt-item${on ? ' set' : ''}`}
-                      style={{ textAlign: 'left', cursor: 'pointer' }}
-                      onClick={() => toggleDraftOption(o.id)}
-                    >
-                      <span className="opt-check" aria-hidden="true">{on ? <Check size={16} strokeWidth={3} /> : null}</span>
-                      {o.name}
-                      <span className="opt-meta">
-                        +¥{amt.toLocaleString()} / +{dur}分
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
 
           {/* トリマー指名（任意・全頭共通） */}
           {draft.dogId && draftHasMenu && (
@@ -745,7 +750,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                     </div>
                     <div className="cart-item-meta">
                       {menuLabel(it)}
-                      {opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
+                      {it.serviceId && opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
                     </div>
                     <div className="cart-item-meta">
                       {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ' / 料金未設定'}
@@ -818,7 +823,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                     </div>
                     <div className="cart-item-meta">
                       {menuLabel(it)}
-                      {opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
+                      {it.serviceId && opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
                       {' ・ '}
                       {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ''}
                     </div>
