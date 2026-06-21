@@ -525,6 +525,7 @@ function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Optio
         <button
           type="button"
           className="link-btn"
+          style={{ textDecoration: 'none', color: option.standalone ? 'var(--brand)' : 'var(--muted)' }}
           title="オプションのみ可（メニューと同列に表示）を切替"
           onClick={() => updateDoc(doc(optionsCol(tenantId), option.id), { standalone: !option.standalone })}
         >

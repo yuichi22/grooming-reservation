@@ -627,23 +627,25 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                         </span>
                       </button>
                     ))}
-                    {standaloneOpts.map((o) => {
-                      const e = optEff(o);
-                      return (
-                        <button
-                          key={o.id}
-                          type="button"
-                          className={`opt-item${draft.primaryOptionId === o.id ? ' set' : ''}`}
-                          style={{ textAlign: 'left', cursor: 'pointer' }}
-                          onClick={() => pickStandalone(o.id)}
-                        >
-                          {o.name}
-                          <span className="opt-meta">
-                            ¥{e.amt.toLocaleString()} / {e.dur}分
-                          </span>
-                        </button>
-                      );
-                    })}
+                    {/* 単体オプションはサービス未選択のときだけメニュー欄に表示（サービス選択後はオプション欄へ） */}
+                    {!draft.serviceId &&
+                      standaloneOpts.map((o) => {
+                        const e = optEff(o);
+                        return (
+                          <button
+                            key={o.id}
+                            type="button"
+                            className={`opt-item${draft.primaryOptionId === o.id ? ' set' : ''}`}
+                            style={{ textAlign: 'left', cursor: 'pointer' }}
+                            onClick={() => pickStandalone(o.id)}
+                          >
+                            {o.name}
+                            <span className="opt-meta">
+                              ¥{e.amt.toLocaleString()} / {e.dur}分
+                            </span>
+                          </button>
+                        );
+                      })}
                   </div>
                 </>
               );
