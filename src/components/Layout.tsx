@@ -92,9 +92,9 @@ export default function Layout() {
             カルテ
           </NavLink>
           {claims.tenantId && (
-            <button type="button" className="header-btn" onClick={() => setQrOpen(true)}>
+            <button type="button" className="header-btn" onClick={() => setQrOpen(true)} aria-label="予約QR">
               <QrCode size={15} style={{ verticalAlign: '-2px', marginRight: 3 }} />
-              予約QR
+              QR
             </button>
           )}
         </div>
