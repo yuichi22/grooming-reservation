@@ -1460,6 +1460,26 @@ button.tg-block.done:hover {
   color: #fff;
   border-color: var(--brand);
 }
+/* 主CTA: 予約開始ボタンは強い配色で目立たせる */
+.book-quick .book-start {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+  font-size: 1.05rem;
+  font-weight: 800;
+  padding: 14px 18px;
+  box-shadow: var(--shadow-sm);
+}
+.book-quick .book-start:hover {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+/* モーダル: 新規ワンちゃん追加カード（犬カードと同じ枠・サイズ） */
+.opt-item.dog-add {
+  color: var(--brand-dark);
+  border-style: dashed;
+  font-weight: 700;
+}
 .book-pills {
   display: flex;
   gap: 8px;

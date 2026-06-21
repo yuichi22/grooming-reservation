@@ -68,6 +68,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   // 予約カート（複数頭）＋ 共通の指名
   const [cart, setCart] = useState<CartItem[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [dogFormOpen, setDogFormOpen] = useState(false); // モーダルの新規ワンちゃん登録フォーム表示
   const [cartOpen, setCartOpen] = useState(false);
   const [staffId, setStaffId] = useState('');
 
@@ -254,10 +255,12 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   // ---- カート操作 ----
   function openNewItem() {
     setCartOpen(false);
+    setDogFormOpen(false);
     setDraft({ id: null, dogId: '', serviceId: '', optionIds: [] });
   }
   function openEditItem(it: CartItem) {
     setCartOpen(false);
+    setDogFormOpen(false);
     setDraft({ id: it.id, dogId: it.dogId, serviceId: it.serviceId, optionIds: [...it.optionIds] });
   }
   const isStandaloneOpt = (id: string) => !!options?.options.find((o) => o.id === id)?.standalone;
@@ -443,11 +446,11 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       <StoreLogo store={options?.store ?? storeInfo} />
       {isDevMode && <p className="muted" style={{ textAlign: 'center' }}>（開発モード: モックの LINE ユーザ）</p>}
 
-      {/* 予約する子を追加 */}
+      {/* 予約開始（主CTA）。2頭目以降は「ワンちゃんを追加」 */}
       <div className="book-quick">
-        <button type="button" onClick={openNewItem}>
-          <Plus size={18} style={{ verticalAlign: '-3px', marginRight: 4 }} />
-          予約するワンちゃんを追加
+        <button type="button" className="book-start" onClick={openNewItem}>
+          <Plus size={20} style={{ verticalAlign: '-4px', marginRight: 4 }} />
+          {cart.length ? 'ワンちゃんを追加' : '予約をはじめる'}
         </button>
       </div>
 
@@ -534,7 +537,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
 
       {/* カレンダー（空き時間・合計時間ぶん） */}
       {cart.length === 0 ? (
-        <p className="tg-hint">「予約するワンちゃんを追加」から、犬・メニューを選んでください。</p>
+        <p className="tg-hint">上の「予約をはじめる」から、ワンちゃんとメニューを選んでください。</p>
       ) : loadingSlots ? (
         <p className="tg-hint">空き時間を読み込み中…</p>
       ) : (
@@ -552,40 +555,60 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         <Modal title={draft.id ? 'ご予約内容の編集' : '予約するワンちゃん'} onClose={() => setDraft(null)}>
           {/* 犬（カート済みの子は非表示。編集中のその子は残す） */}
           <h3 className="pick-head">ワンちゃん</h3>
-          {availDogs.length > 0 && (
+          {draft.dogId ? (
+            // 選択済み: 選んだ子だけ表示（タップで変更）→ メニューに進む
             <div className="opt-list">
-              {availDogs.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  className={`opt-item${draft.dogId === d.id ? ' set' : ''}`}
-                  style={{ textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: d.id } : dr))}
-                >
-                  {d.name}
-                  {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
-                </button>
-              ))}
+              <button
+                type="button"
+                className="opt-item set"
+                style={{ textAlign: 'left', cursor: 'pointer' }}
+                onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: '' } : dr))}
+              >
+                {dogById(draft.dogId)?.name}
+                {breedName(dogById(draft.dogId)?.breedId) ? `（${breedName(dogById(draft.dogId)?.breedId)}）` : ''}
+                <span className="opt-meta">変更</span>
+              </button>
             </div>
-          )}
-          {availDogs.length === 0 && dogs.length > 0 && (
-            <p className="muted">追加できるワンちゃんは全て追加済みです。新しい子は下から登録できます。</p>
-          )}
-          <details open={availDogs.length === 0} style={{ marginTop: 8 }}>
-            <summary className="muted">＋ ワンちゃんを登録</summary>
-            <form className="row-form" onSubmit={addDogToDraft} style={{ marginTop: 8 }}>
-              <input name="dogName" placeholder="名前" required />
-              <select name="breedId" defaultValue="">
-                <option value="">犬種を選択</option>
-                {options?.breeds.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
+          ) : (
+            <>
+              <div className="opt-list">
+                {availDogs.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    className="opt-item"
+                    style={{ textAlign: 'left', cursor: 'pointer' }}
+                    onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: d.id } : dr))}
+                  >
+                    {d.name}
+                    {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
+                  </button>
                 ))}
-              </select>
-              <button type="submit">登録</button>
-            </form>
-          </details>
+                <button
+                  type="button"
+                  className="opt-item dog-add"
+                  style={{ textAlign: 'left', cursor: 'pointer' }}
+                  onClick={() => setDogFormOpen((o) => !o)}
+                >
+                  ＋ 新しくワンちゃんを追加
+                </button>
+              </div>
+              {(dogFormOpen || availDogs.length === 0) && (
+                <form className="row-form" onSubmit={addDogToDraft} style={{ marginTop: 8 }}>
+                  <input name="dogName" placeholder="名前" required />
+                  <select name="breedId" defaultValue="">
+                    <option value="">犬種を選択</option>
+                    {options?.breeds.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="submit">登録</button>
+                </form>
+              )}
+            </>
+          )}
 
           {/* メニュー（犬選択後）。サービス（料金設定済み）＋「オプションのみ可」を同列に表示 */}
           {draft.dogId &&
@@ -789,7 +812,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       {/* 予約する子が未登録の案内 */}
       {selectPrompt && (
         <Modal title="ご予約の準備" onClose={() => setSelectPrompt(false)}>
-          <p>先に「予約するワンちゃんを追加」から、犬とメニューを選択してください。</p>
+          <p>先に「予約をはじめる」から、ワンちゃんとメニューを選択してください。</p>
           <div className="modal-actions">
             <button
               type="button"
@@ -799,7 +822,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                 openNewItem();
               }}
             >
-              ワンちゃんを追加
+              予約をはじめる
             </button>
             <button type="button" onClick={() => setSelectPrompt(false)}>
               閉じる
