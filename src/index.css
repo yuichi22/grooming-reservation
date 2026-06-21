@@ -1568,6 +1568,10 @@ button.tg-block.done:hover {
   flex: 0 0 auto;
   font-size: 0.9rem;
 }
+.cart-bar-chev {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
 /* カート内の各項目 */
 .cart-list {
   display: flex;

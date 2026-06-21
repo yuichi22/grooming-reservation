@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Check, ChevronDown, ChevronUp, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { closeLiff, getAccessToken, getProfile, initLiff, isDevMode } from './liff';
 import {
   createGroupBooking,
@@ -454,16 +454,19 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         </button>
       </div>
 
-      {/* カート */}
+      {/* ご予約内容（いま選んでいる内容の要約。タップで確認・編集） */}
       <button type="button" className={`cart-bar${cart.length ? ' set' : ''}`} onClick={() => cart.length && setCartOpen(true)}>
-        <ShoppingCart size={18} />
+        <PawPrint size={18} />
         <span className="cart-bar-main">
-          {cart.length ? `ご予約リスト（${cart.length}頭）` : 'まだ追加されていません'}
+          {cart.length ? `ご予約内容（${cart.length}頭）` : 'まだ追加されていません'}
         </span>
         {cart.length > 0 && (
-          <span className="cart-bar-sum">
-            {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
-          </span>
+          <>
+            <span className="cart-bar-sum">
+              {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
+            </span>
+            <ChevronRight className="cart-bar-chev" size={18} />
+          </>
         )}
       </button>
 
