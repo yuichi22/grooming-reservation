@@ -16,6 +16,7 @@ export default function MobileNumpad() {
   const [target, setTarget] = useState<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState('');
   const targetRef = useRef<HTMLInputElement | null>(null);
+  const candidateRef = useRef<HTMLInputElement | null>(null);
 
   // モバイルでは number 入力を readOnly にしてOSキーボードを抑止（動的に増える入力にも対応）
   useEffect(() => {
@@ -47,34 +48,42 @@ export default function MobileNumpad() {
     };
   }, []);
 
-  // number 入力のタップでキーパッドを開く
+  // number 入力のタップでキーパッドを開く。
+  // pointerdown では preventDefault のみ（フォーカス/スクロール/OSキーボード/ゴーストクリックを抑止）。
+  // 実際に開くのは pointerup＝指を離した後。これで電卓のキーが指の下で一瞬選択されたように見えるのを防ぐ。
   useEffect(() => {
-    const open = (el: HTMLInputElement) => {
-      if (targetRef.current === el) return; // 同じタップの別イベントを無視
-      targetRef.current = el;
-      setTarget(el);
-      setDraft(el.value === '0' ? '' : el.value); // 既定の 0 は空から入力できるように
-    };
-    // pointerdown で preventDefault → フォーカスを与えない＝OSキーボードも自動スクロールも起きない
     const onDown = (e: Event) => {
-      if (!isMobile()) return;
+      if (!isMobile()) {
+        candidateRef.current = null;
+        return;
+      }
       const el = e.target;
       if (el instanceof HTMLInputElement && el.type === 'number') {
         e.preventDefault();
-        open(el);
+        candidateRef.current = el;
+      } else {
+        candidateRef.current = null;
       }
     };
-    // pointer 非対応環境のフォールバック
-    const onClick = (e: Event) => {
-      if (!isMobile()) return;
-      const el = e.target;
-      if (el instanceof HTMLInputElement && el.type === 'number') open(el);
+    const onUp = () => {
+      const el = candidateRef.current;
+      candidateRef.current = null;
+      if (el && isMobile()) {
+        targetRef.current = el;
+        setTarget(el);
+        setDraft(el.value === '0' ? '' : el.value); // 既定の 0 は空から入力できるように
+      }
+    };
+    const onCancel = () => {
+      candidateRef.current = null;
     };
     document.addEventListener('pointerdown', onDown, true);
-    document.addEventListener('click', onClick, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onCancel, true);
     return () => {
       document.removeEventListener('pointerdown', onDown, true);
-      document.removeEventListener('click', onClick, true);
+      document.removeEventListener('pointerup', onUp, true);
+      document.removeEventListener('pointercancel', onCancel, true);
     };
   }, []);
 
