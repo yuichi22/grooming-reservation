@@ -404,7 +404,9 @@ function TimeGrid({
                   {b.startTime}–{b.slotEnd}
                 </div>
                 {dogName.get(b.dogId) ?? b.dogId}
-                <div style={{ opacity: 0.9, fontSize: '0.7rem' }}>{serviceName.get(b.serviceId) ?? ''}</div>
+                <div style={{ opacity: 0.9, fontSize: '0.7rem' }}>
+                  {b.serviceId ? serviceName.get(b.serviceId) ?? '' : b.options?.map((o) => o.name).join('・') ?? ''}
+                </div>
               </button>
             );
           })}
@@ -584,7 +586,7 @@ function ListView({
   const navigate = useNavigate();
   return (
     <div className="table-wrap">
-      <table>
+      <table className="booking-list">
         <thead>
           <tr>
             <th>時間</th>
@@ -598,21 +600,24 @@ function ListView({
         <tbody>
           {bookings.map((b) => (
             <tr key={b.id}>
-              <td>
+              <td data-label="時間">
                 {b.startTime}〜{b.slotEnd}
               </td>
-              <td>
+              <td data-label="ワンちゃん">
                 <button type="button" className="link-btn" onClick={() => navigate(`/karte/${b.dogId}`)} title="カルテを開く">
                   {dogName.get(b.dogId) ?? b.dogId}
                 </button>
               </td>
-              <td>
-                {serviceName.get(b.serviceId) ?? b.serviceId}
-                {b.options && b.options.length > 0 ? `＋${b.options.length}` : ''}
+              <td data-label="メニュー">
+                {b.serviceId
+                  ? `${serviceName.get(b.serviceId) ?? b.serviceId}${b.options && b.options.length > 0 ? ` ＋${b.options.length}` : ''}`
+                  : b.options && b.options.length > 0
+                    ? b.options.map((o) => o.name).join('・')
+                    : '—'}
               </td>
-              <td>{b.staffId ? staffName.get(b.staffId) ?? b.staffId : '未割当'}</td>
-              <td>{statusLabel(b.status)}</td>
-              <td>
+              <td data-label="担当">{b.staffId ? staffName.get(b.staffId) ?? b.staffId : '未割当'}</td>
+              <td data-label="状態">{statusLabel(b.status)}</td>
+              <td data-label="施術完了" className="bl-action">
                 {b.status === 'reserved' ? (
                   <>
                     <CompleteForm tenantId={tenantId} booking={b} />

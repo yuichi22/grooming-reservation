@@ -638,9 +638,11 @@ export const getGroupAvailability = onCall<{
   const computed = await computeGroupItems(tenantId, items);
   const durationMin = computed.reduce((s, c) => s + c.durationMin, 0);
   const price = computed.some((c) => c.price == null) ? null : computed.reduce((s, c) => s + (c.price ?? 0), 0);
+  // バッファはメニュー（サービス）にのみ適用。単品オプションのみの予約はバッファ0。
+  const effBuffer = computed.some((c) => c.serviceId) ? settings.bufferMin : 0;
 
   if (await isClosedDate(tenantId, date)) {
-    return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours, closed: true };
+    return { slots: [], durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours, closed: true };
   }
 
   const bookings = await loadDayBookings(tenantId, date);
@@ -648,7 +650,7 @@ export const getGroupAvailability = onCall<{
   if (staffId) {
     slots = availability({
       businessHours: settings.businessHours,
-      bufferMin: settings.bufferMin,
+      bufferMin: effBuffer,
       durationMin,
       occupied: occupiedFor(bookings, staffId),
     });
@@ -657,7 +659,7 @@ export const getGroupAvailability = onCall<{
     if (staffIds.length === 0) {
       slots = availability({
         businessHours: settings.businessHours,
-        bufferMin: settings.bufferMin,
+        bufferMin: effBuffer,
         durationMin,
         occupied: bookings.map((b) => ({ start: b.startTime, end: b.slotEnd })),
       });
@@ -666,7 +668,7 @@ export const getGroupAvailability = onCall<{
         staffIds.map((sid) =>
           availability({
             businessHours: settings.businessHours,
-            bufferMin: settings.bufferMin,
+            bufferMin: effBuffer,
             durationMin,
             occupied: occupiedFor(bookings, sid),
           }),
@@ -678,7 +680,7 @@ export const getGroupAvailability = onCall<{
   // 受付締切＋過去時刻を除外（その日が今日のときに効く）
   slots = slots.filter((s) => afterCutoff(date, s, settings));
 
-  return { slots, durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours };
+  return { slots, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours };
 });
 
 /** 複数頭をまとめて確定。同じ担当が startTime から連続で施術し、頭数ぶんの予約を groupId で束ねて作成。 */
@@ -708,7 +710,8 @@ export const createGroupBooking = onCall<{
   }
   const computed = await computeGroupItems(tenantId, items);
   const totalDuration = computed.reduce((s, c) => s + c.durationMin, 0);
-  const bufferMin = settings.bufferMin;
+  // バッファはメニュー（サービス）にのみ適用。単品オプションのみの予約はバッファ0。
+  const bufferMin = computed.some((c) => c.serviceId) ? settings.bufferMin : 0;
   const bookings = await loadDayBookings(tenantId, date);
 
   // 合計時間ぶん連続で空いている担当を確定（指名ありはその担当のみ）

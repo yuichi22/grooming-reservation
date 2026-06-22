@@ -1625,6 +1625,50 @@ button.tg-block.done:hover {
   color: var(--brand-dark);
   border-color: var(--brand-100);
 }
+/* 予約リスト: モバイルは横スクロールせずカード化（幅内に収める） */
+@media (max-width: 600px) {
+  .booking-list thead {
+    display: none;
+  }
+  .booking-list,
+  .booking-list tbody {
+    display: block;
+  }
+  .booking-list tbody tr {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    background: var(--surface);
+  }
+  .booking-list td {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 3px 0;
+    border: none;
+    white-space: normal;
+  }
+  .booking-list td::before {
+    content: attr(data-label);
+    flex: 0 0 5.5em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  /* 施術完了セルは縦積み（フォーム＋操作ボタンを幅いっぱいに） */
+  .booking-list td.bl-action {
+    display: block;
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+    padding-top: 6px;
+  }
+  .booking-list td.bl-action::before {
+    display: block;
+    margin-bottom: 4px;
+  }
+}
 /* 空き時間チップ（15分グリッド・入る枠だけ） */
 .slot-chips {
   display: grid;
