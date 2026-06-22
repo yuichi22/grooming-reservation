@@ -773,7 +773,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
               キャンセル
             </button>
             <button type="button" className="primary" disabled={!draft.dogId || !draftHasMenu} onClick={saveDraft}>
-              {draft.id ? '更新' : 'カートに入れる'}
+              {draft.id ? '更新' : '決定して日時を選ぶ'}
             </button>
           </div>
         </Modal>
