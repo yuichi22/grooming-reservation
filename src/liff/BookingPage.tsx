@@ -96,6 +96,11 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<{ startTime: string; slotEnd: string } | null>(null);
 
+  // 短縮提案（入らない日に「内容を短くすれば入る案」を提示）
+  type Suggestion = { title: string; cart: CartItem[]; slot: string; finish: string };
+  const [suggest, setSuggest] = useState<{ date: string; results: Suggestion[] } | null>(null);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+
   async function loadOptions(cid: string) {
     const res = await getBookingOptions({ tenantId, accessToken: getAccessToken(), customerId: cid });
     setOptions(res.data);
@@ -337,6 +342,73 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     setCart((prev) => prev.filter((it) => it.id !== id));
   }
 
+  // ---- 短縮提案（Phase3）----
+  // 犬種で予約できるメニューのうち、所要時間が最短のサービスID
+  function shortestServiceFor(dogId: string): string | null {
+    const breedId = dogById(dogId)?.breedId ?? null;
+    const cells = (options?.pricing ?? []).filter((p) => p.breedId === breedId);
+    if (cells.length === 0) return null;
+    return cells.reduce((a, b) => (b.durationMin < a.durationMin ? b : a)).serviceId;
+  }
+  // 「内容を短くすれば入る」候補（カート全体の縮小案）を作る
+  function buildReductions(): { title: string; cart: CartItem[] }[] {
+    const out: { title: string; cart: CartItem[] }[] = [];
+    const hasAddon = cart.some((c) => c.serviceId && c.optionIds.length > 0);
+    // A: オプションを外す（本メニューは維持）
+    if (hasAddon) {
+      out.push({ title: 'オプションを外して予約', cart: cart.map((c) => (c.serviceId ? { ...c, optionIds: [] } : c)) });
+    }
+    // 最短メニューに置き換えたカート
+    const shortCart = cart.map((c) => {
+      if (!c.serviceId) return c;
+      const sid = shortestServiceFor(c.dogId);
+      return sid && sid !== c.serviceId ? { ...c, serviceId: sid } : c;
+    });
+    const menuChanged = shortCart.some((c, i) => c.serviceId !== cart[i].serviceId);
+    if (menuChanged) {
+      const names = [...new Set(shortCart.filter((c) => c.serviceId).map((c) => serviceName(c.serviceId)).filter(Boolean))].join('・');
+      // B: メニューを最短に（オプションは維持）
+      out.push({ title: `メニューを「${names}」にして予約`, cart: shortCart });
+      // C: メニュー最短＋オプション無し
+      if (hasAddon) {
+        out.push({ title: `「${names}」のみ（オプション無し）で予約`, cart: shortCart.map((c) => (c.serviceId ? { ...c, optionIds: [] } : c)) });
+      }
+    }
+    return out;
+  }
+  // CTA タップ: 候補それぞれをこの日で空き判定し、入る案だけをモーダルに出す
+  async function findSuggestions() {
+    const cands = buildReductions();
+    setSuggest({ date, results: [] });
+    setSuggestLoading(true);
+    const results: Suggestion[] = [];
+    for (const cand of cands) {
+      try {
+        const res = await getGroupAvailability({
+          tenantId,
+          accessToken: getAccessToken(),
+          date,
+          items: cand.cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
+          staffId: staffId || undefined,
+        });
+        if (!res.data.closed && res.data.slots.length > 0) {
+          const slot = [...res.data.slots].sort()[0];
+          results.push({ title: cand.title, cart: cand.cart, slot, finish: res.data.finishByStart?.[slot] ?? '' });
+        }
+      } catch {
+        /* この案は不可。スキップ */
+      }
+    }
+    setSuggest({ date, results });
+    setSuggestLoading(false);
+  }
+  // 提案を採用: カートを差し替え、確認モーダルをその最短枠で開く
+  function applySuggestion(s: Suggestion) {
+    setCart(s.cart);
+    setSuggest(null);
+    setConfirmSlot(s.slot);
+  }
+
   // 予約する子が未登録なら日付操作をブロックして案内
   function ensureSelected(): boolean {
     if (cart.length === 0) {
@@ -567,7 +639,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                   key={ds}
                   type="button"
                   className={cls.join(' ')}
-                  disabled={past || closed || noFit}
+                  disabled={past || closed}
                   onClick={() => pickDay(d)}
                 >
                   <span className={`cal-daynum${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}`}>{d.getDate()}</span>
@@ -586,12 +658,22 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       ) : loadingSlots ? (
         <p className="tg-hint">空き時間を読み込み中…</p>
       ) : (
-        <AvailabilityGrid
-          slots={slots ?? []}
-          closed={closedDay}
-          selected={confirmSlot}
-          onPick={(s) => setConfirmSlot(s)}
-        />
+        <>
+          <AvailabilityGrid
+            slots={slots ?? []}
+            closed={closedDay}
+            selected={confirmSlot}
+            onPick={(s) => setConfirmSlot(s)}
+          />
+          {/* 空きが無い日でも、内容を短くすれば入る場合は提案 */}
+          {!closedDay && slots != null && slots.length === 0 && buildReductions().length > 0 && (
+            <div className="suggest-cta">
+              <button type="button" onClick={findSuggestions}>
+                内容を短くして空きを探す
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* 追加/編集モーダル（犬→メニュー→オプション） */}
@@ -622,7 +704,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                     type="button"
                     className="opt-item"
                     style={{ textAlign: 'left', cursor: 'pointer' }}
-                    onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: d.id } : dr))}
+                    onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: d.id, serviceId: '', optionIds: [] } : dr))}
                   >
                     {d.name}
                     {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
@@ -924,6 +1006,41 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             </button>
             <button type="button" className="primary" disabled={submitting} onClick={confirm}>
               {submitting ? '送信中…' : '予約する'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* 短縮提案（この日に入る縮小プラン） */}
+      {suggest && (
+        <Modal title="この日の空きを探す" onClose={() => setSuggest(null)}>
+          <p className="muted">
+            {formatDateJa(suggest.date)} は、いまの内容（{totalDur}分）では空きがありません。
+            内容を短くすると、この日に予約できる場合があります。
+          </p>
+          {suggestLoading ? (
+            <p className="tg-hint">空きを探しています…</p>
+          ) : suggest.results.length === 0 ? (
+            <p className="muted">短くしても、この日に空く時間は見つかりませんでした。別の日もお試しください。</p>
+          ) : (
+            <div className="opt-list">
+              {suggest.results.map((r) => (
+                <button
+                  key={r.title}
+                  type="button"
+                  className="opt-item suggest-item"
+                  style={{ textAlign: 'left', cursor: 'pointer' }}
+                  onClick={() => applySuggestion(r)}
+                >
+                  {r.title}
+                  <span className="opt-meta">最短 {r.slot}〜{r.finish || ''}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="modal-actions">
+            <button type="button" onClick={() => setSuggest(null)}>
+              閉じる
             </button>
           </div>
         </Modal>

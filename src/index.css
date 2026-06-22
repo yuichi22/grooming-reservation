@@ -1709,6 +1709,25 @@ button.tg-block.done:hover {
   text-align: center;
   color: var(--muted);
 }
+/* 空き無しの日に出す「短くして探す」CTA */
+.suggest-cta {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 8px;
+}
+.suggest-cta button {
+  background: transparent;
+  border: 1px solid var(--brand);
+  color: var(--brand);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* 提案カードは最短時刻を右に */
+.opt-item.suggest-item .opt-meta {
+  color: var(--brand);
+}
 /* ステップ間の視線誘導（下向き矢印） */
 .flow-arrow {
   display: flex;
