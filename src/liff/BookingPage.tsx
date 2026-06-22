@@ -10,6 +10,7 @@ import {
   getGroupAvailability,
   getMonthAvailability,
   getMyTenants,
+  hideDog,
   registerDog,
   removeMyTenant,
   type BookingOptions,
@@ -101,6 +102,11 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   type Suggestion = { title: string; cart: CartItem[]; slot: string; finish: string };
   const [suggest, setSuggest] = useState<{ date: string; results: Suggestion[] } | null>(null);
   const [suggestLoading, setSuggestLoading] = useState(false);
+
+  // ワンちゃんを「リストから外す」（ソフト削除）
+  const [removeDog, setRemoveDog] = useState<{ id: string; name: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   async function loadOptions(cid: string) {
     const res = await getBookingOptions({ tenantId, accessToken: getAccessToken(), customerId: cid });
@@ -277,6 +283,30 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     await loadOptions(customerId);
     setDraft((dr) => (dr ? { ...dr, dogId: res.data.dogId } : dr));
     form.reset();
+  }
+
+  // ワンちゃんをリストから外す（履歴・カルテはサロンに保持＝ソフト削除）
+  async function confirmRemoveDog() {
+    if (!removeDog || removing) return;
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      await hideDog({ tenantId, accessToken: getAccessToken(), customerId, dogId: removeDog.id });
+      await loadOptions(customerId);
+      // 外した子がカート/下書きに残っていたら除去
+      setCart((prev) => prev.filter((c) => c.dogId !== removeDog.id));
+      setDraft((dr) => (dr && dr.dogId === removeDog.id ? { ...dr, dogId: '', serviceId: '', optionIds: [] } : dr));
+      setRemoveDog(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      setRemoveError(
+        /upcoming/.test(msg)
+          ? 'この子は今後のご予約があります。先にご予約をキャンセルしてください。'
+          : 'リストから外せませんでした。時間をおいてお試しください。',
+      );
+    } finally {
+      setRemoving(false);
+    }
   }
 
   // ---- 表示ヘルパ ----
@@ -739,16 +769,28 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             <>
               <div className="opt-list">
                 {availDogs.map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    className="opt-item"
-                    style={{ textAlign: 'left', cursor: 'pointer' }}
-                    onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: d.id, serviceId: '', optionIds: [] } : dr))}
-                  >
-                    {d.name}
-                    {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
-                  </button>
+                  <div key={d.id} className="opt-row">
+                    <button
+                      type="button"
+                      className="opt-item"
+                      style={{ textAlign: 'left', cursor: 'pointer', flex: 1 }}
+                      onClick={() => setDraft((dr) => (dr ? { ...dr, dogId: d.id, serviceId: '', optionIds: [] } : dr))}
+                    >
+                      {d.name}
+                      {breedName(d.breedId) ? `（${breedName(d.breedId)}）` : ''}
+                    </button>
+                    <button
+                      type="button"
+                      className="opt-remove"
+                      aria-label={`${d.name}をリストから外す`}
+                      onClick={() => {
+                        setRemoveError(null);
+                        setRemoveDog({ id: d.id, name: d.name });
+                      }}
+                    >
+                      外す
+                    </button>
+                  </div>
                 ))}
                 <button
                   type="button"
@@ -1081,6 +1123,23 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           <div className="modal-actions">
             <button type="button" onClick={() => setSuggest(null)}>
               閉じる
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ワンちゃんをリストから外す（ソフト削除）確認 */}
+      {removeDog && (
+        <Modal title="リストから外す" onClose={() => !removing && setRemoveDog(null)}>
+          <p>「{removeDog.name}」をリストから外しますか？</p>
+          <p className="muted">過去のご予約・カルテはサロンに残り、選択リストに表示されなくなるだけです。元に戻したいときはサロンへご連絡ください。</p>
+          {removeError && <p className="error">{removeError}</p>}
+          <div className="modal-actions">
+            <button type="button" onClick={() => setRemoveDog(null)} disabled={removing}>
+              キャンセル
+            </button>
+            <button type="button" className="primary" onClick={confirmRemoveDog} disabled={removing}>
+              {removing ? '処理中…' : 'リストから外す'}
             </button>
           </div>
         </Modal>

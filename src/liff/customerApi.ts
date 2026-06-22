@@ -76,6 +76,12 @@ export const registerDog = httpsCallable<
   { dogId: string }
 >(functions, 'registerDog');
 
+/** 自分の犬をリストから外す（ソフト削除）。今後の予約があると failed-precondition。 */
+export const hideDog = httpsCallable<
+  { tenantId: string; accessToken: string; customerId: string; dogId: string },
+  { ok: boolean }
+>(functions, 'hideDog');
+
 export const getAvailability = httpsCallable<
   {
     tenantId: string;

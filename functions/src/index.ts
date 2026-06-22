@@ -173,6 +173,10 @@ function tzNowWallMs(tz: string): number {
   const p = Object.fromEntries(f.formatToParts(new Date()).map((x) => [x.type, x.value]));
   return Date.UTC(+p.year, +p.month - 1, +p.day, +(p.hour === '24' ? '0' : p.hour), +p.minute);
 }
+/** タイムゾーンの「今日」を YYYY-MM-DD で返す。 */
+function tzTodayStr(tz: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
 function slotWallMs(date: string, hhmm: string): number {
   const [y, m, d] = date.split('-').map(Number);
   const [hh, mm] = hhmm.split(':').map(Number);
@@ -961,13 +965,16 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
     })),
     breeds: breedsSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
     staff: staffSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
-    dogs: dogsSnap.docs.map((d) => ({
-      id: d.id,
-      name: d.data().name,
-      breedId: (d.data().breedId ?? null) as string | null,
-      serviceAdjustments: (d.data().serviceAdjustments ?? {}) as Record<string, number>,
-      optionAdjustments: (d.data().optionAdjustments ?? {}) as Record<string, number>,
-    })),
+    // hiddenByCustomer の犬は選択リストから除外（履歴・カルテは保持＝ソフト削除）
+    dogs: dogsSnap.docs
+      .filter((d) => d.data().hiddenByCustomer !== true)
+      .map((d) => ({
+        id: d.id,
+        name: d.data().name,
+        breedId: (d.data().breedId ?? null) as string | null,
+        serviceAdjustments: (d.data().serviceAdjustments ?? {}) as Record<string, number>,
+        optionAdjustments: (d.data().optionAdjustments ?? {}) as Record<string, number>,
+      })),
     // 料金表: breedId×serviceId → {price, durationMin}。クライアントで金額表示に使う。
     pricing: pricingSnap.docs.map((d) => {
       const p = d.data();
@@ -1033,6 +1040,47 @@ export const registerDog = onCall<{
     });
   return { dogId: ref.id };
 });
+
+/**
+ * 顧客が自分の犬を「リストから外す」(ソフト削除)。hiddenByCustomer を立てるだけで
+ * 予約履歴・カルテ(records)はサロンに残す。今後の予約がある子は外せない。
+ */
+export const hideDog = onCall<{ tenantId: string; accessToken: string; customerId: string; dogId: string }>(
+  async (request) => {
+    const { tenantId, accessToken, customerId, dogId } = request.data;
+    if (!tenantId || !customerId || !dogId) {
+      throw new HttpsError('invalid-argument', 'tenantId, customerId, dogId required');
+    }
+    const { lineUserId } = await verifyLineAccessToken(accessToken);
+    await assertCustomerOwnership(tenantId, customerId, lineUserId);
+
+    const base = db.collection('tenants').doc(tenantId);
+    const dogRef = base.collection('dogs').doc(dogId);
+    const dogSnap = await dogRef.get();
+    if (!dogSnap.exists || dogSnap.data()?.customerId !== customerId) {
+      throw new HttpsError('not-found', 'dog not found for this customer');
+    }
+
+    // 今後の予約(本日以降・有効)があれば外させない（宙に浮く予約を防ぐ）
+    const settings = await loadSettings(tenantId);
+    const today = tzTodayStr(settings.timezone);
+    const upcoming = await base
+      .collection('bookings')
+      .where('dogId', '==', dogId)
+      .where('date', '>=', today)
+      .get();
+    const hasUpcoming = upcoming.docs.some((d) => {
+      const s = d.data().status;
+      return s === 'reserved' || s === 'pending';
+    });
+    if (hasUpcoming) {
+      throw new HttpsError('failed-precondition', 'dog has upcoming bookings');
+    }
+
+    await dogRef.set({ hiddenByCustomer: true }, { merge: true });
+    return { ok: true };
+  },
+);
 
 // ===== M4: 施術完了 (§7) と 中央台帳イベント連携 (§10) =====
 
