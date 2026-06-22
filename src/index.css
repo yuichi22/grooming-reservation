@@ -971,6 +971,11 @@ tr.row-link td.chevron-cell {
 .cal-cell.closed {
   background: var(--danger-50);
 }
+/* 選択中の内容が入らない日（グレーアウト） */
+.cal-cell.nofit {
+  opacity: 0.45;
+  background: var(--bg, #f4f4f5);
+}
 .cal-daynum {
   font-size: 0.82rem;
   font-weight: 700;
@@ -997,6 +1002,10 @@ tr.row-link td.chevron-cell {
 .cal-badge.closed {
   background: #fde2e0;
   color: var(--danger);
+}
+.cal-badge.nofit {
+  background: #e5e7eb;
+  color: var(--muted);
 }
 .cal-detail-head {
   display: flex;

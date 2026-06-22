@@ -689,6 +689,71 @@ export const getGroupAvailability = onCall<{
   return { slots, finishByStart, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours };
 });
 
+/** 選択中の内容(items)が「入る日」を月範囲で返す。月カレンダーのグレーアウト判定に使う。 */
+export const getMonthAvailability = onCall<{
+  tenantId: string;
+  accessToken: string;
+  items: GroupItemInput[];
+  from: string; // YYYY-MM-DD
+  to: string;
+  staffId?: string;
+}>({ minInstances: minInstancesParam }, async (request) => {
+  const { tenantId, accessToken, items, from, to, staffId } = request.data;
+  if (!tenantId || !from || !to || !items?.length) throw new HttpsError('invalid-argument', 'tenantId, from, to, items required');
+  await verifyLineAccessToken(accessToken);
+
+  const settings = await loadSettings(tenantId);
+  const computed = await computeGroupItems(tenantId, items);
+  const durations = computed.map((c) => c.durationMin);
+  const effBuffer = computed.some((c) => c.serviceId) ? settings.bufferMin : 0;
+
+  const base = db.collection('tenants').doc(tenantId);
+  const closSnap = await base.collection('closures').get();
+  const closed = new Set(closSnap.docs.filter((d) => d.id >= from && d.id <= to && d.data()?.fullDay !== false).map((d) => d.id));
+  const bSnap = await base.collection('bookings').where('date', '>=', from).where('date', '<=', to).get();
+  const byDate = new Map<string, BookingRow[]>();
+  bSnap.docs.forEach((d) => {
+    const b = d.data() as BookingRow & { date: string };
+    if (b.status === 'reserved' || b.status === 'done') {
+      const arr = byDate.get(b.date) ?? [];
+      arr.push(b);
+      byDate.set(b.date, arr);
+    }
+  });
+  const staffIds = staffId ? [staffId] : await loadActiveStaffIds(tenantId);
+
+  // その日に「全頭が収まる開始時刻が1つでもあるか」（締切・過去時刻も考慮）
+  const fitsOnDay = (date: string): boolean => {
+    if (closed.has(date)) return false;
+    const dayBookings = byDate.get(date) ?? [];
+    const checkOccupied = (occupied: { start: string; end: string }[]): boolean => {
+      const gaps = freeIntervals(settings.businessHours, occupied);
+      for (const g of gaps) {
+        const first = Math.ceil(g.start / 15) * 15;
+        for (let t = first; t < g.end; t += 15) {
+          const packed = packDogs(gaps, durations, effBuffer, t);
+          if (packed && packed.starts[0] === t && afterCutoff(date, toTimeStr(t), settings)) return true;
+        }
+      }
+      return false;
+    };
+    if (staffIds.length === 0) return checkOccupied(dayBookings.map((b) => ({ start: b.startTime, end: b.slotEnd })));
+    return staffIds.some((sid) => checkOccupied(occupiedFor(dayBookings, sid)));
+  };
+
+  const openDates: string[] = [];
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  const cur = new Date(fy, fm - 1, fd);
+  const end = new Date(ty, tm - 1, td);
+  while (cur <= end) {
+    const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+    if (fitsOnDay(ds)) openDates.push(ds);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return { openDates };
+});
+
 /** 複数頭をまとめて確定。同じ担当が startTime から連続で施術し、頭数ぶんの予約を groupId で束ねて作成。 */
 export const createGroupBooking = onCall<{
   tenantId: string;

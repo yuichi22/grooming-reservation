@@ -117,6 +117,11 @@ export const getGroupAvailability = httpsCallable<
   }
 >(functions, 'getGroupAvailability');
 
+export const getMonthAvailability = httpsCallable<
+  { tenantId: string; accessToken: string; items: GroupItem[]; from: string; to: string; staffId?: string },
+  { openDates: string[] }
+>(functions, 'getMonthAvailability');
+
 export const createGroupBooking = httpsCallable<
   {
     tenantId: string;

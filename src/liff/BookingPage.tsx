@@ -8,6 +8,7 @@ import {
   getBookingOptions,
   getClosedDates,
   getGroupAvailability,
+  getMonthAvailability,
   getMyTenants,
   registerDog,
   removeMyTenant,
@@ -82,6 +83,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     return { y: d.getFullYear(), m: d.getMonth() };
   });
   const [closedMonth, setClosedMonth] = useState<Set<string>>(new Set());
+  const [openMonth, setOpenMonth] = useState<Set<string> | null>(null); // 選択中の内容が入る日（null=判定前/カート空）
 
   // 空き状況（カート合計時間ぶん）
   const [slots, setSlots] = useState<string[] | null>(null);
@@ -178,6 +180,39 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, view.y, view.m]);
+
+  // 選択中の内容が入る日（月範囲）を取得し、入らない日を月カレンダーでグレーアウト
+  useEffect(() => {
+    if (phase !== 'ready' || cart.length === 0) {
+      setOpenMonth(null);
+      return;
+    }
+    const first = new Date(view.y, view.m, 1);
+    const gs = new Date(first);
+    gs.setDate(1 - first.getDay());
+    const ge = new Date(gs);
+    ge.setDate(gs.getDate() + 41);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getMonthAvailability({
+          tenantId,
+          accessToken: getAccessToken(),
+          items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
+          from: fmt(gs),
+          to: fmt(ge),
+          staffId: staffId || undefined,
+        });
+        if (!cancelled) setOpenMonth(new Set(res.data.openDates));
+      } catch {
+        if (!cancelled) setOpenMonth(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, cartKey, staffId, view.y, view.m]);
 
   // カートが空になったら一覧モーダルを自動で閉じる
   useEffect(() => {
@@ -518,22 +553,26 @@ function BookingPage({ tenantId }: { tenantId: string }) {
               const dow = d.getDay();
               const past = ds < today;
               const closed = closedMonth.has(ds);
+              // 選択中の内容が入らない日（休業/過去を除く）
+              const noFit = openMonth != null && !openMonth.has(ds) && !past && !closed;
               const cls = ['cal-cell'];
               if (d.getMonth() !== view.m) cls.push('other');
               if (ds === today) cls.push('today');
               if (ds === date) cls.push('selected');
               if (past) cls.push('other');
               if (closed) cls.push('closed');
+              if (noFit) cls.push('nofit');
               return (
                 <button
                   key={ds}
                   type="button"
                   className={cls.join(' ')}
-                  disabled={past || closed}
+                  disabled={past || closed || noFit}
                   onClick={() => pickDay(d)}
                 >
                   <span className={`cal-daynum${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}`}>{d.getDate()}</span>
                   {closed && <span className="cal-badge closed">休</span>}
+                  {noFit && <span className="cal-badge nofit">×</span>}
                 </button>
               );
             })}
