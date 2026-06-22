@@ -619,6 +619,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             </>
           )}
 
+          {/* 犬を選んだら下へ誘導 */}
+          {draft.dogId && <FlowArrow />}
+
           {/* メニュー（犬選択後）。サービス（料金設定済み）＋「オプションのみ可」を同列に表示 */}
           {draft.dogId &&
             (() => {
@@ -664,6 +667,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                       </div>
                     </>
                   )}
+
+                  {/* メニューを選んだら下へ誘導 */}
+                  {draft.serviceId && <FlowArrow />}
 
                   {/* 追加オプション（メニュー選択時のみ・複数可）。単品オプションもここに混ぜて同列表示 */}
                   {draft.serviceId && allOptions.length > 0 && (
@@ -723,6 +729,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                 </>
               );
             })()}
+
+          {/* メニュー/オプション/単品を選んだら下へ誘導 */}
+          {draft.dogId && draftHasMenu && <FlowArrow />}
 
           {/* トリマー指名（任意・全頭共通） */}
           {draft.dogId && draftHasMenu && (
@@ -955,6 +964,15 @@ function AvailabilityGrid({
           この日に空きはありません
         </div>
       )}
+    </div>
+  );
+}
+
+/** ステップ間の視線誘導用の下向き矢印 */
+function FlowArrow() {
+  return (
+    <div className="flow-arrow" aria-hidden="true">
+      <ChevronDown size={22} strokeWidth={2.5} />
     </div>
   );
 }

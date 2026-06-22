@@ -1625,6 +1625,28 @@ button.tg-block.done:hover {
   color: var(--brand-dark);
   border-color: var(--brand-100);
 }
+/* ステップ間の視線誘導（下向き矢印） */
+.flow-arrow {
+  display: flex;
+  justify-content: center;
+  color: var(--brand);
+  margin: 4px 0 -2px;
+  animation: flow-bounce 1.3s ease-in-out infinite;
+}
+@keyframes flow-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-arrow {
+    animation: none;
+  }
+}
 /* モーダル内の見出し */
 .pick-head {
   margin: 14px 0 6px;
