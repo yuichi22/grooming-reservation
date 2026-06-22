@@ -85,6 +85,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
 
   // 空き状況（カート合計時間ぶん）
   const [slots, setSlots] = useState<string[] | null>(null);
+  const [finishByStart, setFinishByStart] = useState<Record<string, string>>({});
   const [closedDay, setClosedDay] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
@@ -141,6 +142,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         });
         if (cancelled) return;
         setSlots(res.data.slots);
+        setFinishByStart(res.data.finishByStart ?? {});
         setClosedDay(!!res.data.closed);
       } catch {
         if (!cancelled) setSlots([]);
@@ -847,7 +849,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       {confirmSlot && (
         <Modal title="この内容で予約しますか？" onClose={() => setConfirmSlot(null)}>
           <p>
-            {formatDateJa(date)} {confirmSlot}〜{toHHMM(toMin(confirmSlot) + totalDur)}
+            {formatDateJa(date)} {confirmSlot}〜{finishByStart[confirmSlot] ?? toHHMM(toMin(confirmSlot) + totalDur)}
           </p>
           <div className="cart-list">
             {cartEstimates.map(({ it, dur, amt }) => {

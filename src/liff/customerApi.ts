@@ -107,6 +107,8 @@ export const getGroupAvailability = httpsCallable<
   { tenantId: string; accessToken: string; date: string; items: GroupItem[]; staffId?: string },
   {
     slots: string[];
+    /** 開始時刻(HH:MM) → 施術終了時刻(HH:MM)。複数頭は自動分割のため終了は開始ごとに異なる */
+    finishByStart: Record<string, string>;
     durationMin: number;
     bufferMin: number;
     price: number | null;

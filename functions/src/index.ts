@@ -10,7 +10,7 @@ import { logger, setGlobalOptions } from 'firebase-functions/v2';
 import { defineInt } from 'firebase-functions/params';
 import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
 import { verifyLineAccessToken, pushLineMessage } from './line.js';
-import { availability, toMinutes, toTimeStr, unionStarts } from './slots.js';
+import { availability, freeIntervals, packDogs, toMinutes, toTimeStr, unionStarts } from './slots.js';
 import { buildPointEvent, deliverPointEvent, type PointEventStatus } from './crm.js';
 import { buildConfirmationMessage, buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
 import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
@@ -636,51 +636,57 @@ export const getGroupAvailability = onCall<{
 
   const settings = await loadSettings(tenantId);
   const computed = await computeGroupItems(tenantId, items);
-  const durationMin = computed.reduce((s, c) => s + c.durationMin, 0);
+  const durations = computed.map((c) => c.durationMin);
+  const durationMin = durations.reduce((s, d) => s + d, 0);
   const price = computed.some((c) => c.price == null) ? null : computed.reduce((s, c) => s + (c.price ?? 0), 0);
   // バッファはメニュー（サービス）にのみ適用。単品オプションのみの予約はバッファ0。
   const effBuffer = computed.some((c) => c.serviceId) ? settings.bufferMin : 0;
 
   if (await isClosedDate(tenantId, date)) {
-    return { slots: [], durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours, closed: true };
+    return { slots: [], finishByStart: {}, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours, closed: true };
   }
 
   const bookings = await loadDayBookings(tenantId, date);
-  let slots: string[];
+  // 1スタッフの空きに頭数を順に詰め、入る開始時刻(15分グリッド)→施術終了 の対応を作る（連続不可なら自動分割）
+  const planForStaff = (occupied: { start: string; end: string }[]): Map<number, number> => {
+    const gaps = freeIntervals(settings.businessHours, occupied);
+    const out = new Map<number, number>();
+    for (const g of gaps) {
+      const first = Math.ceil(g.start / 15) * 15;
+      for (let t = first; t < g.end; t += 15) {
+        const packed = packDogs(gaps, durations, effBuffer, t);
+        if (packed && packed.starts[0] === t) out.set(t, packed.finishMin);
+      }
+    }
+    return out;
+  };
+
+  const plan = new Map<number, number>();
+  const mergePlan = (p: Map<number, number>) => {
+    for (const [t, fin] of p) {
+      const cur = plan.get(t);
+      if (cur == null || fin < cur) plan.set(t, fin); // 指名なしは最も早く終わる担当を採用
+    }
+  };
   if (staffId) {
-    slots = availability({
-      businessHours: settings.businessHours,
-      bufferMin: effBuffer,
-      durationMin,
-      occupied: occupiedFor(bookings, staffId),
-    });
+    mergePlan(planForStaff(occupiedFor(bookings, staffId)));
   } else {
     const staffIds = await loadActiveStaffIds(tenantId);
-    if (staffIds.length === 0) {
-      slots = availability({
-        businessHours: settings.businessHours,
-        bufferMin: effBuffer,
-        durationMin,
-        occupied: bookings.map((b) => ({ start: b.startTime, end: b.slotEnd })),
-      });
-    } else {
-      slots = unionStarts(
-        staffIds.map((sid) =>
-          availability({
-            businessHours: settings.businessHours,
-            bufferMin: effBuffer,
-            durationMin,
-            occupied: occupiedFor(bookings, sid),
-          }),
-        ),
-      );
-    }
+    if (staffIds.length === 0) mergePlan(planForStaff(bookings.map((b) => ({ start: b.startTime, end: b.slotEnd }))));
+    else for (const sid of staffIds) mergePlan(planForStaff(occupiedFor(bookings, sid)));
   }
 
-  // 受付締切＋過去時刻を除外（その日が今日のときに効く）
-  slots = slots.filter((s) => afterCutoff(date, s, settings));
+  // 受付締切＋過去時刻を除外し、開始時刻→終了時刻のマップを作る
+  const slots: string[] = [];
+  const finishByStart: Record<string, string> = {};
+  for (const t of [...plan.keys()].sort((a, b) => a - b)) {
+    const ts = toTimeStr(t);
+    if (!afterCutoff(date, ts, settings)) continue;
+    slots.push(ts);
+    finishByStart[ts] = toTimeStr(plan.get(t)!);
+  }
 
-  return { slots, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours };
+  return { slots, finishByStart, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours };
 });
 
 /** 複数頭をまとめて確定。同じ担当が startTime から連続で施術し、頭数ぶんの予約を groupId で束ねて作成。 */
@@ -709,42 +715,50 @@ export const createGroupBooking = onCall<{
     throw new HttpsError('failed-precondition', 'past the booking cutoff');
   }
   const computed = await computeGroupItems(tenantId, items);
-  const totalDuration = computed.reduce((s, c) => s + c.durationMin, 0);
+  const durations = computed.map((c) => c.durationMin);
+  const totalDuration = durations.reduce((s, d) => s + d, 0);
   // バッファはメニュー（サービス）にのみ適用。単品オプションのみの予約はバッファ0。
   const bufferMin = computed.some((c) => c.serviceId) ? settings.bufferMin : 0;
   const bookings = await loadDayBookings(tenantId, date);
+  const startMin = toMinutes(startTime);
 
-  // 合計時間ぶん連続で空いている担当を確定（指名ありはその担当のみ）
-  function isFree(sid: string): boolean {
-    return availability({
-      businessHours: settings.businessHours,
-      bufferMin,
-      durationMin: totalDuration,
-      occupied: occupiedFor(bookings, sid),
-    }).includes(startTime);
-  }
+  // startTime から頭数を詰めた配置（連続不可なら自動分割）。先頭が startTime ちょうどでなければ空き無し扱い。
+  const planFor = (occupied: { start: string; end: string }[]) => {
+    const packed = packDogs(freeIntervals(settings.businessHours, occupied), durations, bufferMin, startMin);
+    return packed && packed.starts[0] === startMin ? packed : null;
+  };
+
   let assigned: string | null = null;
+  let packed: { starts: number[]; finishMin: number } | null = null;
   if (staffId) {
-    if (!isFree(staffId)) throw new HttpsError('failed-precondition', 'nominated staff is not available');
+    packed = planFor(occupiedFor(bookings, staffId));
+    if (!packed) throw new HttpsError('failed-precondition', 'nominated staff is not available');
     assigned = staffId;
   } else {
     const staffIds = await loadActiveStaffIds(tenantId);
-    assigned = staffIds.find((sid) => isFree(sid)) ?? null;
-    if (staffIds.length > 0 && assigned == null) {
-      throw new HttpsError('failed-precondition', 'no staff available at this time');
+    if (staffIds.length === 0) {
+      packed = planFor(bookings.map((b) => ({ start: b.startTime, end: b.slotEnd })));
+    } else {
+      for (const sid of staffIds) {
+        const p = planFor(occupiedFor(bookings, sid));
+        if (p) {
+          assigned = sid;
+          packed = p;
+          break;
+        }
+      }
     }
+    if (!packed) throw new HttpsError('failed-precondition', 'no staff available at this time');
   }
 
   const bookingsRef = db.collection('tenants').doc(tenantId).collection('bookings');
   const groupId = bookingsRef.doc().id;
-  let cursor = toMinutes(startTime);
   const bookingIds: string[] = [];
   for (let i = 0; i < computed.length; i++) {
     const c = computed[i];
     const isLast = i === computed.length - 1;
-    const bBuffer = isLast ? bufferMin : 0; // 占有はブロック末尾にだけバッファを足す
-    const bStart = toTimeStr(cursor);
-    const slotEnd = toTimeStr(cursor + c.durationMin + bBuffer);
+    const bBuffer = isLast ? bufferMin : 0; // バッファは最後の頭にだけ付与
+    const bStart = packed.starts[i];
     const ref = await bookingsRef.add({
       dogId: c.dogId,
       customerId,
@@ -754,21 +768,20 @@ export const createGroupBooking = onCall<{
       groupId,
       staffId: assigned,
       date,
-      startTime: bStart,
+      startTime: toTimeStr(bStart),
       durationMin: c.durationMin,
       bufferMin: bBuffer,
-      slotEnd,
+      slotEnd: toTimeStr(bStart + c.durationMin + bBuffer),
       status: 'reserved',
       createdAt: FieldValue.serverTimestamp(),
       // 確認メッセージは先頭の1件のみ送信（2件目以降は送信済み扱いで抑止）
       ...(i > 0 ? { confirmationSentAt: FieldValue.serverTimestamp() } : {}),
     });
     bookingIds.push(ref.id);
-    cursor += c.durationMin;
   }
 
-  const slotEnd = toTimeStr(toMinutes(startTime) + totalDuration + bufferMin);
-  return { bookingIds, groupId, staffId: assigned, slotEnd, startTime, durationMin: totalDuration };
+  // 表示用の終了時刻＝最後の頭の施術終了（バッファ除く）
+  return { bookingIds, groupId, staffId: assigned, slotEnd: toTimeStr(packed.finishMin), startTime, durationMin: totalDuration };
 });
 
 /** スタッフ（管理者/トリマー）による予約作成。LINE トークン不要・Firebase Auth で認可。 */

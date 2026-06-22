@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { availability, effectiveDuration, unionStarts } from './slots';
+import { availability, effectiveDuration, freeIntervals, packDogs, unionStarts } from './slots';
+
+describe('packDogs (複数頭の自動分割)', () => {
+  const bh = [{ start: '09:00', end: '18:00' }];
+  it('連続で入るときは詰めて配置', () => {
+    const gaps = freeIntervals(bh, []);
+    const r = packDogs(gaps, [90, 60], 0, 540); // 9:00 から 90分+60分
+    expect(r).toEqual({ starts: [540, 630], finishMin: 690 }); // 9:00, 10:30 / 終了 11:30
+  });
+  it('連続が無理なら既存予約の合間に分割', () => {
+    const gaps = freeIntervals(bh, [{ start: '11:00', end: '12:00' }]);
+    const r = packDogs(gaps, [90, 60], 0, 540);
+    expect(r).toEqual({ starts: [540, 720], finishMin: 780 }); // 9:00, 12:00 / 終了 13:00
+  });
+  it('閉店までに収まらなければ null', () => {
+    const gaps = freeIntervals(bh, []);
+    expect(packDogs(gaps, [300, 300, 300], 0, 540)).toBeNull(); // 合計900分は入らない
+  });
+});
 
 // クライアント src/lib/slots.test.ts と同じ §6 の例でサーバ側ロジックの parity を確認。
 // 営業 9:00–13:00 / バッファ 10分 / 9:00–10:00, 11:00–13:00 予約済 → 空きは 10:00–11:00。

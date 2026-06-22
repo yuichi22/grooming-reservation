@@ -88,6 +88,45 @@ export function availability(args: AvailabilityArgs): string[] {
   return starts.map(toTimeStr);
 }
 
+/** 営業時間から占有を引いた「空き区間」（分・昇順）。 */
+export function freeIntervals(businessHours: TimeInterval[], occupied: TimeInterval[]): Interval[] {
+  const business: Interval[] = businessHours.map((b) => ({ start: toMinutes(b.start), end: toMinutes(b.end) }));
+  const occ: Interval[] = occupied.map((o) => ({ start: toMinutes(o.start), end: toMinutes(o.end) }));
+  return subtractOccupied(business, occ);
+}
+
+/**
+ * 複数頭を fromMin 以降の空き区間に「順番に」詰める（連続できなければ既存予約の合間に分割）。
+ * - durations: 各頭の所要時間（分・順序どおり）。
+ * - lastBuffer: 最後の頭にだけ足す占有（メニューのバッファ）。頭間にはバッファを入れない。
+ * - 返り: 各頭の開始分 starts と、最後の頭の施術終了分 finishMin（バッファ除く）。配置不能なら null。
+ */
+export function packDogs(
+  gaps: Interval[],
+  durations: number[],
+  lastBuffer: number,
+  fromMin: number,
+): { starts: number[]; finishMin: number } | null {
+  if (durations.length === 0) return null;
+  let cursor = fromMin;
+  const starts: number[] = [];
+  for (let i = 0; i < durations.length; i++) {
+    const need = durations[i] + (i === durations.length - 1 ? lastBuffer : 0);
+    let placed: number | null = null;
+    for (const g of gaps) {
+      const s = Math.max(g.start, cursor);
+      if (s + need <= g.end) {
+        placed = s;
+        break;
+      }
+    }
+    if (placed == null) return null;
+    starts.push(placed);
+    cursor = placed + durations[i]; // 次の頭は施術直後から（バッファは末尾のみ占有）
+  }
+  return { starts, finishMin: starts[starts.length - 1] + durations[durations.length - 1] };
+}
+
 /** 複数開始時刻リストの和集合（昇順・重複排除）。指名なし時の全スタッフ和集合 (§8)。 */
 export function unionStarts(lists: string[][]): string[] {
   const set = new Set<string>();
