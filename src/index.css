@@ -971,10 +971,14 @@ tr.row-link td.chevron-cell {
 .cal-cell.closed {
   background: var(--danger-50);
 }
-/* 選択中の内容が入らない日（グレーアウト） */
+/* 最短でも入らない日（×・グレーアウト・選択不可） */
 .cal-cell.nofit {
   opacity: 0.45;
   background: var(--bg, #f4f4f5);
+}
+/* 内容を変えれば入る日（△・タップ可）。淡いアンバーで「要変更」を示す */
+.cal-cell.maybe {
+  background: #fff7ed;
 }
 .cal-daynum {
   font-size: 0.82rem;
@@ -1006,6 +1010,10 @@ tr.row-link td.chevron-cell {
 .cal-badge.nofit {
   background: #e5e7eb;
   color: var(--muted);
+}
+.cal-badge.maybe {
+  background: #fed7aa;
+  color: #c2410c;
 }
 .cal-detail-head {
   display: flex;

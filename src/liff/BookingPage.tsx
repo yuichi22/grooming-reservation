@@ -84,6 +84,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   });
   const [closedMonth, setClosedMonth] = useState<Set<string>>(new Set());
   const [openMonth, setOpenMonth] = useState<Set<string> | null>(null); // 選択中の内容が入る日（null=判定前/カート空）
+  const [openMonthMin, setOpenMonthMin] = useState<Set<string> | null>(null); // 最短まで縮めた内容なら入る日（△判定用）
 
   // 空き状況（カート合計時間ぶん）
   const [slots, setSlots] = useState<string[] | null>(null);
@@ -186,10 +187,12 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, view.y, view.m]);
 
-  // 選択中の内容が入る日（月範囲）を取得し、入らない日を月カレンダーでグレーアウト
+  // 月範囲で「選択中の内容が入る日(openMonth)」と「最短まで縮めれば入る日(openMonthMin)」を取得。
+  // どちらにも入らない=× / 現状ダメだが最短なら入る=△ の判定に使う。
   useEffect(() => {
     if (phase !== 'ready' || cart.length === 0) {
       setOpenMonth(null);
+      setOpenMonthMin(null);
       return;
     }
     const first = new Date(view.y, view.m, 1);
@@ -197,6 +200,11 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     gs.setDate(1 - first.getDay());
     const ge = new Date(gs);
     ge.setDate(gs.getDate() + 41);
+    const from = fmt(gs);
+    const to = fmt(ge);
+    const staff = staffId || undefined;
+    const minItems = minimalCart();
+    const reducible = JSON.stringify(minItems) !== JSON.stringify(cart);
     let cancelled = false;
     (async () => {
       try {
@@ -204,13 +212,31 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           tenantId,
           accessToken: getAccessToken(),
           items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
-          from: fmt(gs),
-          to: fmt(ge),
-          staffId: staffId || undefined,
+          from,
+          to,
+          staffId: staff,
         });
         if (!cancelled) setOpenMonth(new Set(res.data.openDates));
       } catch {
         if (!cancelled) setOpenMonth(null);
+      }
+      // 縮小余地が無ければ △ は発生しない（最短=現状）
+      if (!reducible) {
+        if (!cancelled) setOpenMonthMin(null);
+        return;
+      }
+      try {
+        const resMin = await getMonthAvailability({
+          tenantId,
+          accessToken: getAccessToken(),
+          items: minItems.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
+          from,
+          to,
+          staffId: staff,
+        });
+        if (!cancelled) setOpenMonthMin(new Set(resMin.data.openDates));
+      } catch {
+        if (!cancelled) setOpenMonthMin(null);
       }
     })();
     return () => {
@@ -349,6 +375,14 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     const cells = (options?.pricing ?? []).filter((p) => p.breedId === breedId);
     if (cells.length === 0) return null;
     return cells.reduce((a, b) => (b.durationMin < a.durationMin ? b : a)).serviceId;
+  }
+  // 最短まで縮めたカート（各メニューを最短サービス＋オプション無しに。単品はそのまま）
+  function minimalCart(): CartItem[] {
+    return cart.map((c) => {
+      if (!c.serviceId) return c;
+      const sid = shortestServiceFor(c.dogId) ?? c.serviceId;
+      return { ...c, serviceId: sid, optionIds: [] };
+    });
   }
   // 「内容を短くすれば入る」候補（カート全体の縮小案）を作る
   function buildReductions(): { title: string; cart: CartItem[] }[] {
@@ -627,24 +661,30 @@ function BookingPage({ tenantId }: { tenantId: string }) {
               const closed = closedMonth.has(ds);
               // 選択中の内容が入らない日（休業/過去を除く）
               const noFit = openMonth != null && !openMonth.has(ds) && !past && !closed;
+              // 現状はダメでも、最短まで縮めれば入る日 → △（変更すれば可能）
+              const maybe = noFit && openMonthMin != null && openMonthMin.has(ds);
+              // 最短でも入らない日 → ×（本当にダメ）
+              const hardFull = noFit && !maybe;
               const cls = ['cal-cell'];
               if (d.getMonth() !== view.m) cls.push('other');
               if (ds === today) cls.push('today');
               if (ds === date) cls.push('selected');
               if (past) cls.push('other');
               if (closed) cls.push('closed');
-              if (noFit) cls.push('nofit');
+              if (maybe) cls.push('maybe');
+              if (hardFull) cls.push('nofit');
               return (
                 <button
                   key={ds}
                   type="button"
                   className={cls.join(' ')}
-                  disabled={past || closed}
+                  disabled={past || closed || hardFull}
                   onClick={() => pickDay(d)}
                 >
                   <span className={`cal-daynum${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}`}>{d.getDate()}</span>
                   {closed && <span className="cal-badge closed">休</span>}
-                  {noFit && <span className="cal-badge nofit">×</span>}
+                  {maybe && <span className="cal-badge maybe">△</span>}
+                  {hardFull && <span className="cal-badge nofit">×</span>}
                 </button>
               );
             })}
