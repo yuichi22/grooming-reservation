@@ -1084,21 +1084,32 @@ tr.row-link td.chevron-cell {
 }
 .cal-bar .day-center button {
   flex: 0 0 auto;
-  padding: 4px 10px;
-  min-height: 34px;
-  font-size: 1.05rem;
+  padding: 6px 14px;
+  min-height: 40px;
+  font-size: 1.25rem;
   line-height: 1;
 }
 .cal-bar .day-label {
+  display: inline-flex;
+  align-items: center;
   font-weight: 800;
-  font-size: 0.98rem;
+  font-size: 1.08rem;
   text-align: center;
   white-space: nowrap;
 }
+/* 曜日は「今日」と同じ白抜き（ブランド塗り＋白文字）の丸 */
 .cal-bar .day-dow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  margin-left: 6px;
+  background: var(--brand);
+  border-radius: 50%;
+  color: #fff;
   font-size: 0.72rem;
   font-weight: 700;
-  margin-left: 1px;
 }
 .cal-bar .day-today {
   margin-left: 5px;

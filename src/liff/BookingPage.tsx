@@ -51,10 +51,10 @@ function formatDateJa(ds: string) {
   const [y, m, d] = ds.split('-').map(Number);
   return `${y}年${m}月${d}日（${DOW[new Date(y, m - 1, d).getDay()]}）`;
 }
-/** 日ナビ用の日付パーツ（例: { ymd: '2026/6/22', dow: '月' }） */
+/** 日ナビ用の日付パーツ（例: { ymd: '2026.6月22日', dow: '月' }） */
 function dateParts(ds: string) {
   const [y, m, d] = ds.split('-').map(Number);
-  return { ymd: `${y}/${m}/${d}`, dow: DOW[new Date(y, m - 1, d).getDay()] };
+  return { ymd: `${y}.${m}月${d}日`, dow: DOW[new Date(y, m - 1, d).getDay()] };
 }
 const toMin = (t: string) => {
   const [h, m] = t.split(':').map(Number);
@@ -487,7 +487,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           </button>
           <span className="day-label">
             {dateParts(date).ymd}
-            <span className="day-dow">.{dateParts(date).dow}</span>
+            <span className="day-dow" aria-label={`${dateParts(date).dow}曜日`}>
+              {dateParts(date).dow}
+            </span>
             {date === today && <span className="day-today">今日</span>}
           </span>
           <button type="button" onClick={() => shiftDay(1)} aria-label="翌日">
