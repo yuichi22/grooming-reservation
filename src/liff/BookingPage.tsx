@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronRight, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { closeLiff, getAccessToken, getProfile, initLiff, isDevMode } from './liff';
@@ -37,8 +37,6 @@ interface Draft {
 }
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
-const PX_PER_MIN = 1;
-const EDGE_PAD = 30;
 const rid = () => Math.random().toString(36).slice(2, 10);
 
 function fmt(d: Date) {
@@ -87,7 +85,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
 
   // 空き状況（カート合計時間ぶん）
   const [slots, setSlots] = useState<string[] | null>(null);
-  const [businessHours, setBusinessHours] = useState<{ start: string; end: string }[] | null>(null);
   const [closedDay, setClosedDay] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
@@ -129,7 +126,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   useEffect(() => {
     if (phase !== 'ready' || cart.length === 0) {
       setSlots(null);
-      setBusinessHours(null);
       return;
     }
     let cancelled = false;
@@ -145,7 +141,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         });
         if (cancelled) return;
         setSlots(res.data.slots);
-        setBusinessHours(res.data.businessHours);
         setClosedDay(!!res.data.closed);
       } catch {
         if (!cancelled) setSlots([]);
@@ -551,7 +546,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         <p className="tg-hint">空き時間を読み込み中…</p>
       ) : (
         <AvailabilityGrid
-          businessHours={businessHours}
           slots={slots ?? []}
           closed={closedDay}
           selected={confirmSlot}
@@ -897,73 +891,33 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   );
 }
 
-/** 空き時間の時間軸グリッド（管理画面の日ビューと同じ見た目）。 */
+/** 空き開始時刻（15分グリッド）をチップで表示。入る枠だけが渡ってくる。 */
 function AvailabilityGrid({
-  businessHours,
   slots,
   closed,
   selected,
   onPick,
 }: {
-  businessHours: { start: string; end: string }[] | null;
   slots: string[];
   closed: boolean;
   selected: string | null;
   onPick: (s: string) => void;
 }) {
-  const bh = businessHours && businessHours.length > 0 ? businessHours : [{ start: '09:00', end: '19:00' }];
-  const axisStart = Math.min(...bh.map((h) => toMin(h.start))) - EDGE_PAD;
-  const axisEnd = Math.max(...bh.map((h) => toMin(h.end))) + EDGE_PAD;
-  const height = (axisEnd - axisStart) * PX_PER_MIN;
-  const hours: number[] = [];
-  for (let h = Math.ceil(axisStart / 60) * 60; h <= axisEnd; h += 60) hours.push(h);
-
-  // 見やすさ優先で30分刻みに間引く（30分始まりが無ければ全件）
-  const sorted = useMemo(() => {
-    const all = [...slots].sort();
-    const half = all.filter((s) => toMin(s) % 30 === 0);
-    return half.length ? half : all;
-  }, [slots]);
-  const SLOT_H = 28; // スロットの高さ(px)
-
+  if (closed) return <div className="slot-empty">休業日</div>;
+  if (slots.length === 0) return <div className="slot-empty">この日に空きはありません</div>;
+  const sorted = [...slots].sort();
   return (
-    <div className="tg" style={{ height }}>
-      {bh.map((h, i) => (
-        <div
-          key={i}
-          className="tg-open"
-          style={{ top: (toMin(h.start) - axisStart) * PX_PER_MIN, height: (toMin(h.end) - toMin(h.start)) * PX_PER_MIN }}
-        />
+    <div className="slot-chips">
+      {sorted.map((s) => (
+        <button
+          key={s}
+          type="button"
+          className={`slot-chip${selected === s ? ' selected' : ''}`}
+          onClick={() => onPick(s)}
+        >
+          {s}
+        </button>
       ))}
-      {hours.map((h) => (
-        <span key={h} className="tg-hour-label" style={{ top: (h - axisStart) * PX_PER_MIN }}>
-          {toHHMM(h)}
-        </span>
-      ))}
-      {hours.map((h) => (
-        <div key={'l' + h} className="tg-hour" style={{ top: (h - axisStart) * PX_PER_MIN }} />
-      ))}
-      {!closed &&
-        sorted.map((s) => {
-          const top = (toMin(s) - axisStart) * PX_PER_MIN;
-          return (
-            <button
-              key={s}
-              type="button"
-              className={`tg-slot${selected === s ? ' selected' : ''}`}
-              style={{ top: top - SLOT_H / 2, height: SLOT_H }}
-              onClick={() => onPick(s)}
-            >
-              {s}
-            </button>
-          );
-        })}
-      {closed && <div className="tg-closed">休業日</div>}
-      {!closed && sorted.length === 0 && (
-        <div className="tg-closed" style={{ color: 'var(--muted)', background: 'transparent' }}>
-          この日に空きはありません
-        </div>
-      )}
     </div>
   );
 }

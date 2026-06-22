@@ -122,6 +122,17 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
           />
         </label>
 
+        <label className="inline">
+          予約受付の締切（予約開始の何時間前まで受付可・0=直前まで）
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={settings.bookingCutoffHours ?? 0}
+            onChange={(e) => setSettings((s) => (s ? { ...s, bookingCutoffHours: Number(e.target.value) } : s))}
+          />
+        </label>
+
         <fieldset>
           <legend>消費税</legend>
           <label className="inline">

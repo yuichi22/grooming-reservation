@@ -31,6 +31,14 @@ describe('availability (§6 の例)', () => {
     const d = effectiveDuration(80, { defaultDurationMin: 50, fixedDuration: true });
     expect(availability({ businessHours, bufferMin: 10, durationMin: d, occupied })).toEqual(['10:00']);
   });
+  it('開始時刻は絶対15分グリッドに丸める（隙間の半端な開始は出さない）', () => {
+    // 営業 9:00–12:00 / 9:00–9:40 予約済 → 隙間 9:40–12:00。30分は 9:45 始まり。
+    const bh = [{ start: '09:00', end: '12:00' }];
+    const occ = [{ start: '09:00', end: '09:40' }];
+    const slots = availability({ businessHours: bh, bufferMin: 0, durationMin: 30, occupied: occ });
+    expect(slots[0]).toBe('09:45');
+    expect(slots.every((s) => Number(s.slice(3)) % 15 === 0)).toBe(true);
+  });
 });
 
 describe('unionStarts (§8 指名なしの和集合)', () => {

@@ -80,7 +80,9 @@ export function availability(args: AvailabilityArgs): string[] {
 
   const starts: number[] = [];
   for (const gap of gaps) {
-    for (let s = gap.start; s + need <= gap.end; s += gridStep) starts.push(s);
+    // 開始時刻は絶対 15分グリッド（:00/:15/:30/:45）に丸める。隙間の途中の半端な時刻は出さない。
+    const first = Math.ceil(gap.start / gridStep) * gridStep;
+    for (let s = first; s + need <= gap.end; s += gridStep) starts.push(s);
   }
   starts.sort((a, b) => a - b);
   return starts.map(toTimeStr);

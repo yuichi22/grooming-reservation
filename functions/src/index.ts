@@ -135,6 +135,7 @@ interface SettingsLike {
   bufferMin: number;
   timezone: string;
   cancelDeadlineHours: number;
+  bookingCutoffHours: number;
 }
 
 /** メッセージ文面に使う店舗情報（settings に保持・任意）。 */
@@ -154,7 +155,33 @@ async function loadSettings(tenantId: string): Promise<SettingsLike> {
     bufferMin: s.bufferMin ?? 0,
     timezone: s.timezone ?? 'Asia/Tokyo',
     cancelDeadlineHours: s.cancelDeadlineHours ?? 24,
+    bookingCutoffHours: s.bookingCutoffHours ?? 0,
   };
+}
+
+/** タイムゾーンの現在時刻を「壁時計をUTCに見立てた」比較用ミリ秒で返す（同一tz同士の比較に使う）。 */
+function tzNowWallMs(tz: string): number {
+  const f = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const p = Object.fromEntries(f.formatToParts(new Date()).map((x) => [x.type, x.value]));
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +(p.hour === '24' ? '0' : p.hour), +p.minute);
+}
+function slotWallMs(date: string, hhmm: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  const [hh, mm] = hhmm.split(':').map(Number);
+  return Date.UTC(y, m - 1, d, hh, mm);
+}
+/** 受付締切＋過去時刻の除外。slot は date(YYYY-MM-DD) の HH:MM。 */
+function afterCutoff(date: string, hhmm: string, settings: SettingsLike): boolean {
+  const threshold = tzNowWallMs(settings.timezone) + settings.bookingCutoffHours * 3600_000;
+  return slotWallMs(date, hhmm) >= threshold;
 }
 
 /** その日が臨時休業/祝日で終日クローズか (§11 営業時間の例外)。 */
@@ -648,6 +675,9 @@ export const getGroupAvailability = onCall<{
     }
   }
 
+  // 受付締切＋過去時刻を除外（その日が今日のときに効く）
+  slots = slots.filter((s) => afterCutoff(date, s, settings));
+
   return { slots, durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours };
 });
 
@@ -673,6 +703,9 @@ export const createGroupBooking = onCall<{
   }
 
   const settings = await loadSettings(tenantId);
+  if (!afterCutoff(date, startTime, settings)) {
+    throw new HttpsError('failed-precondition', 'past the booking cutoff');
+  }
   const computed = await computeGroupItems(tenantId, items);
   const totalDuration = computed.reduce((s, c) => s + c.durationMin, 0);
   const bufferMin = settings.bufferMin;

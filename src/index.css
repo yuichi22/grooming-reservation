@@ -1625,6 +1625,37 @@ button.tg-block.done:hover {
   color: var(--brand-dark);
   border-color: var(--brand-100);
 }
+/* 空き時間チップ（15分グリッド・入る枠だけ） */
+.slot-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.slot-chip {
+  padding: 11px 4px;
+  min-height: 46px;
+  border: 1px solid #9fe3b8;
+  background: #def7e6;
+  color: #067a3a;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.98rem;
+  cursor: pointer;
+}
+.slot-chip:hover {
+  background: #cdeed8;
+}
+.slot-chip.selected {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.slot-empty {
+  padding: 28px 0;
+  text-align: center;
+  color: var(--muted);
+}
 /* ステップ間の視線誘導（下向き矢印） */
 .flow-arrow {
   display: flex;

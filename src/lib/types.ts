@@ -44,6 +44,8 @@ export interface TenantSettings {
   workTimeOptions: number[];
   /** キャンセル締切（予約開始の何時間前まで可）(§11) */
   cancelDeadlineHours?: number;
+  /** 予約受付の締切（予約開始の何時間前まで受付可）。0=直前まで（過去の時刻は常に不可）。既定 0 */
+  bookingCutoffHours?: number;
   /** 店舗情報（LINE 文面に使用・任意） */
   address?: string;
   mapUrl?: string;
