@@ -9,7 +9,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger, setGlobalOptions } from 'firebase-functions/v2';
 import { defineInt } from 'firebase-functions/params';
 import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
-import { verifyLineAccessToken, pushLineMessage } from './line.js';
+import { verifyLineAccessToken, pushLineMessage, isLineFriend } from './line.js';
 import { availability, freeIntervals, packDogs, toMinutes, toTimeStr, unionStarts } from './slots.js';
 import { buildPointEvent, deliverPointEvent, type PointEventStatus } from './crm.js';
 import { buildConfirmationMessage, buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
@@ -336,6 +336,19 @@ function occupiedFor(bookings: BookingRow[], staffId: string): { start: string; 
  * 顧客セッション確立 + find-or-link (§3)。
  * LINE トークンを検証し、tenant 内の customers を識別子照合して結びつける/作成する。
  */
+/**
+ * OA 友だち登録を必須化（A方式のサーバ強制）。未追加なら予約フローに入れない。
+ * dev トークンやチャネルトークン未設定では検証不能のため通す（クライアント側ゲートで担保）。
+ */
+async function assertLineFriend(tenantId: string, lineUserId: string, dev: boolean): Promise<void> {
+  if (dev) return;
+  const tSnap = await db.collection('tenants').doc(tenantId).get();
+  const token = reminderChannelToken(tSnap.data()?.lineConfig as Record<string, unknown> | undefined);
+  if (!(await isLineFriend(token, lineUserId))) {
+    throw new HttpsError('failed-precondition', 'line-friend-required');
+  }
+}
+
 export const customerSession = onCall<{
   tenantId: string;
   accessToken: string;
@@ -344,7 +357,8 @@ export const customerSession = onCall<{
 }>({ minInstances: minInstancesParam }, async (request) => {
   const { tenantId, accessToken, ownerName, phone } = request.data;
   if (!tenantId) throw new HttpsError('invalid-argument', 'tenantId required');
-  const { lineUserId } = await verifyLineAccessToken(accessToken);
+  const { lineUserId, dev } = await verifyLineAccessToken(accessToken);
+  await assertLineFriend(tenantId, lineUserId, dev);
 
   const customersRef = db.collection('tenants').doc(tenantId).collection('customers');
   const existing: CustomerIdentifiers[] = [];
@@ -772,8 +786,9 @@ export const createGroupBooking = onCall<{
   if (!tenantId || !customerId || !date || !startTime || !items?.length) {
     throw new HttpsError('invalid-argument', 'missing required fields');
   }
-  const { lineUserId } = await verifyLineAccessToken(accessToken);
+  const { lineUserId, dev } = await verifyLineAccessToken(accessToken);
   await assertCustomerOwnership(tenantId, customerId, lineUserId);
+  await assertLineFriend(tenantId, lineUserId, dev);
 
   if (await isClosedDate(tenantId, date)) {
     throw new HttpsError('failed-precondition', 'the salon is closed on this date');

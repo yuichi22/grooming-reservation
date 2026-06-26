@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronRight, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { closeLiff, getAccessToken, getProfile, initLiff, isDevMode } from './liff';
+import { ADD_FRIEND_URL, closeLiff, getAccessToken, getProfile, initLiff, isDevMode, isFriend, openAddFriend } from './liff';
 import {
   createGroupBooking,
   customerSession,
@@ -17,7 +17,7 @@ import {
   type MyTenant,
 } from './customerApi';
 
-type Phase = 'init' | 'needPhone' | 'ready' | 'done' | 'error';
+type Phase = 'init' | 'needFriend' | 'needPhone' | 'ready' | 'done' | 'error';
 
 /**
  * カート1項目 = 犬×（メニュー or 単品オプション）。
@@ -113,26 +113,40 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     setOptions(res.data);
   }
 
-  useEffect(() => {
-    (async () => {
-      try {
-        await initLiff();
-        await getProfile();
-        const res = await customerSession({ tenantId, accessToken: getAccessToken() });
-        setCustomerId(res.data.customerId);
-        setStoreInfo(res.data.store);
-        if (res.data.needsPhone) {
-          setPhase('needPhone');
-        } else {
-          if (res.data.options) setOptions(res.data.options);
-          else await loadOptions(res.data.customerId);
-          setPhase('ready');
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : '初期化に失敗しました');
-        setPhase('error');
+  async function boot() {
+    setPhase('init');
+    try {
+      await initLiff();
+      await getProfile();
+      // A方式: OA 友だち登録を必須化。未追加なら予約フローへ入れない
+      if (!(await isFriend())) {
+        setPhase('needFriend');
+        return;
       }
-    })();
+      const res = await customerSession({ tenantId, accessToken: getAccessToken() });
+      setCustomerId(res.data.customerId);
+      setStoreInfo(res.data.store);
+      if (res.data.needsPhone) {
+        setPhase('needPhone');
+      } else {
+        if (res.data.options) setOptions(res.data.options);
+        else await loadOptions(res.data.customerId);
+        setPhase('ready');
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      // サーバ側の友だち必須化に弾かれた場合も案内画面へ
+      if (/line-friend-required/.test(msg)) {
+        setPhase('needFriend');
+        return;
+      }
+      setError(msg || '初期化に失敗しました');
+      setPhase('error');
+    }
+  }
+
+  useEffect(() => {
+    boot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -543,6 +557,31 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         <p className="error">{error}</p>
       </Center>
     );
+
+  // A方式: 友だち未追加は予約に進めない（追加後に「ご予約に進む」で再判定）
+  if (phase === 'needFriend') {
+    return (
+      <div className="liff-shell">
+        <StoreLogo store={storeInfo} />
+        <section style={{ marginTop: 4 }}>
+          <h2>ご予約の前に友だち追加をお願いします</h2>
+          <p className="muted">
+            ご予約の確認や前日のリマインドを LINE でお送りするため、まず公式アカウントの友だち追加が必要です。
+          </p>
+          {ADD_FRIEND_URL ? (
+            <button type="button" className="book-start" style={{ width: '100%' }} onClick={openAddFriend}>
+              友だち追加する
+            </button>
+          ) : (
+            <p className="muted">店頭の友だち追加QR、または公式アカウントの検索から追加してください。</p>
+          )}
+          <button type="button" className="done-again" style={{ width: '100%', marginTop: 10 }} onClick={boot}>
+            追加したのでご予約に進む
+          </button>
+        </section>
+      </div>
+    );
+  }
 
   if (phase === 'needPhone') {
     return (

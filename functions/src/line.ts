@@ -5,6 +5,8 @@ import { HttpsError } from 'firebase-functions/v2/https';
 
 export interface LineIdentity {
   lineUserId: string;
+  /** 開発用 "dev:" トークン由来か（友だち判定など実APIに通さない処理の分岐用）。 */
+  dev: boolean;
 }
 
 /**
@@ -23,7 +25,7 @@ export async function verifyLineAccessToken(accessToken: string): Promise<LineId
     }
     const lineUserId = accessToken.slice('dev:'.length);
     if (!lineUserId) throw new HttpsError('unauthenticated', 'invalid dev token');
-    return { lineUserId };
+    return { lineUserId, dev: true };
   }
 
   // 1) トークンの有効性確認
@@ -45,7 +47,22 @@ export async function verifyLineAccessToken(accessToken: string): Promise<LineId
   if (!profile.userId) {
     throw new HttpsError('unauthenticated', 'LINE profile has no userId');
   }
-  return { lineUserId: profile.userId };
+  return { lineUserId: profile.userId, dev: false };
+}
+
+/**
+ * このユーザーが OA を友だち追加しているか（Messaging API のプロフィール取得で判定）。
+ * - チャネルトークン未設定/開発トークン → 検証不能のため true（誤ブロック回避。クライアント側ゲートで担保）。
+ * - 404 → 友だちでない/ブロック中＝false（確定）。
+ * - その他の一時エラー → true（フェイルオープン。一時障害で予約を止めない）。
+ */
+export async function isLineFriend(channelAccessToken: string | null, lineUserId: string): Promise<boolean> {
+  if (!channelAccessToken || channelAccessToken.startsWith('dev:')) return true;
+  const res = await fetch(`https://api.line.me/v2/bot/profile/${encodeURIComponent(lineUserId)}`, {
+    headers: { Authorization: `Bearer ${channelAccessToken}` },
+  });
+  if (res.status === 404) return false;
+  return true;
 }
 
 export type PushResult = 'sent' | 'skipped';
