@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronRight, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { ADD_FRIEND_URL, closeLiff, getAccessToken, getProfile, initLiff, isDevMode, isFriend, openAddFriend } from './liff';
+import { ADD_FRIEND_URL, closeLiff, getAccessToken, getProfile, initLiff, isDevMode, openAddFriend } from './liff';
 import {
   createGroupBooking,
   customerSession,
@@ -118,11 +118,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     try {
       await initLiff();
       await getProfile();
-      // A方式: OA 友だち登録を必須化。未追加なら予約フローへ入れない
-      if (!(await isFriend())) {
-        setPhase('needFriend');
-        return;
-      }
+      // A方式: 友だち必須化はサーバ判定を正とする（クライアントの getFriendship は
+      // チャネル-OAリンク状況で友だちでも false を返すことがあり誤ブロックの原因になる）。
+      // 未追加ならサーバが 'line-friend-required' を返し、下の catch で needFriend に分岐。
       const res = await customerSession({ tenantId, accessToken: getAccessToken() });
       setCustomerId(res.data.customerId);
       setStoreInfo(res.data.store);
