@@ -320,9 +320,10 @@ async function loadDayBookings(tenantId: string, date: string): Promise<BookingR
     .filter((b) => b.status === 'reserved' || b.status === 'done');
 }
 
-async function loadActiveStaffIds(tenantId: string): Promise<string[]> {
+/** 予約割当の対象スタッフ（active かつ管理者ロールを除く）。管理者は予約枠に入れない。 */
+async function loadBookableStaffIds(tenantId: string): Promise<string[]> {
   const q = await db.collection('tenants').doc(tenantId).collection('staff').where('active', '==', true).get();
-  return q.docs.map((d) => d.id);
+  return q.docs.filter((d) => d.data().role !== 'admin').map((d) => d.id);
 }
 
 /** 指定スタッフ視点の占有区間。未割当(null)予約は全スタッフを塞ぐ扱い。 */
@@ -495,7 +496,7 @@ export const getAvailability = onCall<{
     });
   } else {
     // 指名なし: 全アクティブスタッフの空きの和集合 (§8)
-    const staffIds = await loadActiveStaffIds(tenantId);
+    const staffIds = await loadBookableStaffIds(tenantId);
     if (staffIds.length === 0) {
       slots = availability({
         businessHours: settings.businessHours,
@@ -573,7 +574,7 @@ export const createBooking = onCall<{
     if (!isFree(staffId)) throw new HttpsError('failed-precondition', 'nominated staff is not available');
     assigned = staffId;
   } else {
-    const staffIds = await loadActiveStaffIds(tenantId);
+    const staffIds = await loadBookableStaffIds(tenantId);
     assigned = staffIds.find((sid) => isFree(sid)) ?? null;
     if (staffIds.length > 0 && assigned == null) {
       throw new HttpsError('failed-precondition', 'no staff available at this time');
@@ -689,7 +690,7 @@ export const getGroupAvailability = onCall<{
   if (staffId) {
     mergePlan(planForStaff(occupiedFor(bookings, staffId)));
   } else {
-    const staffIds = await loadActiveStaffIds(tenantId);
+    const staffIds = await loadBookableStaffIds(tenantId);
     if (staffIds.length === 0) mergePlan(planForStaff(bookings.map((b) => ({ start: b.startTime, end: b.slotEnd }))));
     else for (const sid of staffIds) mergePlan(planForStaff(occupiedFor(bookings, sid)));
   }
@@ -738,7 +739,7 @@ export const getMonthAvailability = onCall<{
       byDate.set(b.date, arr);
     }
   });
-  const staffIds = staffId ? [staffId] : await loadActiveStaffIds(tenantId);
+  const staffIds = staffId ? [staffId] : await loadBookableStaffIds(tenantId);
 
   // その日に「全頭が収まる開始時刻が1つでもあるか」（締切・過去時刻も考慮）
   const fitsOnDay = (date: string): boolean => {
@@ -819,7 +820,7 @@ export const createGroupBooking = onCall<{
     if (!packed) throw new HttpsError('failed-precondition', 'nominated staff is not available');
     assigned = staffId;
   } else {
-    const staffIds = await loadActiveStaffIds(tenantId);
+    const staffIds = await loadBookableStaffIds(tenantId);
     if (staffIds.length === 0) {
       packed = planFor(bookings.map((b) => ({ start: b.startTime, end: b.slotEnd })));
     } else {
@@ -914,7 +915,7 @@ export const createBookingByStaff = onCall<{
     if (!isFree(staffId)) throw new HttpsError('failed-precondition', 'nominated staff is not available');
     assigned = staffId;
   } else {
-    const staffIds = await loadActiveStaffIds(tenantId);
+    const staffIds = await loadBookableStaffIds(tenantId);
     assigned = staffIds.find((sid) => isFree(sid)) ?? null;
     if (staffIds.length > 0 && assigned == null) {
       throw new HttpsError('failed-precondition', 'no staff available at this time');
@@ -979,7 +980,8 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
       standalone: (d.data().standalone ?? false) as boolean,
     })),
     breeds: breedsSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
-    staff: staffSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
+    // 指名候補も管理者ロールは除外（予約枠に入れない）
+    staff: staffSnap.docs.filter((d) => d.data().role !== 'admin').map((d) => ({ id: d.id, name: d.data().name })),
     // hiddenByCustomer の犬は選択リストから除外（履歴・カルテは保持＝ソフト削除）
     dogs: dogsSnap.docs
       .filter((d) => d.data().hiddenByCustomer !== true)

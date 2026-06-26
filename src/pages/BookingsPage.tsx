@@ -233,7 +233,11 @@ function DaySection({
   const dogName = useMemo(() => new Map(dogs.map((d) => [d.id, d.name])), [dogs]);
   const staffName = useMemo(() => new Map(staff.map((s) => [s.id, s.name])), [staff]);
   const serviceName = useMemo(() => new Map(services.map((s) => [s.id, s.name])), [services]);
-  const activeStaff = useMemo(() => staff.filter((s) => s.active).sort((a, b) => a.name.localeCompare(b.name, 'ja')), [staff]);
+  // 予約枠の対象スタッフ＝active かつ管理者ロールを除く（管理者は予約に入れない）
+  const activeStaff = useMemo(
+    () => staff.filter((s) => s.active && s.role !== 'admin').sort((a, b) => a.name.localeCompare(b.name, 'ja')),
+    [staff],
+  );
 
   const [createInfo, setCreateInfo] = useState<{ start: string; staffId: string } | null>(null);
 
@@ -547,7 +551,7 @@ function CreateModal({
             指名（任意）
             <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
               <option value="">指名なし（空いているスタッフ）</option>
-              {staff.filter((s) => s.active).map((s) => (
+              {staff.filter((s) => s.active && s.role !== 'admin').map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
