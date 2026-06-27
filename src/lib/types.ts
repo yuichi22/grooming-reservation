@@ -84,6 +84,8 @@ export interface Staff {
   role: StaffRole;
   active: boolean;
   firebaseUid: string;
+  /** メール招待で登録した場合のログイン用メール */
+  email?: string;
 }
 
 /** tenants/{tenantId}/breeds/{breedId} — 犬種マスタ */

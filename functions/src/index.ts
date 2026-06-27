@@ -124,6 +124,55 @@ export const setStaffRole = onCall<SetStaffRoleData>(async (request) => {
   return { tenantId, targetUid, role };
 });
 
+/**
+ * メール招待でスタッフを追加（SaaS向けオンボーディング）。
+ * 管理者は氏名・メール・ロールを入れるだけ。Authユーザーを用意し custom claims 付与＋staff作成。
+ * 新規作成時はクライアントが sendPasswordResetEmail でパスワード設定メールを送る（created=true）。
+ * superAdmin、または対象テナントの admin のみ実行可。
+ */
+export const inviteStaff = onCall<{ tenantId: string; email: string; name: string; role: StaffRole }>(async (request) => {
+  const caller = request.auth?.token;
+  const { tenantId, name, role } = request.data;
+  const email = (request.data.email ?? '').trim().toLowerCase();
+  if (!tenantId || !email || !email.includes('@') || !name?.trim() || (role !== 'admin' && role !== 'trimmer')) {
+    throw new HttpsError('invalid-argument', 'tenantId, email, name, role(admin|trimmer) required');
+  }
+  const isSuper = caller?.superAdmin === true;
+  const isTenantAdmin = caller?.tenantId === tenantId && caller?.role === 'admin';
+  if (!isSuper && !isTenantAdmin) {
+    throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
+  }
+
+  // 既存ユーザーを探し、無ければ作成（管理者はUIDを触らない）
+  let user;
+  let created = false;
+  try {
+    user = await auth.getUserByEmail(email);
+  } catch {
+    user = await auth.createUser({ email });
+    created = true;
+  }
+
+  // 安全策: superAdmin や別テナント所属を巻き込まない
+  if (user.customClaims?.superAdmin === true) {
+    throw new HttpsError('failed-precondition', 'cannot assign tenant role to a superAdmin');
+  }
+  const existingTenant = user.customClaims?.tenantId as string | undefined;
+  if (existingTenant && existingTenant !== tenantId) {
+    throw new HttpsError('failed-precondition', 'this email already belongs to another tenant');
+  }
+
+  await auth.setCustomUserClaims(user.uid, { tenantId, role });
+  await db
+    .collection('tenants')
+    .doc(tenantId)
+    .collection('staff')
+    .doc(user.uid)
+    .set({ name: name.trim(), email, role, active: true, firebaseUid: user.uid }, { merge: true });
+
+  return { uid: user.uid, email, role, created };
+});
+
 // ===== 顧客向け（LIFF）: LINE トークン検証によるサーバ権威の予約フロー =====
 
 interface BusinessHours {
