@@ -13,11 +13,17 @@ export const setStaffRole = httpsCallable<
   { tenantId: string; targetUid: string; role: StaffRole }
 >(functions, 'setStaffRole');
 
-/** メール招待でスタッフを追加（Authユーザー用意＋権限付与＋staff作成）。created=新規作成。 */
+/** メール招待でスタッフを追加（Authユーザー用意＋権限付与＋staff作成）。created=新規作成。resetLink=パスワード設定リンク。 */
 export const inviteStaff = httpsCallable<
   { tenantId: string; email: string; name: string; role: StaffRole },
-  { uid: string; email: string; role: StaffRole; created: boolean }
+  { uid: string; email: string; role: StaffRole; created: boolean; resetLink: string | null }
 >(functions, 'inviteStaff');
+
+/** スタッフのパスワード設定リンクを再発行（メール不達/期限切れ時の共有用）。 */
+export const getStaffInviteLink = httpsCallable<
+  { tenantId: string; targetUid: string },
+  { email: string; link: string }
+>(functions, 'getStaffInviteLink');
 
 /** スタッフの氏名・ロールを編集（ロール変更時は custom claims も同期）。 */
 export const updateStaff = httpsCallable<

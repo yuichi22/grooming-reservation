@@ -542,6 +542,34 @@ td code {
   gap: 6px;
   flex-wrap: wrap;
 }
+/* 招待リンク表示（メール不達時の共有用） */
+.invite-link {
+  border: 1px solid var(--brand);
+  background: var(--brand-50);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin: 12px 0;
+}
+.invite-link-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.invite-link-head button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+}
+.invite-link-row {
+  display: flex;
+  gap: 8px;
+}
+.invite-link-row input {
+  flex: 1;
+  font-size: 0.85rem;
+}
 .row-form {
   display: flex;
   flex-wrap: wrap;

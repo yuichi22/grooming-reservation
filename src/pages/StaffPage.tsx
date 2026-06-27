@@ -4,7 +4,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { useAuth } from '../auth/AuthContext';
 import { auth } from '../firebaseStaff';
 import { staffCol } from '../lib/firestore';
-import { inviteStaff, updateStaff } from '../lib/functions';
+import { getStaffInviteLink, inviteStaff, updateStaff } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import type { Staff, StaffRole } from '../lib/types';
 
@@ -23,10 +23,34 @@ function StaffInner({ tenantId }: { tenantId: string }) {
   const [role, setRole] = useState<StaffRole>('trimmer');
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // パスワード設定リンク（メール不達時の共有用）
+  const [inviteLink, setInviteLink] = useState<{ name: string; link: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function copyLink(link: string) {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* クリップボード不可の環境は手動コピー */
+    }
+  }
+
+  async function showInviteLink(s: Staff) {
+    setMsg(null);
+    try {
+      const res = await getStaffInviteLink({ tenantId, targetUid: s.id });
+      setInviteLink({ name: s.name, link: res.data.link });
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'リンクの発行に失敗しました');
+    }
+  }
 
   async function onInvite(e: FormEvent) {
     e.preventDefault();
     setMsg(null);
+    setInviteLink(null);
     setBusy(true);
     try {
       // メール招待: Authユーザー用意＋custom claims付与＋staff作成 (§2)
@@ -35,6 +59,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
       if (res.data.created) {
         await sendPasswordResetEmail(auth, res.data.email);
         setMsg(`招待しました: ${name}（${role}）。パスワード設定メールを ${res.data.email} に送信しました。`);
+        if (res.data.resetLink) setInviteLink({ name, link: res.data.resetLink });
       } else {
         setMsg(`権限を付与しました: ${name}（${role}）。${res.data.email} は既存ユーザーのため既存のパスワードでログインできます。`);
       }
@@ -120,6 +145,24 @@ function StaffInner({ tenantId }: { tenantId: string }) {
       </form>
       {msg && <p className="muted">{msg}</p>}
 
+      {inviteLink && (
+        <div className="invite-link">
+          <div className="invite-link-head">
+            <strong>{inviteLink.name} のパスワード設定リンク</strong>
+            <button type="button" aria-label="閉じる" onClick={() => setInviteLink(null)}>
+              ✕
+            </button>
+          </div>
+          <p className="muted">メールが届かない場合は、このリンクをLINE等で本人に共有してください（約1時間有効）。</p>
+          <div className="invite-link-row">
+            <input readOnly value={inviteLink.link} onFocus={(e) => e.currentTarget.select()} />
+            <button type="button" onClick={() => copyLink(inviteLink.link)}>
+              {copied ? 'コピーしました' : 'コピー'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p>読み込み中…</p>
       ) : (
@@ -165,6 +208,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
                   <td>{s.active ? '在籍' : '停止'}</td>
                   <td className="row-actions">
                     <button onClick={() => startEdit(s)}>編集</button>
+                    {s.email && <button onClick={() => showInviteLink(s)}>招待リンク</button>}
                     <button onClick={() => toggleActive(s)}>{s.active ? '停止' : '復帰'}</button>
                   </td>
                 </tr>

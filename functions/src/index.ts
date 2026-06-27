@@ -170,7 +170,36 @@ export const inviteStaff = onCall<{ tenantId: string; email: string; name: strin
     .doc(user.uid)
     .set({ name: name.trim(), email, role, active: true, firebaseUid: user.uid }, { merge: true });
 
-  return { uid: user.uid, email, role, created };
+  // メールに加え、管理画面で直接共有できるパスワード設定リンクも返す（メール不達対策）
+  let resetLink: string | null = null;
+  try {
+    resetLink = await auth.generatePasswordResetLink(email);
+  } catch {
+    resetLink = null;
+  }
+  return { uid: user.uid, email, role, created, resetLink };
+});
+
+/**
+ * スタッフのパスワード設定リンクを再発行（メールが届かない/期限切れ時の共有用）。
+ * superAdmin、または対象テナントの admin のみ。リンクは約1時間有効。
+ */
+export const getStaffInviteLink = onCall<{ tenantId: string; targetUid: string }>(async (request) => {
+  const caller = request.auth?.token;
+  const { tenantId, targetUid } = request.data;
+  if (!tenantId || !targetUid) throw new HttpsError('invalid-argument', 'tenantId, targetUid required');
+  const isSuper = caller?.superAdmin === true;
+  const isTenantAdmin = caller?.tenantId === tenantId && caller?.role === 'admin';
+  if (!isSuper && !isTenantAdmin) {
+    throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
+  }
+  const user = await auth.getUser(targetUid);
+  if ((user.customClaims?.tenantId as string | undefined) !== tenantId) {
+    throw new HttpsError('failed-precondition', 'staff does not belong to this tenant');
+  }
+  if (!user.email) throw new HttpsError('failed-precondition', 'staff has no email');
+  const link = await auth.generatePasswordResetLink(user.email);
+  return { email: user.email, link };
 });
 
 /**
