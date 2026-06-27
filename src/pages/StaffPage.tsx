@@ -4,7 +4,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { useAuth } from '../auth/AuthContext';
 import { auth } from '../firebaseStaff';
 import { staffCol } from '../lib/firestore';
-import { inviteStaff } from '../lib/functions';
+import { inviteStaff, updateStaff } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import type { Staff, StaffRole } from '../lib/types';
 
@@ -56,6 +56,44 @@ function StaffInner({ tenantId }: { tenantId: string }) {
     await updateDoc(doc(staffCol(tenantId), s.id), { active: !s.active });
   }
 
+  // 行ごとの編集（氏名・ロール）
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState<StaffRole>('trimmer');
+  const [editBusy, setEditBusy] = useState(false);
+
+  function startEdit(s: Staff) {
+    setMsg(null);
+    setEditId(s.id);
+    setEditName(s.name);
+    setEditRole(s.role);
+  }
+  async function saveEdit(s: Staff) {
+    setEditBusy(true);
+    setMsg(null);
+    try {
+      const roleChanged = editRole !== s.role;
+      await updateStaff({ tenantId, targetUid: s.id, name: editName.trim(), role: editRole });
+      setMsg(
+        roleChanged
+          ? `更新しました: ${editName}（${editRole}）。ロール変更は本人の再ログイン後に反映されます。`
+          : `更新しました: ${editName}`,
+      );
+      setEditId(null);
+    } catch (err) {
+      const m = err instanceof Error ? err.message : '';
+      setMsg(
+        /own admin role/.test(m)
+          ? '自分自身を管理者から外すことはできません。'
+          : /another tenant/.test(m)
+            ? 'このスタッフは別の店舗に所属しています。'
+            : m || '更新に失敗しました',
+      );
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
   return (
     <section>
       <h1>スタッフ</h1>
@@ -96,17 +134,42 @@ function StaffInner({ tenantId }: { tenantId: string }) {
             </tr>
           </thead>
           <tbody>
-            {staff.map((s) => (
-              <tr key={s.id}>
-                <td>{s.name}</td>
-                <td>{s.role}</td>
-                <td>{s.email ?? '—'}</td>
-                <td>{s.active ? '在籍' : '停止'}</td>
-                <td>
-                  <button onClick={() => toggleActive(s)}>{s.active ? '停止' : '復帰'}</button>
-                </td>
-              </tr>
-            ))}
+            {staff.map((s) =>
+              editId === s.id ? (
+                <tr key={s.id}>
+                  <td>
+                    <input value={editName} onChange={(e) => setEditName(e.target.value)} aria-label="氏名" />
+                  </td>
+                  <td>
+                    <select value={editRole} onChange={(e) => setEditRole(e.target.value as StaffRole)} aria-label="ロール">
+                      <option value="trimmer">trimmer</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  </td>
+                  <td>{s.email ?? '—'}</td>
+                  <td>{s.active ? '在籍' : '停止'}</td>
+                  <td className="row-actions">
+                    <button onClick={() => saveEdit(s)} disabled={editBusy || !editName.trim()}>
+                      {editBusy ? '保存中…' : '保存'}
+                    </button>
+                    <button onClick={() => setEditId(null)} disabled={editBusy}>
+                      キャンセル
+                    </button>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={s.id}>
+                  <td>{s.name}</td>
+                  <td>{s.role}</td>
+                  <td>{s.email ?? '—'}</td>
+                  <td>{s.active ? '在籍' : '停止'}</td>
+                  <td className="row-actions">
+                    <button onClick={() => startEdit(s)}>編集</button>
+                    <button onClick={() => toggleActive(s)}>{s.active ? '停止' : '復帰'}</button>
+                  </td>
+                </tr>
+              ),
+            )}
             {staff.length === 0 && (
               <tr>
                 <td colSpan={5} className="muted">

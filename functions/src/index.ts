@@ -173,6 +173,49 @@ export const inviteStaff = onCall<{ tenantId: string; email: string; name: strin
   return { uid: user.uid, email, role, created };
 });
 
+/**
+ * スタッフの氏名・ロールを編集（在籍状態・メールは変更しない）。
+ * ロール変更時は custom claims も同期。superAdmin、または対象テナントの admin のみ。
+ * 自分自身を admin から外すロックアウトは防止。
+ */
+export const updateStaff = onCall<{ tenantId: string; targetUid: string; name: string; role: StaffRole }>(
+  async (request) => {
+    const caller = request.auth?.token;
+    const callerUid = request.auth?.uid;
+    const { tenantId, targetUid, name, role } = request.data;
+    if (!tenantId || !targetUid || !name?.trim() || (role !== 'admin' && role !== 'trimmer')) {
+      throw new HttpsError('invalid-argument', 'tenantId, targetUid, name, role(admin|trimmer) required');
+    }
+    const isSuper = caller?.superAdmin === true;
+    const isTenantAdmin = caller?.tenantId === tenantId && caller?.role === 'admin';
+    if (!isSuper && !isTenantAdmin) {
+      throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
+    }
+    if (callerUid === targetUid && role !== 'admin') {
+      throw new HttpsError('failed-precondition', 'cannot remove your own admin role');
+    }
+
+    const target = await auth.getUser(targetUid);
+    if (target.customClaims?.superAdmin === true) {
+      throw new HttpsError('failed-precondition', 'cannot modify a superAdmin');
+    }
+    const existingTenant = target.customClaims?.tenantId as string | undefined;
+    if (existingTenant && existingTenant !== tenantId) {
+      throw new HttpsError('failed-precondition', 'this staff belongs to another tenant');
+    }
+
+    await auth.setCustomUserClaims(targetUid, { tenantId, role });
+    await db
+      .collection('tenants')
+      .doc(tenantId)
+      .collection('staff')
+      .doc(targetUid)
+      .set({ name: name.trim(), role }, { merge: true });
+
+    return { targetUid, name: name.trim(), role };
+  },
+);
+
 // ===== 顧客向け（LIFF）: LINE トークン検証によるサーバ権威の予約フロー =====
 
 interface BusinessHours {

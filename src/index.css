@@ -536,6 +536,12 @@ td code {
 }
 
 /* ---------- forms ---------- */
+/* テーブル行の操作ボタン群（編集/停止 など） */
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 .row-form {
   display: flex;
   flex-wrap: wrap;

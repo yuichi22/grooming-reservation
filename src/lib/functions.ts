@@ -19,6 +19,12 @@ export const inviteStaff = httpsCallable<
   { uid: string; email: string; role: StaffRole; created: boolean }
 >(functions, 'inviteStaff');
 
+/** スタッフの氏名・ロールを編集（ロール変更時は custom claims も同期）。 */
+export const updateStaff = httpsCallable<
+  { tenantId: string; targetUid: string; name: string; role: StaffRole },
+  { targetUid: string; name: string; role: StaffRole }
+>(functions, 'updateStaff');
+
 export const completeBooking = httpsCallable<
   { tenantId: string; bookingId: string; finalDurationMin: number; finalPrice: number; notes?: string },
   { bookingId: string; status: 'done' }
