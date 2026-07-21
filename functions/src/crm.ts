@@ -46,19 +46,27 @@ export function crmWebhookUrl(): string | null {
   return process.env.CRM_WEBHOOK_URL || null;
 }
 
+/** CRM Webhook の共有シークレット（Bearer 認証用）。未設定なら null。 */
+export function crmWebhookSecret(): string | null {
+  return process.env.CRM_WEBHOOK_SECRET || null;
+}
+
 /**
  * Webhook へ POST 配信。冪等性のため Idempotency-Key に bookingId を入れる。
+ * 共有シークレットが設定されていれば Authorization: Bearer を付ける（CRM 側で認証）。
  * URL 未設定なら未配信(false)。
  */
 export async function deliverPointEvent(payload: PointEventPayload): Promise<boolean> {
   const url = crmWebhookUrl();
   if (!url) return false;
 
+  const secret = crmWebhookSecret();
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Idempotency-Key': payload.bookingId,
+      ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
     },
     body: JSON.stringify(payload),
   });
