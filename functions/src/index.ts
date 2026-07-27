@@ -1,6 +1,6 @@
 // Cloud Functions (M1): テナント発行とスタッフ権限付与。
 // 認証は custom claims に基づく (§2)。
-import { initializeApp } from 'firebase-admin/app';
+import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, type DocumentReference } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -16,7 +16,8 @@ import { buildCheckoutRequest, checkoutRequestId, deliverCheckoutRequest } from 
 import { buildConfirmationMessage, buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
 import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
 
-initializeApp();
+// provisioning.ts 側の自衛初期化と共存するためガード（ESMのimport評価順対策）
+if (!getApps().length) initializeApp();
 // 全関数を東京リージョンに（Firestore も asia-northeast1）。クライアント(日本)→関数、
 // 関数→Firestore の往復レイテンシを削減（旧 us-central1 では太平洋往復が積み重なっていた）。
 setGlobalOptions({ region: 'asia-northeast1' });
@@ -29,20 +30,7 @@ type StaffRole = 'admin' | 'trimmer';
 // prod のみ 1（.env.groomhaus-prod）、dev は default 0（無料）。
 const minInstancesParam = defineInt('MIN_INSTANCES', { default: 0 });
 
-const DEFAULT_SETTINGS = {
-  timezone: 'Asia/Tokyo',
-  businessHours: [{ start: '09:00', end: '19:00' }],
-  bufferMin: 10,
-  workTimeOptions: [50, 80, 110],
-  cancelDeadlineHours: 24, // §11 キャンセル締切（既定: 前日同時刻）
-};
-
-const EMPTY_LINE_CONFIG = {
-  providerId: '',
-  miniAppChannelId: '',
-  messagingApiChannelId: '',
-  liffId: '',
-};
+import { DEFAULT_SETTINGS, EMPTY_LINE_CONFIG } from './tenantDefaults.js';
 
 interface CreateTenantData {
   tenantId: string;
@@ -1703,3 +1691,6 @@ export const mergeCustomers = onCall<{ tenantId: string; sourceCustomerId: strin
     return { targetCustomerId, movedDogs: dogs.size, movedBookings: bookings.size, patch };
   },
 );
+
+// --- Core自動プロビジョニング（拠点でgroom有効化→テナント自動作成＋管理者招待） ---
+export { provisionTenantForSpace, provisionGroomAdmin } from './provisioning.js';
