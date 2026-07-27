@@ -11,7 +11,8 @@ import { defineInt } from 'firebase-functions/params';
 import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
 import { verifyLineAccessToken, pushLineMessage, isLineFriend } from './line.js';
 import { availability, freeIntervals, packDogs, toMinutes, toTimeStr, unionStarts } from './slots.js';
-import { buildPointEvent, deliverPointEvent, type PointEventStatus } from './crm.js';
+import { buildPointEvent, deliverPointEvent, crmWebhookSecret, type PointEventStatus } from './crm.js';
+import { buildCheckoutRequest, checkoutRequestId, deliverCheckoutRequest } from './posCheckout.js';
 import { buildConfirmationMessage, buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
 import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
 
@@ -1281,6 +1282,133 @@ export const completeBooking = onCall<{
   });
 
   return { bookingId, status: 'done' };
+});
+
+/**
+ * 完了済み予約の会計依頼伝票を同一拠点のPOS(mobile_order)へ送る（①会計連携）。
+ * 前提: tenant doc に coreTenantId/coreSpaceId（Core拠点への紐付け）が設定済み。
+ * 冪等: requestId=groom_{tenantId}_{bookingId}。POS側が再送をno-opにするため再送ボタンは安全。
+ * 結果は booking.posCheckout に記録（送信中フラグで連打も抑止）。
+ */
+export const sendCheckoutToPos = onCall<{ tenantId: string; bookingId: string }>(async (request) => {
+  const caller = request.auth?.token;
+  const { tenantId, bookingId } = request.data;
+  if (!tenantId || !bookingId) {
+    throw new HttpsError('invalid-argument', 'tenantId and bookingId required');
+  }
+  const isSuper = caller?.superAdmin === true;
+  const isStaff = caller?.tenantId === tenantId && (caller?.role === 'admin' || caller?.role === 'trimmer');
+  if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
+
+  const base = db.collection('tenants').doc(tenantId);
+  const bookingRef = base.collection('bookings').doc(bookingId);
+  const nowIso = new Date().toISOString();
+
+  // 送信中ガード＋前提検証（トランザクションで連打時の二重fetchを抑止）
+  const booking = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(bookingRef);
+    if (!snap.exists) throw new HttpsError('not-found', 'booking not found');
+    const b = snap.data() as {
+      status: string;
+      finalPrice?: number | null;
+      customerId: string;
+      dogId: string;
+      serviceId: string;
+      options?: { name: string }[];
+      posCheckout?: { status?: string; sentAt?: string | null } | null;
+    };
+    if (b.status !== 'done' || b.finalPrice == null) {
+      throw new HttpsError('failed-precondition', '完了(確定料金入力)後に送信できます');
+    }
+    const inFlight =
+      b.posCheckout?.status === 'sending' &&
+      b.posCheckout.sentAt != null &&
+      Date.now() - Date.parse(b.posCheckout.sentAt) < 60_000;
+    if (inFlight) throw new HttpsError('aborted', '送信処理中です');
+    tx.update(bookingRef, {
+      posCheckout: {
+        requestId: checkoutRequestId(tenantId, bookingId),
+        status: 'sending',
+        sentAt: nowIso,
+        storeId: null,
+        posStatus: null,
+        lastError: null,
+      },
+    });
+    return b;
+  });
+
+  const tenantSnap = await base.get();
+  const tenant = tenantSnap.data() ?? {};
+  const coreTenantId = (tenant.coreTenantId as string | undefined) ?? '';
+  const coreSpaceId = (tenant.coreSpaceId as string | undefined) ?? '';
+
+  const fail = async (error: string, toThrow: HttpsError): Promise<never> => {
+    await bookingRef.update({ 'posCheckout.status': 'failed', 'posCheckout.lastError': error });
+    throw toThrow;
+  };
+
+  if (!coreTenantId || !coreSpaceId) {
+    return fail(
+      'pos_not_linked',
+      new HttpsError('failed-precondition', 'POS未連携です（coreTenantId/coreSpaceId 未設定）'),
+    );
+  }
+
+  const [custSnap, dogSnap, serviceSnap] = await Promise.all([
+    base.collection('customers').doc(booking.customerId).get(),
+    base.collection('dogs').doc(booking.dogId).get(),
+    booking.serviceId ? base.collection('services').doc(booking.serviceId).get() : Promise.resolve(null),
+  ]);
+  const cust = custSnap.data() ?? {};
+  const optionNames = (booking.options ?? []).map((o) => o.name);
+  const serviceName =
+    (serviceSnap?.data()?.name as string | undefined) ??
+    (optionNames.length > 0 ? optionNames.join('・') : 'トリミング');
+
+  const payload = buildCheckoutRequest({
+    coreTenantId,
+    coreSpaceId,
+    groomTenantId: tenantId,
+    bookingId,
+    serviceName,
+    optionNames,
+    finalPrice: booking.finalPrice as number,
+    ownerName: (cust.ownerName as string | undefined) ?? 'お客',
+    dogName: (dogSnap.data()?.name as string | undefined) ?? '',
+    memberId: (cust.memberId ?? null) as string | null,
+    lineUserId: (cust.lineUserId ?? null) as string | null,
+  });
+
+  let result;
+  try {
+    result = await deliverCheckoutRequest(payload, crmWebhookSecret());
+  } catch (e) {
+    logger.warn('checkout request delivery failed', { tenantId, bookingId, error: String(e) });
+    return fail('delivery_error', new HttpsError('unavailable', 'POSへの送信に失敗しました。時間をおいて再送してください'));
+  }
+  if (!result.ok) {
+    logger.warn('checkout request rejected', { tenantId, bookingId, httpStatus: result.httpStatus, error: result.error });
+    if (result.error === 'space_not_linked') {
+      return fail(
+        'space_not_linked',
+        new HttpsError('failed-precondition', 'POS側に対応する店舗がありません（拠点未連携）'),
+      );
+    }
+    return fail(result.error ?? 'pos_error', new HttpsError('unavailable', 'POSが伝票を受け付けませんでした'));
+  }
+
+  await bookingRef.update({
+    posCheckout: {
+      requestId: payload.request.requestId,
+      status: 'sent',
+      sentAt: nowIso,
+      storeId: result.storeId,
+      posStatus: result.status,
+      lastError: null,
+    },
+  });
+  return { requestId: payload.request.requestId, storeId: result.storeId, posStatus: result.status };
 });
 
 /** イベントをアウトボックスに書き、可能なら配信して状態を更新する。 */

@@ -197,6 +197,19 @@ export interface ServiceRecord {
   notes?: string;
 }
 
+/** POS(mobile_order)への会計依頼伝票の送信記録（①会計連携）。booking.posCheckout */
+export interface PosCheckoutInfo {
+  /** groom側発番の冪等キー（POS側 checkoutRequests の doc ID） */
+  requestId: string;
+  status: 'sending' | 'sent' | 'failed';
+  sentAt?: IsoStr | null;
+  /** 逆引きされたPOS店舗 */
+  storeId?: string | null;
+  /** 送信時点のPOS側伝票状態（pending/claimed/paid など） */
+  posStatus?: string | null;
+  lastError?: string | null;
+}
+
 /** tenants/{tenantId}/bookings/{bookingId} (§5) */
 export interface Booking {
   id: string;
@@ -226,5 +239,7 @@ export interface Booking {
   confirmationSentAt?: IsoStr | null;
   /** キャンセル日時 (§11) */
   canceledAt?: IsoStr | null;
+  /** POSへの会計依頼伝票の送信記録（①会計連携）。未送信なら未設定 */
+  posCheckout?: PosCheckoutInfo | null;
   createdAt: IsoStr;
 }

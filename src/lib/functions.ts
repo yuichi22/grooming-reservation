@@ -36,6 +36,12 @@ export const completeBooking = httpsCallable<
   { bookingId: string; status: 'done' }
 >(functions, 'completeBooking');
 
+/** 完了済み予約の会計依頼伝票をPOS(mobile_order)へ送信（①会計連携）。再送は冪等。 */
+export const sendCheckoutToPos = httpsCallable<
+  { tenantId: string; bookingId: string },
+  { requestId: string; storeId: string | null; posStatus: string | null }
+>(functions, 'sendCheckoutToPos');
+
 export const createBookingByStaff = httpsCallable<
   {
     tenantId: string;

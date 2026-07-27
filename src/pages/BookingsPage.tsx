@@ -14,7 +14,7 @@ import {
   staffCol,
   tenantDoc,
 } from '../lib/firestore';
-import { completeBooking, createBookingByStaff } from '../lib/functions';
+import { completeBooking, createBookingByStaff, sendCheckoutToPos } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import type { Booking, Closure, Customer, Dog, Option, PriceEntry, Service, Staff, Tenant } from '../lib/types';
@@ -631,9 +631,12 @@ function ListView({
                     </div>
                   </>
                 ) : b.status === 'done' ? (
-                  <span className="muted">
-                    {b.finalDurationMin}分 / ¥{(b.finalPrice ?? 0).toLocaleString()}
-                  </span>
+                  <>
+                    <span className="muted">
+                      {b.finalDurationMin}分 / ¥{(b.finalPrice ?? 0).toLocaleString()}
+                    </span>
+                    <PosSendButton tenantId={tenantId} booking={b} />
+                  </>
                 ) : (
                   '—'
                 )}
@@ -649,6 +652,43 @@ function ListView({
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * 完了済み予約の「POSへ会計送信」ボタン（①会計連携）。
+ * 送信結果は booking.posCheckout に載って購読で反映されるが、
+ * 反映前の連打を防ぐためローカルでも送信済み表示に切り替える。再送は冪等で安全。
+ */
+function PosSendButton({ tenantId, booking }: { tenantId: string; booking: Booking }) {
+  const [busy, setBusy] = useState(false);
+  const [sentLocal, setSentLocal] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const sent = sentLocal || booking.posCheckout?.status === 'sent';
+  const paid = booking.posCheckout?.posStatus === 'paid';
+
+  async function onSend() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await sendCheckoutToPos({ tenantId, bookingId: booking.id });
+      setSentLocal(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'POSへの送信に失敗しました');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (paid) return <div className="row-form" style={{ margin: '4px 0 0' }}><span className="muted">POS会計済み ✓</span></div>;
+  return (
+    <div className="row-form" style={{ margin: '4px 0 0' }}>
+      <button type="button" onClick={onSend} disabled={busy}>
+        {busy ? '送信中…' : sent ? 'POSへ再送' : 'POSへ会計送信'}
+      </button>
+      {sent && !busy && <span className="muted">送信済 ✓</span>}
+      {err && <span className="error">{err}</span>}
     </div>
   );
 }
