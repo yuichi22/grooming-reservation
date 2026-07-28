@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { RequireAuth } from './auth/RequireAuth';
 import LoginPage from './auth/LoginPage';
+import RegisterPage from './auth/RegisterPage';
 import Layout from './components/Layout';
 import DashboardPage from './pages/DashboardPage';
 import BookingsPage from './pages/BookingsPage';
@@ -19,6 +20,7 @@ export default function StaffApp() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route
           element={
             <RequireAuth>
