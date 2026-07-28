@@ -129,6 +129,16 @@ export const provisionTenantForSpace = onRequest({ region: 'asia-northeast1', co
     // 管理者登録URL（POSと同じ「リンクを開いて本人がメール・パスワードを決める」方式）
     const inviteCode = randomBytes(16).toString('hex');
     const inviteUrl = buildAdminInviteUrl(groomTenantId, inviteCode);
+
+    // 共有LINE設定（platform/lineDefaults）を複製。未設定テナントはLINE通知が
+    // skipped になるため、既定で共有OAのトークン等を引き継ぐ（自前OA導入時に上書き可）。
+    const defaultsSnap = await db.doc('platform/lineDefaults').get();
+    const shared = defaultsSnap.exists ? defaultsSnap.data() ?? {} : {};
+    const lineDefaults: Record<string, string> = {};
+    for (const k of ['messagingChannelAccessToken', 'providerId', 'miniAppChannelId', 'messagingApiChannelId', 'liffId']) {
+      const v = str((shared as Record<string, unknown>)[k]);
+      if (v) lineDefaults[k] = v;
+    }
     await db.runTransaction(async (tx) => {
       const [linkSnap, tenantSnap] = await Promise.all([tx.get(linkRef), tx.get(tenantRef)]);
       if (linkSnap.exists) throw new Error('already-provisioned');
@@ -137,7 +147,7 @@ export const provisionTenantForSpace = onRequest({ region: 'asia-northeast1', co
         name: spaceName,
         plan: 'standard',
         status: 'active',
-        lineConfig: { ...EMPTY_LINE_CONFIG },
+        lineConfig: { ...EMPTY_LINE_CONFIG, ...lineDefaults },
         settings: { ...DEFAULT_SETTINGS },
         coreTenantId,
         coreSpaceId,
