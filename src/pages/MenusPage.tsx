@@ -336,7 +336,7 @@ function ServiceMaster({ tenantId, services }: { tenantId: string; services: Ser
   }
   return (
     <div style={{ marginTop: 18 }}>
-      <h2>サービスマスタ</h2>
+      <h2>サービス</h2>
       <form className="row-form" onSubmit={add}>
         <input placeholder="例: カット / シャンプー" value={name} onChange={(e) => setName(e.target.value)} />
         <button type="submit">サービスを追加</button>
@@ -435,7 +435,7 @@ function OptionMaster({ tenantId, optionItems }: { tenantId: string; optionItems
 
   return (
     <div style={{ marginTop: 18 }}>
-      <h2>オプションマスタ</h2>
+      <h2>オプション</h2>
       <p className="muted">
         サービスとは別に選べるオプション（料金・追加時間）。予約時はサービス＋オプションの合計時間で枠を確保します。
       </p>
@@ -566,7 +566,7 @@ function BreedMaster({ tenantId, breeds }: { tenantId: string; breeds: Breed[] }
 
   return (
     <div style={{ marginTop: 18 }}>
-      <h2>犬種マスタ</h2>
+      <h2>犬種</h2>
       <form className="row-form" onSubmit={add}>
         <input placeholder="例: トイプードル" value={name} onChange={(e) => setName(e.target.value)} />
         <button type="submit">犬種を追加</button>
