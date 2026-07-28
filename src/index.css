@@ -581,6 +581,8 @@ td code {
 .row-form select {
   flex: 1 1 160px;
   min-width: 0;
+  /* select と input の高さを厳密に揃える（native select の描画差を吸収） */
+  height: 40px;
 }
 .row-form button {
   flex: 0 0 auto;
