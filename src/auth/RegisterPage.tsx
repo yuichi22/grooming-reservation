@@ -54,8 +54,14 @@ export default function RegisterPage() {
       ) : (
         <form onSubmit={onSubmit}>
           <label>
-            お名前
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="氏名を入力" required />
+            管理者名
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="例）山田 太郎（店長・オーナー名でも可）"
+              required
+            />
           </label>
           <label>
             メールアドレス
