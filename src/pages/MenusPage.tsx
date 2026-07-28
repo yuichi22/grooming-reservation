@@ -569,7 +569,7 @@ function BreedMaster({ tenantId, breeds }: { tenantId: string; breeds: Breed[] }
       <h2>犬種マスタ</h2>
       <form className="row-form" onSubmit={add}>
         <input placeholder="例: トイプードル" value={name} onChange={(e) => setName(e.target.value)} />
-        <button type="submit">追加</button>
+        <button type="submit">犬種を追加</button>
       </form>
       <div className="table-wrap">
         <table>
