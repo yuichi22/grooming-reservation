@@ -665,6 +665,13 @@ function PosSendButton({ tenantId, booking }: { tenantId: string; booking: Booki
   const [busy, setBusy] = useState(false);
   const [sentLocal, setSentLocal] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // POS未連携テナント(coreTenantId/coreSpaceId無し)ではボタンを出さない。
+  // prodなど連携未設定の環境で「押すとエラー」になるのを防ぐ自己ガード。
+  const { data: tenant } = useDocument<Tenant & { coreTenantId?: string; coreSpaceId?: string }>(
+    tenantDoc(tenantId),
+    [tenantId],
+  );
+  const posLinked = Boolean(tenant?.coreTenantId && tenant?.coreSpaceId);
   const sent = sentLocal || booking.posCheckout?.status === 'sent';
   const paid = booking.posCheckout?.posStatus === 'paid';
 
@@ -681,6 +688,7 @@ function PosSendButton({ tenantId, booking }: { tenantId: string; booking: Booki
     }
   }
 
+  if (!posLinked) return null;
   if (paid) return <div className="row-form" style={{ margin: '4px 0 0' }}><span className="muted">POS会計済み ✓</span></div>;
   return (
     <div className="row-form" style={{ margin: '4px 0 0' }}>
