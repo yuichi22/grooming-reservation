@@ -1694,3 +1694,6 @@ export const mergeCustomers = onCall<{ tenantId: string; sourceCustomerId: strin
 
 // --- Core自動プロビジョニング（拠点でgroom有効化→テナント自動作成＋管理者招待） ---
 export { provisionTenantForSpace, provisionGroomAdmin, registerGroomAdmin } from './provisioning.js';
+
+// --- 公開URL（/{slug}）の入口解決 ---
+export { resolveSpaceSlug } from './slugEntry.js';
