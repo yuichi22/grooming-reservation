@@ -29,6 +29,32 @@ export async function initLiff(): Promise<void> {
   initialized = true;
 }
 
+/**
+ * ログインを強制しない初期化（Web集客のゲスト閲覧用）。戻り値 = ログイン済みか。
+ * 未ログインでも予約内容の検討まで進め、確定時に loginForBooking でLINEへ誘導する。
+ * 開発モードは常にログイン済み扱い（"dev:" トークンで動く）。
+ */
+export async function initLiffOptional(): Promise<boolean> {
+  if (isDevMode) {
+    initialized = true;
+    return true;
+  }
+  if (!initialized) {
+    await liff.init({ liffId: LIFF_ID! });
+    initialized = true;
+  }
+  return liff.isLoggedIn();
+}
+
+/**
+ * ゲストが予約確定に進むときのLINEログイン。認証後に元のURLへ戻る
+ * （呼び出し側が下書きを保存してから呼ぶこと。リダイレクトでページ状態は失われる）。
+ */
+export function loginForBooking(): void {
+  if (isDevMode) return;
+  liff.login({ redirectUri: window.location.href });
+}
+
 export async function getProfile(): Promise<LiffProfile> {
   if (isDevMode) {
     return { userId: DEV_USER_ID, displayName: '開発テスター' };

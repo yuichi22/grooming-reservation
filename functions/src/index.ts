@@ -717,30 +717,41 @@ export const createBooking = onCall<{
 // ===== 複数頭まとめ予約（カート）: 同じ担当が連続で施術する v1（連続ブロック） =====
 
 interface GroupItemInput {
-  dogId: string;
+  /** 登録済みの犬。ゲスト(未ログイン)下書きでは未指定 */
+  dogId?: string;
+  /** dogId 無しのときの犬種（ゲストの空き照会用。個別加算なしの標準時間で概算） */
+  breedId?: string | null;
+  /** 確定時に新規登録する犬（ゲスト予約のLINEログイン後確定で使用） */
+  newDog?: { name: string; breedId?: string | null };
   serviceId: string;
   optionIds?: string[];
 }
 interface ComputedGroupItem {
   dogId: string;
+  newDog?: { name: string; breedId: string | null };
   serviceId: string;
   optionIds: string[];
   durationMin: number;
   price: number | null;
   options: OptionSnapshot[];
 }
-/** カート各項目の所要時間・料金・オプションスナップショットを算出（getAvailability と同じ規則）。 */
+/**
+ * カート各項目の所要時間・料金・オプションスナップショットを算出（getAvailability と同じ規則）。
+ * dogId 無し（ゲスト）は犬種のみで算出する。新規犬には個別加算が無いため確定時と同値になる。
+ */
 async function computeGroupItems(tenantId: string, items: GroupItemInput[]): Promise<ComputedGroupItem[]> {
   return Promise.all(
     items.map(async (it) => {
       const dog = await loadDog(tenantId, it.dogId);
+      const breedId = dog ? (dog.breedId ?? null) : ((it.breedId ?? it.newDog?.breedId) || null);
       const opts = await loadSelectedOptions(tenantId, it.optionIds, dog?.optionAdjustments ?? {});
       // serviceId 空 = メニュー無し（単体オプション）予約。基準は 0、合計はオプションのみ。
       const base = it.serviceId
-        ? effectiveBase(dog, await loadPriceCell(tenantId, dog?.breedId ?? null, it.serviceId), it.serviceId)
+        ? effectiveBase(dog, await loadPriceCell(tenantId, breedId, it.serviceId), it.serviceId)
         : { durationMin: 0, price: 0 };
       return {
-        dogId: it.dogId,
+        dogId: it.dogId ?? '',
+        ...(it.newDog?.name?.trim() ? { newDog: { name: it.newDog.name.trim(), breedId: it.newDog.breedId || null } } : {}),
         serviceId: it.serviceId,
         optionIds: it.optionIds ?? [],
         durationMin: base.durationMin + opts.durationMin,
@@ -751,17 +762,20 @@ async function computeGroupItems(tenantId: string, items: GroupItemInput[]): Pro
   );
 }
 
-/** 複数頭の合計時間で空きを返す。指名ありはその担当、なしは全担当の和集合（1人が合計時間ぶん連続で空いている枠）。 */
+/**
+ * 複数頭の合計時間で空きを返す。指名ありはその担当、なしは全担当の和集合（1人が合計時間ぶん連続で空いている枠）。
+ * 認証不要: 返す内容は空き枠のみ（ユーザー非依存の公開情報）。Web集客のゲスト閲覧を
+ * LINEログイン前に通すため、トークンは検証しない（予約確定側は従来どおり検証する）。
+ */
 export const getGroupAvailability = onCall<{
   tenantId: string;
-  accessToken: string;
+  accessToken?: string;
   date: string;
   items: GroupItemInput[];
   staffId?: string;
 }>({ minInstances: minInstancesParam }, async (request) => {
-  const { tenantId, accessToken, date, items, staffId } = request.data;
+  const { tenantId, date, items, staffId } = request.data;
   if (!tenantId || !date || !items?.length) throw new HttpsError('invalid-argument', 'tenantId, date, items required');
-  await verifyLineAccessToken(accessToken); // 顧客認証ゲート
 
   const settings = await loadSettings(tenantId);
   const computed = await computeGroupItems(tenantId, items);
@@ -818,18 +832,20 @@ export const getGroupAvailability = onCall<{
   return { slots, finishByStart, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours };
 });
 
-/** 選択中の内容(items)が「入る日」を月範囲で返す。月カレンダーのグレーアウト判定に使う。 */
+/**
+ * 選択中の内容(items)が「入る日」を月範囲で返す。月カレンダーのグレーアウト判定に使う。
+ * 認証不要（getGroupAvailability と同じ理由。公開情報のみ）。
+ */
 export const getMonthAvailability = onCall<{
   tenantId: string;
-  accessToken: string;
+  accessToken?: string;
   items: GroupItemInput[];
   from: string; // YYYY-MM-DD
   to: string;
   staffId?: string;
 }>({ minInstances: minInstancesParam }, async (request) => {
-  const { tenantId, accessToken, items, from, to, staffId } = request.data;
+  const { tenantId, items, from, to, staffId } = request.data;
   if (!tenantId || !from || !to || !items?.length) throw new HttpsError('invalid-argument', 'tenantId, from, to, items required');
-  await verifyLineAccessToken(accessToken);
 
   const settings = await loadSettings(tenantId);
   const computed = await computeGroupItems(tenantId, items);
@@ -883,7 +899,11 @@ export const getMonthAvailability = onCall<{
   return { openDates };
 });
 
-/** 複数頭をまとめて確定。同じ担当が startTime から連続で施術し、頭数ぶんの予約を groupId で束ねて作成。 */
+/**
+ * 複数頭をまとめて確定。同じ担当が startTime から連続で施術し、頭数ぶんの予約を groupId で束ねて作成。
+ * items は登録済みの dogId か newDog（ゲスト予約でログイン後にまとめて確定）のどちらか。
+ * newDog は空き検証が通ってから登録する（枠が取れなかったのに犬だけ残るのを防ぐ）。
+ */
 export const createGroupBooking = onCall<{
   tenantId: string;
   accessToken: string;
@@ -896,6 +916,9 @@ export const createGroupBooking = onCall<{
   const { tenantId, accessToken, customerId, date, startTime, items, staffId } = request.data;
   if (!tenantId || !customerId || !date || !startTime || !items?.length) {
     throw new HttpsError('invalid-argument', 'missing required fields');
+  }
+  if (items.some((it) => !it.dogId && !it.newDog?.name?.trim())) {
+    throw new HttpsError('invalid-argument', 'each item requires dogId or newDog');
   }
   const { lineUserId, dev } = await verifyLineAccessToken(accessToken);
   await assertCustomerOwnership(tenantId, customerId, lineUserId);
@@ -946,6 +969,23 @@ export const createGroupBooking = onCall<{
     if (!packed) throw new HttpsError('failed-precondition', 'no staff available at this time');
   }
 
+  // ゲスト予約の新規犬を登録して dogId を確定（空き検証が通った後）。§7 初回は confirmedDurationMin=null。
+  const dogsRef = db.collection('tenants').doc(tenantId).collection('dogs');
+  const resolvedDogIds: string[] = [];
+  for (const c of computed) {
+    if (c.dogId) {
+      resolvedDogIds.push(c.dogId);
+    } else {
+      const ref = await dogsRef.add({
+        customerId,
+        name: c.newDog!.name,
+        breedId: c.newDog!.breedId,
+        confirmedDurationMin: null,
+      });
+      resolvedDogIds.push(ref.id);
+    }
+  }
+
   const bookingsRef = db.collection('tenants').doc(tenantId).collection('bookings');
   const groupId = bookingsRef.doc().id;
   const bookingIds: string[] = [];
@@ -955,7 +995,7 @@ export const createGroupBooking = onCall<{
     const bBuffer = isLast ? bufferMin : 0; // バッファは最後の頭にだけ付与
     const bStart = packed.starts[i];
     const ref = await bookingsRef.add({
-      dogId: c.dogId,
+      dogId: resolvedDogIds[i],
       customerId,
       serviceId: c.serviceId,
       optionIds: c.optionIds,
@@ -1063,8 +1103,11 @@ async function assertCustomerOwnership(tenantId: string, customerId: string, lin
   }
 }
 
-/** 予約画面の選択肢（サービス・犬種・指名候補スタッフ・自分の犬・料金表）。customerSession でも再利用。 */
-async function fetchBookingOptions(tenantId: string, customerId: string) {
+/**
+ * 予約画面の選択肢（サービス・犬種・指名候補スタッフ・自分の犬・料金表）。customerSession でも再利用。
+ * customerId が null のときは犬を除いたテナント公開カタログのみ（ゲスト閲覧用）。
+ */
+async function fetchBookingOptions(tenantId: string, customerId: string | null) {
   const base = db.collection('tenants').doc(tenantId);
   const [tenantSnap, servicesSnap, optionsSnap, breedsSnap, staffSnap, dogsSnap, pricingSnap] = await Promise.all([
     base.get(),
@@ -1072,7 +1115,7 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
     base.collection('options').where('active', '==', true).get(),
     base.collection('breeds').where('active', '==', true).get(),
     base.collection('staff').where('active', '==', true).get(),
-    base.collection('dogs').where('customerId', '==', customerId).get(),
+    customerId ? base.collection('dogs').where('customerId', '==', customerId).get() : Promise.resolve(null),
     base.collection('pricing').get(),
   ]);
   const tdata = tenantSnap.data() ?? {};
@@ -1093,7 +1136,7 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
     // 指名候補も管理者ロールは除外（予約枠に入れない）
     staff: staffSnap.docs.filter((d) => d.data().role !== 'admin').map((d) => ({ id: d.id, name: d.data().name })),
     // hiddenByCustomer の犬は選択リストから除外（履歴・カルテは保持＝ソフト削除）
-    dogs: dogsSnap.docs
+    dogs: (dogsSnap?.docs ?? [])
       .filter((d) => d.data().hiddenByCustomer !== true)
       .map((d) => ({
         id: d.id,
@@ -1115,6 +1158,21 @@ async function fetchBookingOptions(tenantId: string, customerId: string) {
   };
 }
 
+/**
+ * ゲスト（LINEログイン前）向けの公開予約カタログ。Web集客導線で予約内容の検討まで
+ * ログイン無しで進めるために使う。返すのは店舗の公開情報のみ（犬・顧客情報は含まない）。
+ */
+export const getPublicBookingOptions = onCall<{ tenantId: string }>(
+  { minInstances: minInstancesParam },
+  async (request) => {
+    const { tenantId } = request.data;
+    if (!tenantId) throw new HttpsError('invalid-argument', 'tenantId required');
+    const tSnap = await db.collection('tenants').doc(tenantId).get();
+    if (!tSnap.exists) throw new HttpsError('not-found', 'tenant not found');
+    return fetchBookingOptions(tenantId, null);
+  },
+);
+
 /** 予約画面の選択肢を取得（犬の登録後などの再取得用）。 */
 export const getBookingOptions = onCall<{ tenantId: string; accessToken: string; customerId: string }>(
   async (request) => {
@@ -1126,12 +1184,14 @@ export const getBookingOptions = onCall<{ tenantId: string; accessToken: string;
   },
 );
 
-/** 休業日の一覧（顧客カレンダー表示用）。指定範囲 [from, to] の終日休業の日付を返す。 */
-export const getClosedDates = onCall<{ tenantId: string; accessToken: string; from: string; to: string }>(
+/**
+ * 休業日の一覧（顧客カレンダー表示用）。指定範囲 [from, to] の終日休業の日付を返す。
+ * 認証不要（ゲスト閲覧可。休業日はユーザー非依存の公開情報）。
+ */
+export const getClosedDates = onCall<{ tenantId: string; accessToken?: string; from: string; to: string }>(
   async (request) => {
-    const { tenantId, accessToken, from, to } = request.data;
+    const { tenantId, from, to } = request.data;
     if (!tenantId || !from || !to) throw new HttpsError('invalid-argument', 'tenantId, from, to required');
-    await verifyLineAccessToken(accessToken); // 顧客認証ゲート
     const snap = await db.collection('tenants').doc(tenantId).collection('closures').get();
     const dates = snap.docs
       .filter((d) => d.id >= from && d.id <= to && d.data()?.fullDay !== false)

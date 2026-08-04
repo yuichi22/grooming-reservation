@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronRight, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { ADD_FRIEND_URL, closeLiff, getAccessToken, getProfile, initLiff, isDevMode, openAddFriend } from './liff';
+import { ADD_FRIEND_URL, closeLiff, getAccessToken, getProfile, initLiff, initLiffOptional, isDevMode, loginForBooking, openAddFriend } from './liff';
 import {
   createGroupBooking,
   customerSession,
@@ -10,10 +10,12 @@ import {
   getGroupAvailability,
   getMonthAvailability,
   getMyTenants,
+  getPublicBookingOptions,
   hideDog,
   registerDog,
   removeMyTenant,
   type BookingOptions,
+  type GroupItem,
   type MyTenant,
 } from './customerApi';
 
@@ -40,6 +42,57 @@ interface Draft {
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const rid = () => Math.random().toString(36).slice(2, 10);
+
+/** ゲスト（LINEログイン前）がその場で入力した犬。確定時に newDog としてサーバ登録される */
+interface GuestDog {
+  id: string; // 'guest:' プレフィックス付きのローカルID
+  name: string;
+  breedId: string | null;
+}
+const isGuestDogId = (id: string) => id.startsWith('guest:');
+
+/**
+ * ゲスト予約の下書き（LINEログインのリダイレクトをまたいで復元するための永続化）。
+ * ログイン往復・友だち追加・電話番号登録を挟んでも選択内容を失わない。
+ */
+interface GuestDraft {
+  tenantId: string;
+  guestDogs: GuestDog[];
+  cart: CartItem[];
+  staffId: string;
+  date: string;
+  slot: string | null;
+  savedAt: number;
+}
+const GUEST_DRAFT_KEY = 'groomGuestBookingDraft';
+const GUEST_DRAFT_TTL_MS = 2 * 60 * 60 * 1000; // 2時間
+
+function saveGuestDraft(draft: GuestDraft): void {
+  try {
+    localStorage.setItem(GUEST_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    /* プライベートブラウズ等で保存できなくても続行（復元できないだけ） */
+  }
+}
+function loadGuestDraft(tenantId: string): GuestDraft | null {
+  try {
+    const raw = localStorage.getItem(GUEST_DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as GuestDraft;
+    if (d.tenantId !== tenantId || !Array.isArray(d.cart) || d.cart.length === 0) return null;
+    if (Date.now() - (d.savedAt ?? 0) > GUEST_DRAFT_TTL_MS) return null;
+    return d;
+  } catch {
+    return null;
+  }
+}
+function clearGuestDraft(): void {
+  try {
+    localStorage.removeItem(GUEST_DRAFT_KEY);
+  } catch {
+    /* noop */
+  }
+}
 
 function fmt(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -69,6 +122,11 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   const [customerId, setCustomerId] = useState('');
   const [options, setOptions] = useState<BookingOptions | null>(null);
   const [storeInfo, setStoreInfo] = useState<{ name: string; logoUrl: string | null } | null>(null);
+
+  // ゲストモード（Web集客導線）: LINE未ログインのまま閲覧〜内容決定まで進め、確定時にログインへ誘導。
+  // ?guest=1 は開発モードでゲスト動線を試すための強制フラグ。
+  const [guest, setGuest] = useState(false);
+  const [guestDogs, setGuestDogs] = useState<GuestDog[]>([]);
 
   // 予約カート（複数頭）＋ 共通の指名
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -113,10 +171,40 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     setOptions(res.data);
   }
 
+  // LINEログイン往復（＋友だち追加・電話番号登録）後にゲスト下書きを復元する。
+  // 下書きは予約成功まで消さない（途中離脱しても再開できる）。
+  function resumeGuestDraft() {
+    const saved = loadGuestDraft(tenantId);
+    if (!saved) return;
+    setGuestDogs(saved.guestDogs ?? []);
+    setCart(saved.cart);
+    setStaffId(saved.staffId ?? '');
+    setDate(saved.date);
+    if (saved.slot) setConfirmSlot(saved.slot);
+  }
+
   async function boot() {
     setPhase('init');
     try {
-      await initLiff();
+      const forceGuest = new URLSearchParams(window.location.search).get('guest') === '1';
+      const loggedIn = forceGuest ? false : await initLiffOptional();
+      if (!loggedIn) {
+        // ゲストモード: 公開カタログだけで予約内容の検討まで進める（LINE登録は確定時）
+        const res = await getPublicBookingOptions({ tenantId });
+        setOptions({ ...res.data, dogs: [] });
+        setStoreInfo(res.data.store);
+        setGuest(true);
+        const saved = loadGuestDraft(tenantId);
+        if (saved) {
+          setGuestDogs(saved.guestDogs ?? []);
+          setCart(saved.cart);
+          setStaffId(saved.staffId ?? '');
+          setDate(saved.date);
+        }
+        setPhase('ready');
+        return;
+      }
+      setGuest(false);
       await getProfile();
       // A方式: 友だち必須化はサーバ判定を正とする（クライアントの getFriendship は
       // チャネル-OAリンク状況で友だちでも false を返すことがあり誤ブロックの原因になる）。
@@ -130,6 +218,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         if (res.data.options) setOptions(res.data.options);
         else await loadOptions(res.data.customerId);
         setPhase('ready');
+        resumeGuestDraft();
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
@@ -148,6 +237,25 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // カート項目をAPIのitemsへ変換。ゲスト入力の犬は breedId のみ（dogIdは未登録）で照会する。
+  const toAvailabilityItems = (list: CartItem[]): GroupItem[] =>
+    list.map((c) => {
+      const g = guestDogs.find((x) => x.id === c.dogId);
+      return g
+        ? { breedId: g.breedId, serviceId: c.serviceId, optionIds: c.optionIds }
+        : { dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds };
+    });
+  // 確定用: ゲスト入力の犬は newDog としてサーバ登録してもらう。
+  const toBookingItems = (list: CartItem[]): GroupItem[] =>
+    list.map((c) => {
+      const g = guestDogs.find((x) => x.id === c.dogId);
+      return g
+        ? { newDog: { name: g.name, breedId: g.breedId }, serviceId: c.serviceId, optionIds: c.optionIds }
+        : { dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds };
+    });
+  // ゲストはLINEトークンが無い（空き系APIは認証不要になっている）
+  const authToken = () => (guest ? {} : { accessToken: getAccessToken() });
+
   // カート（合計時間）の空き状況を自動取得
   const cartKey = cart.map((c) => `${c.dogId}:${c.serviceId}:${c.optionIds.join('|')}`).join(',');
   useEffect(() => {
@@ -161,9 +269,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       try {
         const res = await getGroupAvailability({
           tenantId,
-          accessToken: getAccessToken(),
+          ...authToken(),
           date,
-          items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
+          items: toAvailabilityItems(cart),
           staffId: staffId || undefined,
         });
         if (cancelled) return;
@@ -193,7 +301,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await getClosedDates({ tenantId, accessToken: getAccessToken(), from: fmt(gs), to: fmt(ge) });
+        const res = await getClosedDates({ tenantId, ...authToken(), from: fmt(gs), to: fmt(ge) });
         if (!cancelled) setClosedMonth(new Set(res.data.dates));
       } catch {
         /* 表示用なので失敗は無視 */
@@ -228,8 +336,8 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       try {
         const res = await getMonthAvailability({
           tenantId,
-          accessToken: getAccessToken(),
-          items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
+          ...authToken(),
+          items: toAvailabilityItems(cart),
           from,
           to,
           staffId: staff,
@@ -246,8 +354,8 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       try {
         const resMin = await getMonthAvailability({
           tenantId,
-          accessToken: getAccessToken(),
-          items: minItems.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
+          ...authToken(),
+          items: toAvailabilityItems(minItems),
           from,
           to,
           staffId: staff,
@@ -279,18 +387,27 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       if (res.data.options) setOptions(res.data.options);
       else await loadOptions(res.data.customerId);
       setPhase('ready');
+      resumeGuestDraft();
     } catch (e) {
       setError(e instanceof Error ? e.message : '登録に失敗しました');
     }
   }
 
   // 下書きモーダル内でワンちゃんを新規登録 → その子を選択
+  // ゲストはローカル保持のみ（サーバ登録は予約確定＝LINEログイン後に newDog でまとめて行う）
   async function addDogToDraft(e: FormEvent) {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const name = (form.elements.namedItem('dogName') as HTMLInputElement).value.trim();
     const breedId = (form.elements.namedItem('breedId') as HTMLSelectElement).value;
     if (!name) return;
+    if (guest) {
+      const id = `guest:${rid()}`;
+      setGuestDogs((prev) => [...prev, { id, name, breedId: breedId || null }]);
+      setDraft((dr) => (dr ? { ...dr, dogId: id } : dr));
+      form.reset();
+      return;
+    }
     const res = await registerDog({ tenantId, accessToken: getAccessToken(), customerId, name, breedId: breedId || undefined });
     await loadOptions(customerId);
     setDraft((dr) => (dr ? { ...dr, dogId: res.data.dogId } : dr));
@@ -298,8 +415,17 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   }
 
   // ワンちゃんをリストから外す（履歴・カルテはサロンに保持＝ソフト削除）
+  // ゲスト入力の犬はローカル削除のみ。
   async function confirmRemoveDog() {
     if (!removeDog || removing) return;
+    if (isGuestDogId(removeDog.id)) {
+      const id = removeDog.id;
+      setGuestDogs((prev) => prev.filter((g) => g.id !== id));
+      setCart((prev) => prev.filter((c) => c.dogId !== id));
+      setDraft((dr) => (dr && dr.dogId === id ? { ...dr, dogId: '', serviceId: '', optionIds: [] } : dr));
+      setRemoveDog(null);
+      return;
+    }
     setRemoving(true);
     setRemoveError(null);
     try {
@@ -322,7 +448,20 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   }
 
   // ---- 表示ヘルパ ----
-  const dogById = (id: string) => options?.dogs.find((d) => d.id === id);
+  // ゲスト入力の犬（未登録・ローカル保持）も登録済みと同じ形で引けるようにする（個別加算なし）
+  const guestDogEntry = (g: GuestDog) => ({
+    id: g.id,
+    name: g.name,
+    breedId: g.breedId,
+    serviceAdjustments: {} as Record<string, number>,
+    optionAdjustments: {} as Record<string, number>,
+  });
+  const dogById = (id: string) => {
+    const registered = options?.dogs.find((d) => d.id === id);
+    if (registered) return registered;
+    const g = guestDogs.find((x) => x.id === id);
+    return g ? guestDogEntry(g) : undefined;
+  };
   const breedName = (id: string | null | undefined) => options?.breeds.find((b) => b.id === id)?.name;
   const serviceName = (id: string) => options?.services.find((s) => s.id === id)?.name;
   const optionName = (id: string) => options?.options.find((o) => o.id === id)?.name;
@@ -462,9 +601,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       try {
         const res = await getGroupAvailability({
           tenantId,
-          accessToken: getAccessToken(),
+          ...authToken(),
           date,
-          items: cand.cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
+          items: toAvailabilityItems(cand.cart),
           staffId: staffId || undefined,
         });
         if (!res.data.closed && res.data.slots.length > 0) {
@@ -513,7 +652,24 @@ function BookingPage({ tenantId }: { tenantId: string }) {
 
   async function confirm() {
     if (!confirmSlot || cart.length === 0 || submitting) return;
+
+    // ゲストはここでLINEログインへ（Web集客導線: LINE登録は最後）。
+    // リダイレクトで状態が消えるため下書きを保存してから遷移し、戻り後に復元して確定する。
+    if (guest) {
+      saveGuestDraft({ tenantId, guestDogs, cart, staffId, date, slot: confirmSlot, savedAt: Date.now() });
+      if (isDevMode) {
+        // 開発モード: ?guest=1 を外してリロード＝「ログインして戻ってきた」を再現
+        const url = new URL(window.location.href);
+        url.searchParams.delete('guest');
+        window.location.href = url.toString();
+        return;
+      }
+      loginForBooking();
+      return;
+    }
+
     setSubmitting(true);
+    setError(null);
     try {
       const res = await createGroupBooking({
         tenantId,
@@ -521,13 +677,19 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         customerId,
         date,
         startTime: confirmSlot,
-        items: cart.map((c) => ({ dogId: c.dogId, serviceId: c.serviceId, optionIds: c.optionIds })),
+        items: toBookingItems(cart),
         staffId: staffId || undefined,
       });
+      clearGuestDraft();
       setConfirmation({ startTime: confirmSlot, slotEnd: res.data.slotEnd });
       setPhase('done');
     } catch (e) {
-      setError(e instanceof Error ? e.message : '予約に失敗しました');
+      const msg = e instanceof Error ? e.message : '';
+      setError(
+        /not available|no staff available/.test(msg)
+          ? 'この時間は埋まってしまいました。別の時間を選び直してください。'
+          : msg || '予約に失敗しました',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -540,6 +702,11 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     setConfirmSlot(null);
     setStaffId('');
     setDate(todayStr());
+    // ゲスト入力の犬は予約確定でサーバ登録済み。ローカル分は破棄し、登録済みリストを取り直す
+    if (guestDogs.length > 0) {
+      setGuestDogs([]);
+      if (customerId) void loadOptions(customerId);
+    }
     setPhase('ready');
   }
 
@@ -632,7 +799,10 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     );
   }
 
-  const dogs = (options?.dogs ?? []).filter((d, i, a) => a.findIndex((x) => x.id === d.id) === i);
+  // 登録済み＋ゲスト入力（ローカル）の犬。ゲストモードでは登録済みは常に空
+  const dogs = [...(options?.dogs ?? []), ...guestDogs.map(guestDogEntry)].filter(
+    (d, i, a) => a.findIndex((x) => x.id === d.id) === i,
+  );
   const services = options?.services ?? [];
   const staffList = options?.staff ?? [];
   const allOptions = options?.options ?? [];
@@ -654,7 +824,12 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   return (
     <div className="liff-shell">
       <StoreLogo store={options?.store ?? storeInfo} />
-      {isDevMode && <p className="muted" style={{ textAlign: 'center' }}>（開発モード: モックの LINE ユーザ）</p>}
+      {isDevMode && <p className="muted" style={{ textAlign: 'center' }}>（開発モード: モックの LINE ユーザ{guest ? '・ゲスト' : ''}）</p>}
+      {guest && (
+        <p className="muted" style={{ textAlign: 'center', margin: '0 0 8px' }}>
+          ご予約内容の確認まで、そのままお進みいただけます（LINEログインは最後です）
+        </p>
+      )}
 
       {/* 予約開始（主CTA）。2頭目以降は「ワンちゃんを追加」 */}
       <div className="book-quick">
@@ -1119,12 +1294,18 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           <div className="book-summary">
             合計 {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
           </div>
+          {guest && (
+            <p className="muted" style={{ marginTop: 8 }}>
+              予約の確定にはLINEログインと公式アカウントの友だち追加が必要です。ログイン後、この内容のまま確定できます。
+            </p>
+          )}
+          {error && <p className="error">{error}</p>}
           <div className="modal-actions">
-            <button type="button" onClick={() => setConfirmSlot(null)}>
+            <button type="button" onClick={() => { setConfirmSlot(null); setError(null); }}>
               戻る
             </button>
             <button type="button" className="primary" disabled={submitting} onClick={confirm}>
-              {submitting ? '送信中…' : '予約する'}
+              {submitting ? '送信中…' : guest ? 'LINEで予約を確定する' : '予約する'}
             </button>
           </div>
         </Modal>
@@ -1169,7 +1350,11 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       {removeDog && (
         <Modal title="リストから外す" onClose={() => !removing && setRemoveDog(null)}>
           <p>「{removeDog.name}」をリストから外しますか？</p>
-          <p className="muted">過去のご予約・カルテはサロンに残り、選択リストに表示されなくなるだけです。元に戻したいときはサロンへご連絡ください。</p>
+          {isGuestDogId(removeDog.id) ? (
+            <p className="muted">入力した内容を取り消します（まだサロンには登録されていません）。</p>
+          ) : (
+            <p className="muted">過去のご予約・カルテはサロンに残り、選択リストに表示されなくなるだけです。元に戻したいときはサロンへご連絡ください。</p>
+          )}
           {removeError && <p className="error">{removeError}</p>}
           <div className="modal-actions">
             <button type="button" onClick={() => setRemoveDog(null)} disabled={removing}>

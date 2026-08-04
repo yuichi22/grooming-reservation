@@ -66,8 +66,14 @@ export const getBookingOptions = httpsCallable<
   BookingOptions
 >(functions, 'getBookingOptions');
 
+/** ゲスト（LINEログイン前）向けの公開予約カタログ。dogs は含まれない。 */
+export const getPublicBookingOptions = httpsCallable<
+  { tenantId: string },
+  Omit<BookingOptions, 'dogs'>
+>(functions, 'getPublicBookingOptions');
+
 export const getClosedDates = httpsCallable<
-  { tenantId: string; accessToken: string; from: string; to: string },
+  { tenantId: string; accessToken?: string; from: string; to: string },
   { dates: string[] }
 >(functions, 'getClosedDates');
 
@@ -102,15 +108,21 @@ export const getAvailability = httpsCallable<
   }
 >(functions, 'getAvailability');
 
-/** カート（複数頭まとめ予約）の1項目 = 犬×メニュー×オプション */
+/**
+ * カート（複数頭まとめ予約）の1項目 = 犬×メニュー×オプション。
+ * dogId は登録済みの犬。ゲスト（未ログイン）の空き照会は breedId のみ、
+ * ログイン後の確定は newDog（サーバ側で登録して予約に紐付け）を使う。
+ */
 export interface GroupItem {
-  dogId: string;
+  dogId?: string;
+  breedId?: string | null;
+  newDog?: { name: string; breedId?: string | null };
   serviceId: string;
   optionIds?: string[];
 }
 
 export const getGroupAvailability = httpsCallable<
-  { tenantId: string; accessToken: string; date: string; items: GroupItem[]; staffId?: string },
+  { tenantId: string; accessToken?: string; date: string; items: GroupItem[]; staffId?: string },
   {
     slots: string[];
     /** 開始時刻(HH:MM) → 施術終了時刻(HH:MM)。複数頭は自動分割のため終了は開始ごとに異なる */
@@ -124,7 +136,7 @@ export const getGroupAvailability = httpsCallable<
 >(functions, 'getGroupAvailability');
 
 export const getMonthAvailability = httpsCallable<
-  { tenantId: string; accessToken: string; items: GroupItem[]; from: string; to: string; staffId?: string },
+  { tenantId: string; accessToken?: string; items: GroupItem[]; from: string; to: string; staffId?: string },
   { openDates: string[] }
 >(functions, 'getMonthAvailability');
 
