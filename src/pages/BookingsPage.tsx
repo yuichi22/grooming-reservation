@@ -900,15 +900,18 @@ function BookingDetailModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        {/* 1. 予約の取り消し系（先頭・予約中のみ） */}
-        {booking.status === 'reserved' && (
-          <div className="row-form" style={{ margin: '0 0 8px' }}>
-            <button onClick={() => setStatus(tenantId, booking.id, 'canceled')}>キャンセル</button>
-            <button onClick={() => setStatus(tenantId, booking.id, 'noshow')}>無断欠席</button>
-          </div>
-        )}
+        {/* 1. 犬種・名前＋カルテ導線（先頭。閉じると誤認しやすいボタンは置かない） */}
+        <p style={{ margin: '0 0 2px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <strong>
+            {breedLabel ? `${breedLabel}　` : ''}
+            {dog?.name ?? 'ワンちゃん'}
+          </strong>
+          <button type="button" className="link-btn" onClick={() => navigate(`/karte/${booking.dogId}`)}>
+            カルテを見る
+          </button>
+        </p>
 
-        {/* 2-3. 日時・状態 / メニュー・担当 */}
+        {/* 2. 日時・状態 / 予約メニュー・担当 */}
         <p style={{ margin: '0 0 2px' }}>
           <strong>
             {formatDateJa(booking.date)} {booking.startTime}〜{booking.slotEnd}
@@ -922,21 +925,18 @@ function BookingDetailModal({
           )}
         </p>
         <p className="muted" style={{ margin: '0 0 6px' }}>
-          メニュー: {menu} ／ 担当: {booking.staffId ? staffName.get(booking.staffId) ?? booking.staffId : '未割当'}
+          予約メニュー: {menu} ／ 担当: {booking.staffId ? staffName.get(booking.staffId) ?? booking.staffId : '未割当'}
         </p>
 
-        {/* 4. 犬種・名前＋カルテ導線 */}
-        <p style={{ margin: '0 0 2px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <strong>
-            {breedLabel ? `${breedLabel}　` : ''}
-            {dog?.name ?? 'ワンちゃん'}
-          </strong>
-          <button type="button" className="link-btn" onClick={() => navigate(`/karte/${booking.dogId}`)}>
-            カルテを見る
-          </button>
-        </p>
+        {/* 3. 予約の取り消し系（予約情報の直下。ラベルも「予約キャンセル」で明示） */}
+        {booking.status === 'reserved' && (
+          <div className="row-form" style={{ margin: '0 0 8px' }}>
+            <button onClick={() => setStatus(tenantId, booking.id, 'canceled')}>予約キャンセル</button>
+            <button onClick={() => setStatus(tenantId, booking.id, 'noshow')}>無断欠席</button>
+          </div>
+        )}
 
-        {/* 5-6. 飼い主・連絡手段 */}
+        {/* 4. 飼い主・連絡手段 */}
         {customer && (
           <>
             <p className="muted" style={{ margin: 0 }}>
