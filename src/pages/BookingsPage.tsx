@@ -101,18 +101,34 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
     query(shiftsCol(tenantId), where(documentId(), '>=', rangeStart), where(documentId(), '<=', rangeEnd)),
     [tenantId, rangeStart, rangeEnd],
   );
+  const bookableIds = useMemo(
+    () => calStaff.filter((x) => x.active && x.role !== 'admin').map((x) => x.id),
+    [calStaff],
+  );
   const autoClosedDates = useMemo(() => {
     const s = calTenant?.settings;
     if ((s?.autoCloseWhenAllOff ?? true) === false) return new Set<string>();
     const bh = s?.businessHours && s.businessHours.length > 0 ? s.businessHours : [{ start: '09:00', end: '19:00' }];
-    const ids = calStaff.filter((x) => x.active && x.role !== 'admin').map((x) => x.id);
-    if (ids.length === 0) return new Set<string>();
+    if (bookableIds.length === 0) return new Set<string>();
     const out = new Set<string>();
     for (const sd of calShiftDays) {
-      if (ids.every((sid) => staffHoursFor(sd.staff, sid, bh).length === 0)) out.add(sd.id);
+      if (bookableIds.every((sid) => staffHoursFor(sd.staff, sid, bh).length === 0)) out.add(sd.id);
     }
     return out;
-  }, [calTenant, calStaff, calShiftDays]);
+  }, [calTenant, bookableIds, calShiftDays]);
+  // シフトが誰も決まっていない日は「未定」バッジ（未定ゲートON時・今日以降。顧客アプリと同じ見え方）
+  const undecidedDates = useMemo(() => {
+    if (!(calTenant?.settings?.requireShiftForBooking ?? false) || bookableIds.length === 0) return new Set<string>();
+    const byDate = new Map(calShiftDays.map((s) => [s.id, s]));
+    const out = new Set<string>();
+    for (const d of gridDays) {
+      const ds = fmt(d);
+      if (ds < today) continue;
+      const sd = byDate.get(ds);
+      if (!bookableIds.some((sid) => !!sd?.staff?.[sid])) out.add(ds);
+    }
+    return out;
+  }, [calTenant, bookableIds, calShiftDays, gridDays, today]);
 
   function goMonth(delta: number) {
     setView((v) => {
@@ -205,6 +221,10 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
                     </span>
                   ) : count > 0 ? (
                     <span className="cal-badge count">{count}件</span>
+                  ) : undecidedDates.has(ds) ? (
+                    <span className="cal-badge undecided" title="シフトが未設定（未定ゲートONのため受付停止中）">
+                      未定
+                    </span>
                   ) : null}
                 </button>
               );
@@ -229,13 +249,20 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
             ›
           </button>
         </div>
-        <button
-          type="button"
-          className={`closeday-btn${selectedClosed ? ' btn-closed' : ''}`}
-          onClick={toggleClosure}
-        >
-          {selectedClosed ? '休業日を解除' : '休業日にする'}
-        </button>
+        {!selectedClosed && autoClosedDates.has(selected) ? (
+          // シフト由来の休業（全員終日休み）。手動休業とは別物なのでボタンではなく状態表示
+          <span className="closeday-btn allday-off" title="スタッフ全員が終日休みのため休業表示中。シフトで出勤に戻すと解除されます">
+            全員休み
+          </span>
+        ) : (
+          <button
+            type="button"
+            className={`closeday-btn${selectedClosed ? ' btn-closed' : ''}`}
+            onClick={toggleClosure}
+          >
+            {selectedClosed ? '休業日を解除' : '休業日にする'}
+          </button>
+        )}
       </div>
     </section>
   );

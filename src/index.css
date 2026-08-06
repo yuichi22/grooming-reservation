@@ -1177,6 +1177,15 @@ tr.row-link td.chevron-cell {
   padding: 4px 10px;
   white-space: nowrap;
 }
+/* シフト由来の全員休み表示（ボタンではなく状態ラベル） */
+.day-nav-fixed .allday-off {
+  display: inline-flex;
+  align-items: center;
+  background: #eceae6;
+  color: #6d675e;
+  font-weight: 800;
+  border-radius: 8px;
+}
 
 /* 予約詳細モーダル（管理側）。名前を大きく・✕は右上・行間にゆとり */
 .bdm-head {
