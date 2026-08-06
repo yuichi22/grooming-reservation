@@ -286,8 +286,13 @@ label.inline > select {
 .nav-toggle {
   order: 0;
   position: absolute;
-  left: 12px;
-  bottom: 8px; /* ログインID（メール）の行あたりに配置 */
+  left: 10px;
+  bottom: 6px; /* ログインID（メール）の行あたりに配置 */
+  /* モバイルはボタン4つと重ならないよう小さめに（デスクトップは下で42pxに戻す） */
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 11px;
 }
 .header-center {
   order: 1;
@@ -314,6 +319,10 @@ label.inline > select {
   .nav-toggle {
     position: static;
     transform: none;
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    border-radius: 16px;
   }
   .header-quick {
     order: 1;
