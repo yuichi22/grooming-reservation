@@ -10,6 +10,7 @@ import {
   dogsCol,
   optionsCol,
   pricingCol,
+  recordsCol,
   servicesCol,
   shiftDoc,
   shiftsCol,
@@ -20,7 +21,7 @@ import { completeBooking, createBookingByStaff, sendCheckoutToPos } from '../lib
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import { isWithinHours, staffHoursFor, subtractIntervals } from '../lib/shifts';
-import type { Booking, Closure, Customer, Dog, Option, PriceEntry, Service, ShiftDayDoc, Staff, Tenant } from '../lib/types';
+import type { Booking, Closure, Customer, Dog, Option, PriceEntry, Service, ServiceRecord, ShiftDayDoc, Staff, Tenant } from '../lib/types';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const PX_PER_MIN = 1; // 時間軸の縮尺
@@ -266,6 +267,8 @@ function DaySection({
   );
 
   const [createInfo, setCreateInfo] = useState<{ start: string; staffId: string } | null>(null);
+  // 予約詳細モーダル（リスト行の操作＋カルテを合体）。購読中の bookings から常に最新を引く
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const businessHours =
     tenant?.settings?.businessHours && tenant.settings.businessHours.length > 0
@@ -284,6 +287,7 @@ function DaySection({
     subtractIntervals(businessHours, staffHoursFor(shiftDay?.staff, staffId, businessHours));
 
   const sorted = [...bookings].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const detailBooking = detailId ? sorted.find((b) => b.id === detailId) ?? null : null;
 
   return (
     <>
@@ -301,6 +305,7 @@ function DaySection({
             offShift={offShift}
             offIntervalsFor={offIntervalsFor}
             onCreateAt={(start, staffId) => setCreateInfo({ start, staffId })}
+            onOpen={(b) => setDetailId(b.id)}
           />
           {!closed && <p className="tg-hint">空き時間をクリックすると予約を作成できます。</p>}
         </>
@@ -312,6 +317,20 @@ function DaySection({
           staffName={staffName}
           serviceName={serviceName}
           offShift={offShift}
+          onOpen={(b) => setDetailId(b.id)}
+        />
+      )}
+
+      {detailBooking && (
+        <BookingDetailModal
+          tenantId={tenantId}
+          booking={detailBooking}
+          dog={dogs.find((d) => d.id === detailBooking.dogId) ?? null}
+          customer={customers.find((c) => c.id === detailBooking.customerId) ?? null}
+          staffName={staffName}
+          serviceName={serviceName}
+          offShift={offShift}
+          onClose={() => setDetailId(null)}
         />
       )}
 
@@ -344,6 +363,7 @@ function TimeGrid({
   offShift,
   offIntervalsFor,
   onCreateAt,
+  onOpen,
 }: {
   bookings: Booking[];
   businessHours: { start: string; end: string }[];
@@ -354,8 +374,8 @@ function TimeGrid({
   offShift: (b: Booking) => boolean;
   offIntervalsFor: (staffId: string) => { start: string; end: string }[];
   onCreateAt: (startTime: string, staffId: string) => void;
+  onOpen: (b: Booking) => void;
 }) {
-  const navigate = useNavigate();
   // 営業時間前後に余白を足した軸
   const axisStart = Math.min(...businessHours.map((h) => toMin(h.start))) - EDGE_PAD;
   const axisEnd = Math.max(...businessHours.map((h) => toMin(h.end))) + EDGE_PAD;
@@ -468,8 +488,8 @@ function TimeGrid({
                 key={b.id}
                 type="button"
                 className={`tg-block${b.status === 'done' ? ' done' : ''}`}
-                onClick={() => navigate(`/karte/${b.dogId}`)}
-                title="カルテを開く"
+                onClick={() => onOpen(b)}
+                title="予約の詳細を開く"
                 style={{
                   top: (s - axisStart) * PX_PER_MIN,
                   height: Math.max(18, b.durationMin * PX_PER_MIN - 2),
@@ -660,6 +680,7 @@ function ListView({
   staffName,
   serviceName,
   offShift,
+  onOpen,
 }: {
   tenantId: string;
   bookings: Booking[];
@@ -667,8 +688,8 @@ function ListView({
   staffName: Map<string, string>;
   serviceName: Map<string, string>;
   offShift: (b: Booking) => boolean;
+  onOpen: (b: Booking) => void;
 }) {
-  const navigate = useNavigate();
   return (
     <div className="table-wrap">
       <table className="booking-list">
@@ -689,7 +710,7 @@ function ListView({
                 {b.startTime}〜{b.slotEnd}
               </td>
               <td data-label="ワンちゃん">
-                <button type="button" className="link-btn" onClick={() => navigate(`/karte/${b.dogId}`)} title="カルテを開く">
+                <button type="button" className="link-btn" onClick={() => onOpen(b)} title="予約の詳細を開く">
                   {dogName.get(b.dogId) ?? b.dogId}
                 </button>
               </td>
@@ -741,6 +762,135 @@ function ListView({
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * 予約詳細モーダル: リスト表示の操作（完了/キャンセル/無断欠席/POS送信）と
+ * カルテ（ワンちゃん情報＋施術履歴）を1画面に合体。予約タップで開く。
+ * booking は購読中のリストから渡されるため、操作後の状態変化も開いたまま反映される。
+ */
+function BookingDetailModal({
+  tenantId,
+  booking,
+  dog,
+  customer,
+  staffName,
+  serviceName,
+  offShift,
+  onClose,
+}: {
+  tenantId: string;
+  booking: Booking;
+  dog: Dog | null;
+  customer: Customer | null;
+  staffName: Map<string, string>;
+  serviceName: Map<string, string>;
+  offShift: (b: Booking) => boolean;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const { data: records } = useCollection<ServiceRecord>(recordsCol(tenantId, booking.dogId), [tenantId, booking.dogId]);
+  const recent = useMemo(() => [...records].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5), [records]);
+  const menu = booking.serviceId
+    ? `${serviceName.get(booking.serviceId) ?? booking.serviceId}${
+        booking.options && booking.options.length > 0 ? ` ＋${booking.options.map((o) => o.name).join('・')}` : ''
+      }`
+    : booking.options?.map((o) => o.name).join('・') || '—';
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>
+            {dog?.name ?? 'ワンちゃん'}
+            {dog?.breed ? `（${dog.breed}）` : ''}
+          </h2>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="閉じる">
+            ✕
+          </button>
+        </div>
+
+        <p style={{ margin: '0 0 2px' }}>
+          <strong>
+            {formatDateJa(booking.date)} {booking.startTime}〜{booking.slotEnd}
+          </strong>{' '}
+          ・ {statusLabel(booking.status)}
+          {offShift(booking) && (
+            <span className="error" title="担当スタッフのシフト外です。担当か日時の変更をご検討ください">
+              {' '}
+              ⚠シフト外
+            </span>
+          )}
+        </p>
+        <p className="muted" style={{ margin: '0 0 2px' }}>
+          メニュー: {menu} ／ 担当: {booking.staffId ? staffName.get(booking.staffId) ?? booking.staffId : '未割当'}
+        </p>
+        {customer && (
+          <p className="muted" style={{ margin: 0 }}>
+            飼い主: {customer.ownerName}
+            {customer.phone ? `（${customer.phone}）` : ''}
+          </p>
+        )}
+
+        {booking.status === 'reserved' && (
+          <div style={{ marginTop: 10 }}>
+            <CompleteForm tenantId={tenantId} booking={booking} />
+            <div className="row-form" style={{ margin: '6px 0 0' }}>
+              <button onClick={() => setStatus(tenantId, booking.id, 'canceled')}>キャンセル</button>
+              <button onClick={() => setStatus(tenantId, booking.id, 'noshow')}>無断欠席</button>
+            </div>
+          </div>
+        )}
+        {booking.status === 'done' && (
+          <div style={{ marginTop: 10 }}>
+            <span className="muted">
+              確定: {booking.finalDurationMin}分 / ¥{(booking.finalPrice ?? 0).toLocaleString()}
+            </span>
+            <PosSendButton tenantId={tenantId} booking={booking} />
+          </div>
+        )}
+
+        <h3 className="pick-head" style={{ marginTop: 14 }}>
+          カルテ（直近の施術履歴）
+        </h3>
+        {(dog?.allergies || dog?.notes) && (
+          <p className="muted" style={{ margin: '0 0 6px' }}>
+            {dog?.allergies ? `アレルギー: ${dog.allergies}　` : ''}
+            {dog?.notes ? `特記: ${dog.notes}` : ''}
+          </p>
+        )}
+        {recent.length === 0 ? (
+          <p className="muted">施術履歴はまだありません。</p>
+        ) : (
+          <div className="cart-list">
+            {recent.map((r) => (
+              <div key={r.id} className="cart-item">
+                <div className="cart-item-body">
+                  <div className="cart-item-title">
+                    {r.date}
+                    {r.serviceId ? ` ${serviceName.get(r.serviceId) ?? ''}` : ''}
+                  </div>
+                  <div className="cart-item-meta">
+                    {r.durationMin}分 / ¥{r.price.toLocaleString()}
+                    {r.notes ? ` ・ ${r.notes}` : ''}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="modal-actions">
+          <button type="button" onClick={() => navigate(`/karte/${booking.dogId}`)}>
+            カルテ全体を開く
+          </button>
+          <button type="button" className="primary" onClick={onClose}>
+            閉じる
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
