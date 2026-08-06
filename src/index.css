@@ -1143,25 +1143,24 @@ tr.row-link td.chevron-cell {
 .cal-tools-row .cal-acc-head {
   flex: 1 1 auto;
 }
-.day-nav-bottom {
+.day-nav-sticky {
   position: sticky;
-  bottom: -1px; /* スクロール端の1px隙間を消す */
+  top: 0;
   z-index: 6;
   display: flex;
   justify-content: center;
   background: var(--surface);
-  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   /* セクションカードのpadding(18px)いっぱいまで広げてバーとして見せる */
-  margin: 10px -18px 0;
-  padding: 8px 12px 10px;
-  border-radius: 0 0 var(--radius) var(--radius);
+  margin: 0 -18px 10px;
+  padding: 8px 12px;
 }
-.day-nav-bottom .day-center {
+.day-nav-sticky .day-center {
   display: flex;
   align-items: center;
   gap: 14px;
 }
-.day-nav-bottom .day-label {
+.day-nav-sticky .day-label {
   font-weight: 800;
   min-width: 11em;
   text-align: center;
