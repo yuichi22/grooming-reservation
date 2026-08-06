@@ -5,6 +5,7 @@
 // - 先頭の「範囲」セレクタ = tenants.settings.bookingHorizonMonths。
 //   お客様のWeb予約カレンダーの表示・受付範囲もこの設定に連動する（サーバ側で強制）
 import { useMemo, useState } from 'react';
+import { Settings as SettingsIcon } from 'lucide-react';
 import { deleteDoc, doc, documentId, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../firebaseStaff';
 import { useAuth } from '../auth/AuthContext';
@@ -73,6 +74,8 @@ export default function ShiftsPage() {
     [staff],
   );
 
+  // 設定モーダル（範囲・自動休業。説明もここに集約）
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // 選び直し中のセルと、時間指定モーダル
   const [editing, setEditing] = useState<{ date: string; staffId: string } | null>(null);
   const [timeModal, setTimeModal] = useState<{ date: string; staffId: string; staffName: string; start: string; end: string } | null>(null);
@@ -140,32 +143,58 @@ export default function ShiftsPage() {
 
   return (
     <section>
-      <h1>シフト管理</h1>
-      <div className="shift-controls">
-        <label className="inline">
-          シフト・予約受付の範囲
-          <select value={horizonMonths} onChange={(e) => saveHorizon(Number(e.target.value))}>
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <option key={n} value={n}>
-                {n}ヶ月先まで
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="muted" style={{ margin: '4px 0 0' }}>
-          お客様のWeb予約カレンダーもこの範囲まで表示・受付されます（範囲外は「空きなし」に見えます）。
-          未設定の日は営業時間（{businessHours.map((h) => `${h.start}〜${h.end}`).join(' / ')}）どおり出勤の扱いです。
-        </p>
-        <label className="inline" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-          <input type="checkbox" checked={autoClose} onChange={(e) => saveAutoClose(e.target.checked)} />
-          スタッフ全員が終日休みの日は、お客様に「休業日」として表示する
-        </label>
-        <p className="muted" style={{ margin: '2px 0 0' }}>
-          OFFの場合は「予約がいっぱい」に見えます。設定ページの休業日（臨時休業・祝日）は常に最優先です。
-        </p>
+      {/* 説明・設定はモーダルに集約し、シフト表を上に出す（モバイルで表が下に行き過ぎない） */}
+      <div className="cal-title-row">
+        <h1>シフト管理</h1>
+        <button type="button" className="cal-today-btn" onClick={() => setSettingsOpen(true)}>
+          <SettingsIcon size={15} style={{ verticalAlign: '-2px', marginRight: 4 }} />
+          設定
+        </button>
       </div>
+      <p className="muted" style={{ margin: '0 0 10px' }}>
+        セルのボタンで出勤/休み/時間を設定。<strong>日付をタップすると休業日</strong>を設定できます（{horizonMonths}
+        ヶ月先まで受付中）。
+      </p>
 
       {err && <p className="error">{err}</p>}
+
+      {/* シフト・予約受付の設定モーダル */}
+      {settingsOpen && (
+        <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>シフト・予約受付の設定</h2>
+            </div>
+            <label className="inline">
+              シフト・予約受付の範囲
+              <select value={horizonMonths} onChange={(e) => saveHorizon(Number(e.target.value))}>
+                {[1, 2, 3, 4, 5, 6].map((n) => (
+                  <option key={n} value={n}>
+                    {n}ヶ月先まで
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted" style={{ margin: '4px 0 12px' }}>
+              シフト表がこの月数分表示され、お客様のWeb予約カレンダーも同じ範囲まで表示・受付されます
+              （範囲外は「空きなし」に見えます）。未設定の日は営業時間（
+              {businessHours.map((h) => `${h.start}〜${h.end}`).join(' / ')}）どおり出勤の扱いです。
+            </p>
+            <label className="inline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={autoClose} onChange={(e) => saveAutoClose(e.target.checked)} />
+              スタッフ全員が終日休みの日は、お客様に「休業日」として表示する
+            </label>
+            <p className="muted" style={{ margin: '2px 0 0' }}>
+              OFFの場合は「予約がいっぱい」に見えます。手動の休業日（臨時休業・祝日）は常に最優先です。
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="primary" onClick={() => setSettingsOpen(false)}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {bookableStaff.length === 0 ? (
         <p className="muted">シフト対象のスタッフがいません（スタッフ管理でトリマーを追加してください）。</p>
