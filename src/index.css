@@ -1163,8 +1163,19 @@ tr.row-link td.chevron-cell {
 }
 .day-nav-fixed .day-label {
   font-weight: 800;
-  min-width: 11em;
+  min-width: 10em;
   text-align: center;
+}
+/* 下部バー内の休業日切替（コンパクト表示） */
+.day-nav-fixed {
+  gap: 10px;
+  align-items: center;
+}
+.day-nav-fixed .closeday-btn {
+  font-size: 0.78rem;
+  min-height: 34px;
+  padding: 4px 10px;
+  white-space: nowrap;
 }
 
 /* 予約詳細モーダル（管理側）。名前を大きく・✕は右上・行間にゆとり */

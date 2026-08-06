@@ -210,12 +210,6 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
               );
             })}
           </div>
-          <div className="cal-closeday">
-            <span className="muted">選択日: {formatDateJa(selected)}</span>
-            <button type="button" className={selectedClosed ? 'btn-closed' : ''} onClick={toggleClosure}>
-              {selectedClosed ? '休業日を解除' : '休業日にする'}
-            </button>
-          </div>
         </div>
       )}
 
@@ -224,7 +218,7 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
       {/* 下固定バーに隠れないための余白 */}
       <div style={{ height: 56 }} aria-hidden />
 
-      {/* 日ナビ: 画面最下部に固定（表の長さに関係なく常にピッタリ下） */}
+      {/* 日ナビ: 画面最下部に固定（表の長さに関係なく常にピッタリ下）。休業日の切替もここに集約 */}
       <div className="day-nav day-nav-fixed">
         <div className="day-center">
           <button type="button" onClick={() => shiftDay(-1)} aria-label="前日">
@@ -235,6 +229,13 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
             ›
           </button>
         </div>
+        <button
+          type="button"
+          className={`closeday-btn${selectedClosed ? ' btn-closed' : ''}`}
+          onClick={toggleClosure}
+        >
+          {selectedClosed ? '休業日を解除' : '休業日にする'}
+        </button>
       </div>
     </section>
   );
