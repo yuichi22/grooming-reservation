@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { ADD_FRIEND_URL, closeLiff, getAccessToken, getProfile, initLiff, initLiffOptional, isDevMode, loginForBooking, openAddFriend } from './liff';
@@ -647,10 +647,26 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       return { y: d.getFullYear(), m: d.getMonth() };
     });
   }
+  // 日付タップでカレンダー先頭（月ナビ）を画面上端へスライドし、カレンダー＋時間枠が1画面に収まるようにする。
+  // 直後のReact再レンダー（枠の読み込み表示への差し替え）でsmoothスクロールが中断されるため、
+  // 再レンダー後に固定位置へ scrollTo する（scrollIntoView 即時呼びでは動かない）。
+  const calRef = useRef<HTMLDivElement | null>(null);
   function pickDay(d: Date) {
     if (!ensureSelected()) return;
     setDate(fmt(d));
     if (d.getMonth() !== view.m || d.getFullYear() !== view.y) setView({ y: d.getFullYear(), m: d.getMonth() });
+    setTimeout(() => {
+      const el = calRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY - 6;
+      window.scrollTo({ top, behavior: 'smooth' });
+      // 一部環境（バックグラウンドタブ等）でsmoothが中断される保険。届いていなければ即時ジャンプ
+      setTimeout(() => {
+        if (el.getBoundingClientRect().top > 60) {
+          window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 6 });
+        }
+      }, 500);
+    }, 120);
   }
 
   async function confirm() {
@@ -903,7 +919,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           }
         }}
       >
-        <div className="cal-acc-body">
+        <div className="cal-acc-body" ref={calRef}>
           <div className="cal-head">
             <button type="button" onClick={() => goMonth(-1)} aria-label="前の月">
               ‹

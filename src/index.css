@@ -1125,12 +1125,12 @@ tr.row-link td.chevron-cell {
 .cal-disabled {
   opacity: 0.45;
 }
-/* 常時表示カレンダーの選択日ラベル（月ナビ直下）と時間枠の見出し */
+/* 常時表示カレンダーの選択日ラベル（月ナビに引っ付ける）と時間枠の見出し */
 .cal-selected-date {
   text-align: center;
   font-weight: 800;
   font-size: 0.95rem;
-  margin: 2px 0 6px;
+  margin: -10px 0 6px; /* cal-head の下余白(14px)を相殺して月ナビ直下に */
   display: flex;
   align-items: center;
   justify-content: center;
