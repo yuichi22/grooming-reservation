@@ -104,11 +104,6 @@ function formatDateJa(ds: string) {
   const [y, m, d] = ds.split('-').map(Number);
   return `${y}年${m}月${d}日（${DOW[new Date(y, m - 1, d).getDay()]}）`;
 }
-/** 日ナビ用の日付パーツ（例: { ymd: '2026.6月22日', dow: '月' }） */
-function dateParts(ds: string) {
-  const [y, m, d] = ds.split('-').map(Number);
-  return { ymd: `${y}.${m}月${d}日`, dow: DOW[new Date(y, m - 1, d).getDay()] };
-}
 const toMin = (t: string) => {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
@@ -136,7 +131,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   const [staffPickerOpen, setStaffPickerOpen] = useState(false); // 指名リストの開閉（既定は指名なしで折りたたみ）
 
   const [date, setDate] = useState(todayStr());
-  const [monthOpen, setMonthOpen] = useState(false);
   const [view, setView] = useState(() => {
     const d = new Date();
     return { y: d.getFullYear(), m: d.getMonth() };
@@ -643,13 +637,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     }
     return true;
   }
-  function shiftDay(delta: number) {
-    if (!ensureSelected()) return;
-    const [y, m, d] = date.split('-').map(Number);
-    const next = fmt(new Date(y, m - 1, d + delta));
-    if (delta > 0 && next > horizonEnd) return; // 受付範囲の月末まで
-    setDate(next);
-  }
   function goMonth(delta: number) {
     setView((v) => {
       const d = new Date(v.y, v.m + delta, 1);
@@ -663,7 +650,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   function pickDay(d: Date) {
     if (!ensureSelected()) return;
     setDate(fmt(d));
-    setMonthOpen(false);
     if (d.getMonth() !== view.m || d.getFullYear() !== view.y) setView({ y: d.getFullYear(), m: d.getMonth() });
   }
 
@@ -905,8 +891,8 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         </div>
       )}
 
-      {/* 月表示トグル＋日付ナビ＋月カレンダー。ワンちゃん未選択の間はグレーアウトし、
-          タップしたら「予約をはじめる」への案内を出す（操作順で迷わせない） */}
+      {/* 月カレンダーは常時表示（トグル・日ナビ廃止）。日付タップで下に時間枠が出る一本道。
+          ワンちゃん未選択の間はグレーアウトし、タップしたら「予約をはじめる」への案内を出す */}
       <div
         className={cart.length === 0 ? 'cal-disabled' : undefined}
         onClickCapture={(e) => {
@@ -917,29 +903,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           }
         }}
       >
-      {/* 月表示トグル＋日付ナビを1行に */}
-      <div className="cal-bar">
-        <button type="button" className="cal-toggle" onClick={() => setMonthOpen((o) => !o)} aria-label="月表示の開閉">
-          {monthOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          月表示
-        </button>
-        <div className="day-center">
-          <button type="button" onClick={() => shiftDay(-1)} aria-label="前日" disabled={date <= today}>
-            ‹
-          </button>
-          <span className="day-label">
-            {dateParts(date).ymd}
-            <span className="day-dow" aria-label={`${dateParts(date).dow}曜日`}>
-              {dateParts(date).dow}
-            </span>
-            {date === today && <span className="day-today">今日</span>}
-          </span>
-          <button type="button" onClick={() => shiftDay(1)} aria-label="翌日" disabled={date >= horizonEnd}>
-            ›
-          </button>
-        </div>
-      </div>
-      {monthOpen && (
         <div className="cal-acc-body">
           <div className="cal-head">
             <button type="button" onClick={() => goMonth(-1)} aria-label="前の月">
@@ -951,6 +914,10 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             <button type="button" onClick={() => goMonth(1)} aria-label="次の月" disabled={atHorizonMonth}>
               ›
             </button>
+          </div>
+          <div className="cal-selected-date">
+            {Number(date.slice(8, 10))}日（{DOW[new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))).getDay()]}）
+            {date === today && <span className="day-today">今日</span>}
           </div>
           <div className="cal-grid">
             {DOW.map((w, i) => (
@@ -997,16 +964,16 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             })}
           </div>
         </div>
-      )}
       </div>
 
-      {/* カレンダー（空き時間・合計時間ぶん） */}
+      {/* 選択日の時間枠（カレンダーの直下に常時表示） */}
       {cart.length === 0 ? (
         <p className="tg-hint">上の「予約をはじめる」から、ワンちゃんとメニューを選んでください。</p>
       ) : loadingSlots ? (
         <p className="tg-hint">空き時間を読み込み中…</p>
       ) : (
         <>
+          <h3 className="slot-head">時間を選択してください</h3>
           <AvailabilityGrid
             slots={slots ?? []}
             closed={closedDay}

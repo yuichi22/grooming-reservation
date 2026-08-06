@@ -1125,6 +1125,22 @@ tr.row-link td.chevron-cell {
 .cal-disabled {
   opacity: 0.45;
 }
+/* 常時表示カレンダーの選択日ラベル（月ナビ直下）と時間枠の見出し */
+.cal-selected-date {
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin: 2px 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.slot-head {
+  font-size: 0.9rem;
+  font-weight: 800;
+  margin: 12px 0 6px;
+}
 .cal-detail-head {
   display: flex;
   align-items: center;
