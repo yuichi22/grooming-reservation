@@ -1,10 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { deleteDoc, setDoc, updateDoc, doc } from 'firebase/firestore';
+import { updateDoc } from 'firebase/firestore';
 import { useAuth } from '../auth/AuthContext';
-import { closuresCol, tenantDoc } from '../lib/firestore';
-import { useCollection } from '../lib/useCollection';
+import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
-import type { BusinessHours, Closure, Tenant, TenantSettings } from '../lib/types';
+import type { BusinessHours, Tenant, TenantSettings } from '../lib/types';
 
 export default function SettingsPage() {
   const { claims } = useAuth();
@@ -205,76 +204,14 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
         </div>
       </form>
 
-      <Closures tenantId={tenantId} />
-    </section>
-  );
-}
-
-/** 臨時休業/祝日の管理 (§11)。 */
-function Closures({ tenantId }: { tenantId: string }) {
-  const { data: closures } = useCollection<Closure>(closuresCol(tenantId), [tenantId]);
-  const [date, setDate] = useState('');
-  const [reason, setReason] = useState('');
-  const [err, setErr] = useState<string | null>(null);
-
-  async function add(e: FormEvent) {
-    e.preventDefault();
-    if (!date) return;
-    setErr(null);
-    try {
-      // ドキュメント ID = 日付（1日1件・冪等）。
-      // 注: undefined のフィールドは Firestore が拒否するため、理由は空なら載せない
-      // （以前は reason: undefined を書こうとして例外→ボタンが無反応に見えていた）。
-      await setDoc(doc(closuresCol(tenantId), date), {
-        ...(reason.trim() ? { reason: reason.trim() } : {}),
-        fullDay: true,
-      } as Omit<Closure, 'id'> as Closure);
-      setDate('');
-      setReason('');
-    } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : '休業日の追加に失敗しました');
-    }
-  }
-
-  return (
-    <section style={{ marginTop: 32 }}>
-      <h2>休業日（臨時休業・祝日 §11）</h2>
-      <p className="muted">登録した日は空き計算で「空きなし」となり、予約も受け付けません。</p>
-      <form className="row-form" onSubmit={add}>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <input placeholder="理由（任意）" value={reason} onChange={(e) => setReason(e.target.value)} />
-        <button type="submit">休業日を追加</button>
-      </form>
-      {err && <p className="error">{err}</p>}
-      <div className="table-wrap"><table>
-        <thead>
-          <tr>
-            <th>日付</th>
-            <th>理由</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {[...closures]
-            .sort((a, b) => a.id.localeCompare(b.id))
-            .map((c) => (
-              <tr key={c.id}>
-                <td>{c.id}</td>
-                <td>{c.reason ?? '—'}</td>
-                <td>
-                  <button onClick={() => deleteDoc(doc(closuresCol(tenantId), c.id))}>削除</button>
-                </td>
-              </tr>
-            ))}
-          {closures.length === 0 && (
-            <tr>
-              <td colSpan={3} className="muted">
-                休業日なし
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table></div>
+      {/* 休業日の管理は営業カレンダーの一部としてシフトへ集約（二重管理の入口を作らない） */}
+      <section style={{ marginTop: 32 }}>
+        <h2>休業日（臨時休業・祝日）</h2>
+        <p className="muted">
+          休業日の設定は「シフト」ページへ移動しました。月表の日付をタップして設定・解除できます
+          （予約カレンダーの月表示からも設定できます）。
+        </p>
+      </section>
     </section>
   );
 }

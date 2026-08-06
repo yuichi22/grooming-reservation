@@ -1411,6 +1411,24 @@ button.tg-block.done:hover {
 .shift-table th .sat {
   color: #2263a8;
 }
+/* 日付ヘッダー（タップで休業日設定） */
+.shift-day-head {
+  width: 100%;
+  min-height: 0;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 5px;
+}
+.shift-day-head:hover:not(:disabled) {
+  background: #efe9df;
+}
+.shift-day-head:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
 .shift-sticky {
   position: sticky;
   left: 0;

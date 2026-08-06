@@ -5,7 +5,7 @@
 // - 先頭の「範囲」セレクタ = tenants.settings.bookingHorizonMonths。
 //   お客様のWeb予約カレンダーの表示・受付範囲もこの設定に連動する（サーバ側で強制）
 import { useMemo, useState } from 'react';
-import { doc, documentId, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { deleteDoc, doc, documentId, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../firebaseStaff';
 import { useAuth } from '../auth/AuthContext';
 import { closuresCol, shiftDoc, shiftsCol, staffCol, tenantDoc } from '../lib/firestore';
@@ -76,6 +76,24 @@ export default function ShiftsPage() {
   // 選び直し中のセルと、時間指定モーダル
   const [editing, setEditing] = useState<{ date: string; staffId: string } | null>(null);
   const [timeModal, setTimeModal] = useState<{ date: string; staffId: string; staffName: string; start: string; end: string } | null>(null);
+  // 休業日（closures）の設定モーダル。日付ヘッダーのタップで開く（設定ページから移設・集約）
+  const [closureModal, setClosureModal] = useState<{ date: string; isClosed: boolean; reason: string } | null>(null);
+
+  async function saveClosure(date: string, close: boolean, reason: string) {
+    setErr(null);
+    try {
+      const ref = doc(closuresCol(tenantId), date);
+      if (close) {
+        // 注: undefined フィールドは Firestore が拒否するため、理由は空なら載せない
+        await setDoc(ref, { ...(reason.trim() ? { reason: reason.trim() } : {}), fullDay: true } as never);
+      } else {
+        await deleteDoc(ref);
+      }
+      setClosureModal(null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '休業日の保存に失敗しました');
+    }
+  }
 
   async function writeEntry(date: string, staffId: string, entry: { work: true } | { intervals: TimeInterval[] }) {
     setErr(null);
@@ -170,11 +188,26 @@ export default function ShiftsPage() {
                       <th className="shift-sticky">スタッフ</th>
                       {days.map((d) => (
                         <th key={d.ds} className={closedDates.has(d.ds) ? 'shift-closed-day' : ''}>
-                          <span className={d.dow === 0 ? 'sun' : d.dow === 6 ? 'sat' : ''}>
-                            {d.day}
-                            <small>（{DOW[d.dow]}）</small>
-                          </span>
-                          {closedDates.has(d.ds) && <small className="shift-closed-mark">休業</small>}
+                          {/* 日付タップで休業日の設定/解除（過去日は表示のみ） */}
+                          <button
+                            type="button"
+                            className="shift-day-head"
+                            disabled={d.ds < today}
+                            title="タップで休業日を設定/解除"
+                            onClick={() =>
+                              setClosureModal({
+                                date: d.ds,
+                                isClosed: closedDates.has(d.ds),
+                                reason: closures.find((c) => c.id === d.ds)?.reason ?? '',
+                              })
+                            }
+                          >
+                            <span className={d.dow === 0 ? 'sun' : d.dow === 6 ? 'sat' : ''}>
+                              {d.day}
+                              <small>（{DOW[d.dow]}）</small>
+                            </span>
+                            {closedDates.has(d.ds) && <small className="shift-closed-mark">休業</small>}
+                          </button>
                         </th>
                       ))}
                     </tr>
@@ -252,6 +285,45 @@ export default function ShiftsPage() {
             </div>
           );
         })
+      )}
+
+      {/* 休業日モーダル（日付ヘッダーから。臨時休業・祝日） */}
+      {closureModal && (
+        <div className="modal-backdrop" onClick={() => setClosureModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>{closureModal.date} を{closureModal.isClosed ? '休業日から解除' : '休業日にする'}</h2>
+            </div>
+            {closureModal.isClosed ? (
+              <p className="muted">
+                この日は休業日です{closureModal.reason ? `（${closureModal.reason}）` : ''}。解除するとシフトどおりの受付に戻ります。
+              </p>
+            ) : (
+              <>
+                <p className="muted">お客様には「休業日」と表示され、予約を受け付けません（シフトより優先）。</p>
+                <label>
+                  理由（任意・例: 夏季休業）
+                  <input
+                    value={closureModal.reason}
+                    onChange={(e) => setClosureModal((cm) => (cm ? { ...cm, reason: e.target.value } : cm))}
+                  />
+                </label>
+              </>
+            )}
+            <div className="modal-actions">
+              <button type="button" onClick={() => setClosureModal(null)}>
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => saveClosure(closureModal.date, !closureModal.isClosed, closureModal.reason)}
+              >
+                {closureModal.isClosed ? '休業日を解除' : '休業日にする'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 時間指定モーダル（決定/キャンセル） */}

@@ -15,7 +15,6 @@ const NAV: NavItem[] = [
   // 予約・カルテはヘッダーのボタンに集約（サイドバーからは除外）
   { to: '/menus', label: 'メニュー', icon: '✂️', admin: true },
   { to: '/staff', label: 'スタッフ', icon: '👤', admin: true },
-  { to: '/shifts', label: 'シフト', icon: '📅', admin: true },
   { to: '/customers', label: '顧客', icon: '👥', admin: true },
   { to: '/settings', label: '設定', icon: '⚙️', admin: true },
 ];
@@ -92,6 +91,12 @@ export default function Layout() {
           <NavLink to="/karte" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
             カルテ
           </NavLink>
+          {/* シフトは週次で触る運用ページなのでヘッダーに昇格（admin専用。トリマーは従来の3つ） */}
+          {isAdmin && (
+            <NavLink to="/shifts" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+              シフト
+            </NavLink>
+          )}
           {claims.tenantId && (
             <button type="button" className="header-btn" onClick={() => setQrOpen(true)} aria-label="予約QR">
               <QrCode size={15} style={{ verticalAlign: '-2px', marginRight: 3 }} />

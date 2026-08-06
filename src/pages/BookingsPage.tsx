@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { deleteDoc, doc, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { deleteDoc, doc, documentId, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -12,6 +12,7 @@ import {
   pricingCol,
   servicesCol,
   shiftDoc,
+  shiftsCol,
   staffCol,
   tenantDoc,
 } from '../lib/firestore';
@@ -91,6 +92,26 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
   );
   const selectedClosed = closedDates.has(selected);
 
+  // 全員終日休みの自動休業も月カレンダーに「休」を出す（シフト①・顧客側getClosedDatesと同じ導出）
+  const { data: calTenant } = useDocument<Tenant>(tenantDoc(tenantId), [tenantId]);
+  const { data: calStaff } = useCollection<Staff>(staffCol(tenantId), [tenantId]);
+  const { data: calShiftDays } = useCollection<ShiftDayDoc>(
+    query(shiftsCol(tenantId), where(documentId(), '>=', rangeStart), where(documentId(), '<=', rangeEnd)),
+    [tenantId, rangeStart, rangeEnd],
+  );
+  const autoClosedDates = useMemo(() => {
+    const s = calTenant?.settings;
+    if ((s?.autoCloseWhenAllOff ?? true) === false) return new Set<string>();
+    const bh = s?.businessHours && s.businessHours.length > 0 ? s.businessHours : [{ start: '09:00', end: '19:00' }];
+    const ids = calStaff.filter((x) => x.active && x.role !== 'admin').map((x) => x.id);
+    if (ids.length === 0) return new Set<string>();
+    const out = new Set<string>();
+    for (const sd of calShiftDays) {
+      if (ids.every((sid) => staffHoursFor(sd.staff, sid, bh).length === 0)) out.add(sd.id);
+    }
+    return out;
+  }, [calTenant, calStaff, calShiftDays]);
+
   function goMonth(delta: number) {
     setView((v) => {
       const d = new Date(v.y, v.m + delta, 1);
@@ -157,16 +178,19 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
               const inMonth = d.getMonth() === view.m;
               const count = countByDate.get(ds) ?? 0;
               const closed = closedDates.has(ds);
+              const autoClosed = !closed && autoClosedDates.has(ds); // 全員終日休み（シフト由来）
               const cls = ['cal-cell'];
               if (!inMonth) cls.push('other');
               if (ds === today) cls.push('today');
               if (ds === selected) cls.push('selected');
-              if (closed) cls.push('closed');
+              if (closed || autoClosed) cls.push('closed');
               return (
                 <button key={ds} type="button" className={cls.join(' ')} onClick={() => pickDay(d)}>
                   <span className={`cal-daynum${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}`}>{d.getDate()}</span>
-                  {closed ? (
-                    <span className="cal-badge closed">休</span>
+                  {closed || autoClosed ? (
+                    <span className="cal-badge closed" title={autoClosed ? 'スタッフ全員が終日休み' : '休業日'}>
+                      休
+                    </span>
                   ) : count > 0 ? (
                     <span className="cal-badge count">{count}件</span>
                   ) : null}
