@@ -1134,6 +1134,39 @@ tr.row-link td.chevron-cell {
 .cal-disabled {
   opacity: 0.45;
 }
+/* 予約カレンダー: 月カレンダー開閉＋時間/リスト切替の行と、画面下スティッキーの日ナビ */
+.cal-tools-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cal-tools-row .cal-acc-head {
+  flex: 1 1 auto;
+}
+.day-nav-bottom {
+  position: sticky;
+  bottom: -1px; /* スクロール端の1px隙間を消す */
+  z-index: 6;
+  display: flex;
+  justify-content: center;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  /* セクションカードのpadding(18px)いっぱいまで広げてバーとして見せる */
+  margin: 10px -18px 0;
+  padding: 8px 12px 10px;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.day-nav-bottom .day-center {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.day-nav-bottom .day-label {
+  font-weight: 800;
+  min-width: 11em;
+  text-align: center;
+}
+
 /* 予約詳細モーダル（管理側）。名前を大きく・✕は右上・行間にゆとり */
 .bdm-head {
   display: flex;

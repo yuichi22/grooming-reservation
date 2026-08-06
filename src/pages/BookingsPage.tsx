@@ -150,11 +150,21 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
         </button>
       </div>
 
-      {/* 月カレンダー（アコーディオン・既定で閉） */}
-      <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
-        {monthOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-        月カレンダー
-      </button>
+      {/* 月カレンダー開閉と時間/リスト切替を1行に */}
+      <div className="cal-tools-row">
+        <button type="button" className="cal-acc-head" onClick={() => setMonthOpen((o) => !o)}>
+          {monthOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          月カレンダー
+        </button>
+        <div className="view-toggle">
+          <button type="button" className={dayView === 'time' ? 'active' : ''} onClick={() => setDayView('time')}>
+            時間
+          </button>
+          <button type="button" className={dayView === 'list' ? 'active' : ''} onClick={() => setDayView('list')}>
+            リスト
+          </button>
+        </div>
+      </div>
       {monthOpen && (
         <div className="cal-acc-body">
           <div className="cal-head">
@@ -209,8 +219,10 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
         </div>
       )}
 
-      {/* 日ナビ */}
-      <div className="day-nav">
+      <DaySection tenantId={tenantId} date={selected} closed={selectedClosed} dayView={dayView} />
+
+      {/* 日ナビ: 画面下にスティッキー（表をスクロールしても日送りが常に手元に） */}
+      <div className="day-nav day-nav-bottom">
         <div className="day-center">
           <button type="button" onClick={() => shiftDay(-1)} aria-label="前日">
             ‹
@@ -220,17 +232,7 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
             ›
           </button>
         </div>
-        <div className="view-toggle">
-          <button type="button" className={dayView === 'time' ? 'active' : ''} onClick={() => setDayView('time')}>
-            時間
-          </button>
-          <button type="button" className={dayView === 'list' ? 'active' : ''} onClick={() => setDayView('list')}>
-            リスト
-          </button>
-        </div>
       </div>
-
-      <DaySection tenantId={tenantId} date={selected} closed={selectedClosed} dayView={dayView} />
     </section>
   );
 }
