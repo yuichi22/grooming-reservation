@@ -18,7 +18,7 @@ import {
 import { completeBooking, createBookingByStaff, sendCheckoutToPos } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import { isWithinHours, staffHoursFor } from '../lib/shifts';
+import { isWithinHours, staffHoursFor, subtractIntervals } from '../lib/shifts';
 import type { Booking, Closure, Customer, Dog, Option, PriceEntry, Service, ShiftDayDoc, Staff, Tenant } from '../lib/types';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
@@ -255,6 +255,9 @@ function DaySection({
     const hours = staffHoursFor(shiftDay?.staff, b.staffId, businessHours);
     return !isWithinHours(hours, b.startTime, b.slotEnd);
   };
+  // スタッフ列のシフト休み帯（営業時間 − 実効勤務時間）。グリッドのグレー表示＋作成ブロックに使う
+  const offIntervalsFor = (staffId: string) =>
+    subtractIntervals(businessHours, staffHoursFor(shiftDay?.staff, staffId, businessHours));
 
   const sorted = [...bookings].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
@@ -272,6 +275,7 @@ function DaySection({
             serviceName={serviceName}
             closed={closed}
             offShift={offShift}
+            offIntervalsFor={offIntervalsFor}
             onCreateAt={(start, staffId) => setCreateInfo({ start, staffId })}
           />
           {!closed && <p className="tg-hint">空き時間をクリックすると予約を作成できます。</p>}
@@ -314,6 +318,7 @@ function TimeGrid({
   serviceName,
   closed,
   offShift,
+  offIntervalsFor,
   onCreateAt,
 }: {
   bookings: Booking[];
@@ -323,6 +328,7 @@ function TimeGrid({
   serviceName: Map<string, string>;
   closed: boolean;
   offShift: (b: Booking) => boolean;
+  offIntervalsFor: (staffId: string) => { start: string; end: string }[];
   onCreateAt: (startTime: string, staffId: string) => void;
 }) {
   const navigate = useNavigate();
@@ -345,7 +351,10 @@ function TimeGrid({
     if (!seg) return; // 営業時間外
     const colW = layer.clientWidth / colCount;
     const col = Math.min(colCount - 1, Math.max(0, Math.floor(e.nativeEvent.offsetX / colW)));
-    onCreateAt(toHHMM(min), columns[col]?.id ?? '');
+    const colStaffId = columns[col]?.id ?? '';
+    // シフト休みの時間帯には作成させない（オーバーレイが吸うが、保険としてここでも判定）
+    if (colStaffId && offIntervalsFor(colStaffId).some((iv) => min >= toMin(iv.start) && min < toMin(iv.end))) return;
+    onCreateAt(toHHMM(min), colStaffId);
   }
 
   return (
@@ -397,6 +406,32 @@ function TimeGrid({
         ))}
         {/* クリックで作成 */}
         <div className="tg-clicklayer" onClick={handleClick} />
+        {/* シフト休みの帯（スタッフ列単位）。クリック層より上に重ねて作成もブロック */}
+        {columns.map((s, i) => {
+          const offs = offIntervalsFor(s.id);
+          const bhStart = Math.min(...businessHours.map((h) => toMin(h.start)));
+          const bhEnd = Math.max(...businessHours.map((h) => toMin(h.end)));
+          return offs.map((iv) => {
+            const st = toMin(iv.start);
+            const en = toMin(iv.end);
+            const fullDay = st <= bhStart && en >= bhEnd;
+            return (
+              <div
+                key={`${s.id}:${iv.start}`}
+                className="tg-off"
+                title={`${s.name} はこの時間シフト休みです`}
+                style={{
+                  top: (st - axisStart) * PX_PER_MIN,
+                  height: (en - st) * PX_PER_MIN,
+                  left: `calc(56px + ${i} * (100% - 66px) / ${colCount} + 2px)`,
+                  width: `calc((100% - 66px) / ${colCount} - 4px)`,
+                }}
+              >
+                {fullDay ? 'お休み' : '休'}
+              </div>
+            );
+          });
+        })}
         {/* 予約ブロック */}
         {bookings
           .filter((b) => b.status === 'reserved' || b.status === 'done')

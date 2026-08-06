@@ -56,6 +56,26 @@ export function staffHoursFor(
   return intersectIntervals(intervals, businessHours);
 }
 
+/** base から minus を引いた残り区間（営業時間 − 勤務時間 = シフト休みの時間帯）。 */
+export function subtractIntervals(base: TimeInterval[], minus: TimeInterval[]): TimeInterval[] {
+  const m = minus
+    .map((x) => ({ start: toMin(x.start), end: toMin(x.end) }))
+    .filter((x) => x.end > x.start)
+    .sort((a, b) => a.start - b.start);
+  const out: { start: number; end: number }[] = [];
+  for (const b of base) {
+    let cursor = toMin(b.start);
+    const bEnd = toMin(b.end);
+    for (const o of m) {
+      if (o.end <= cursor || o.start >= bEnd) continue;
+      if (o.start > cursor) out.push({ start: cursor, end: Math.min(o.start, bEnd) });
+      cursor = Math.max(cursor, o.end);
+    }
+    if (cursor < bEnd) out.push({ start: cursor, end: bEnd });
+  }
+  return out.map((x) => ({ start: toStr(x.start), end: toStr(x.end) }));
+}
+
 /** 予約 [startTime, endTime) が勤務時間帯に収まっているか（シフト外予約の警告判定）。 */
 export function isWithinHours(hours: TimeInterval[], startTime: string, endTime: string): boolean {
   return intersectIntervals(hours, [{ start: startTime, end: endTime }]).some(

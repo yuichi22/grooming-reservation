@@ -1363,6 +1363,25 @@ button.tg-block.done:hover {
   font-size: 0.68rem;
   opacity: 0.92;
 }
+/* シフト休み（スタッフ列単位）の表示。クリック層より上に重ねて予約作成もブロックする */
+.tg-off {
+  position: absolute;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(110, 100, 90, 0.12),
+    rgba(110, 100, 90, 0.12) 6px,
+    rgba(110, 100, 90, 0.05) 6px,
+    rgba(110, 100, 90, 0.05) 12px
+  );
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.74rem;
+  font-weight: 800;
+  border-radius: 4px;
+  cursor: not-allowed;
+}
 .tg-closed {
   position: absolute;
   inset: 0;
