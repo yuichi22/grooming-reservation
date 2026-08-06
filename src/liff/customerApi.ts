@@ -76,7 +76,8 @@ export const getPublicBookingOptions = httpsCallable<
 
 export const getClosedDates = httpsCallable<
   { tenantId: string; accessToken?: string; from: string; to: string },
-  { dates: string[] }
+  // undecidedDates = シフト未定で受付前の日（requireShiftForBooking がONのテナントのみ）
+  { dates: string[]; undecidedDates?: string[] }
 >(functions, 'getClosedDates');
 
 export const registerDog = httpsCallable<

@@ -1356,14 +1356,33 @@ export const getClosedDates = onCall<{ tenantId: string; accessToken?: string; f
     const dates = new Set(
       snap.docs.filter((d) => d.id >= from && d.id <= to && d.data()?.fullDay !== false).map((d) => d.id),
     );
-    if (settings.autoCloseWhenAllOff) {
+    // シフト未定の日（未定ゲートON時）。顧客カレンダーに「未定」を出すために別枠で返す
+    const undecidedDates: string[] = [];
+    if (settings.autoCloseWhenAllOff || settings.requireShiftForBooking) {
       const [shiftDays, staffIds] = await Promise.all([loadShiftDays(tenantId, from, to), loadBookableStaffIds(tenantId)]);
-      // シフトdocがある日だけ判定すれば十分（doc無し=全員営業時間どおり出勤）
-      for (const [date, shiftDay] of shiftDays) {
-        if (date >= from && date <= to && isAllStaffOff(shiftDay, staffIds, settings)) dates.add(date);
+      if (settings.autoCloseWhenAllOff) {
+        // シフトdocがある日だけ判定すれば十分（doc無し=全員営業時間どおり出勤）
+        for (const [date, shiftDay] of shiftDays) {
+          if (date >= from && date <= to && isAllStaffOff(shiftDay, staffIds, settings)) dates.add(date);
+        }
+      }
+      if (settings.requireShiftForBooking && staffIds.length > 0) {
+        // 受付範囲内の全日を走査（doc無し=未定）。休業日は休業表示を優先
+        const horizon = horizonEndDate(settings);
+        const [fy, fm, fd] = from.split('-').map(Number);
+        const [ty, tm, td] = to.split('-').map(Number);
+        const cur = new Date(fy, fm - 1, fd);
+        const end = new Date(ty, tm - 1, td);
+        while (cur <= end) {
+          const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+          if (ds <= horizon && !dates.has(ds) && bookablePool(shiftDays.get(ds) ?? null, staffIds, settings) === null) {
+            undecidedDates.push(ds);
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
       }
     }
-    return { dates: [...dates].sort() };
+    return { dates: [...dates].sort(), undecidedDates };
   },
 );
 

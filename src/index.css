@@ -1082,6 +1082,19 @@ tr.row-link td.chevron-cell {
   background: #fed7aa;
   color: #c2410c;
 }
+/* シフト未定（受付前）の日 */
+.cal-badge.undecided {
+  background: #ece9e2;
+  color: var(--muted);
+}
+/* カートのインライン表示（モーダル廃止・ご予約内容の直下に一覧） */
+.cart-inline {
+  margin: 8px 0 4px;
+}
+/* ワンちゃん未選択の間、日付ナビ・月カレンダーをグレーアウト（タップは案内モーダルへ） */
+.cal-disabled {
+  opacity: 0.45;
+}
 .cal-detail-head {
   display: flex;
   align-items: center;

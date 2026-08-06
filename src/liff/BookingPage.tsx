@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Check, ChevronDown, ChevronRight, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { ADD_FRIEND_URL, closeLiff, getAccessToken, getProfile, initLiff, initLiffOptional, isDevMode, loginForBooking, openAddFriend } from './liff';
 import {
   createGroupBooking,
@@ -132,8 +132,8 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dogFormOpen, setDogFormOpen] = useState(false); // モーダルの新規ワンちゃん登録フォーム表示
-  const [cartOpen, setCartOpen] = useState(false);
   const [staffId, setStaffId] = useState('');
+  const [staffPickerOpen, setStaffPickerOpen] = useState(false); // 指名リストの開閉（既定は指名なしで折りたたみ）
 
   const [date, setDate] = useState(todayStr());
   const [monthOpen, setMonthOpen] = useState(false);
@@ -142,6 +142,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     return { y: d.getFullYear(), m: d.getMonth() };
   });
   const [closedMonth, setClosedMonth] = useState<Set<string>>(new Set());
+  const [undecidedMonth, setUndecidedMonth] = useState<Set<string>>(new Set()); // シフト未定（受付前）の日
   const [openMonth, setOpenMonth] = useState<Set<string> | null>(null); // 選択中の内容が入る日（null=判定前/カート空）
   const [openMonthMin, setOpenMonthMin] = useState<Set<string> | null>(null); // 最短まで縮めた内容なら入る日（△判定用）
 
@@ -304,7 +305,10 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     (async () => {
       try {
         const res = await getClosedDates({ tenantId, ...authToken(), from: fmt(gs), to: fmt(ge) });
-        if (!cancelled) setClosedMonth(new Set(res.data.dates));
+        if (!cancelled) {
+          setClosedMonth(new Set(res.data.dates));
+          setUndecidedMonth(new Set(res.data.undecidedDates ?? []));
+        }
       } catch {
         /* 表示用なので失敗は無視 */
       }
@@ -372,11 +376,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, cartKey, staffId, view.y, view.m]);
-
-  // カートが空になったら一覧モーダルを自動で閉じる
-  useEffect(() => {
-    if (cartOpen && cart.length === 0) setCartOpen(false);
-  }, [cartOpen, cart.length]);
 
   async function submitPhone(e: FormEvent) {
     e.preventDefault();
@@ -515,13 +514,13 @@ function BookingPage({ tenantId }: { tenantId: string }) {
 
   // ---- カート操作 ----
   function openNewItem() {
-    setCartOpen(false);
     setDogFormOpen(false);
+    setStaffPickerOpen(false);
     setDraft({ id: null, dogId: '', serviceId: '', optionIds: [] });
   }
   function openEditItem(it: CartItem) {
-    setCartOpen(false);
     setDogFormOpen(false);
+    setStaffPickerOpen(false);
     setDraft({ id: it.id, dogId: it.dogId, serviceId: it.serviceId, optionIds: [...it.optionIds] });
   }
   const isStandaloneOpt = (id: string) => !!options?.options.find((o) => o.id === id)?.standalone;
@@ -857,22 +856,63 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         </button>
       </div>
 
-      {/* ご予約内容（いま選んでいる内容の要約。タップで確認・編集） */}
-      <button type="button" className={`cart-bar${cart.length ? ' set' : ''}`} onClick={() => cart.length && setCartOpen(true)}>
+      {/* ご予約内容（モーダルではなくそのままリスト表示。編集/削除もここから） */}
+      <div className={`cart-bar${cart.length ? ' set' : ''}`}>
         <PawPrint size={18} />
         <span className="cart-bar-main">
           {cart.length ? `ご予約内容（${cart.length}頭）` : 'まだ追加されていません'}
         </span>
         {cart.length > 0 && (
-          <>
-            <span className="cart-bar-sum">
-              {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
-            </span>
-            <ChevronRight className="cart-bar-chev" size={18} />
-          </>
+          <span className="cart-bar-sum">
+            {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
+          </span>
         )}
-      </button>
+      </div>
+      {cart.length > 0 && (
+        <div className="cart-list cart-inline">
+          {cartEstimates.map(({ it, dur, amt }) => {
+            const dog = dogById(it.dogId);
+            const opts = allOptions.filter((o) => it.optionIds.includes(o.id));
+            return (
+              <div key={it.id} className="cart-item">
+                <div className="cart-item-body">
+                  <div className="cart-item-title">
+                    {dog?.name}
+                    {breedName(dog?.breedId) ? `（${breedName(dog?.breedId)}）` : ''}
+                  </div>
+                  <div className="cart-item-meta">
+                    {menuLabel(it)}
+                    {it.serviceId && opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
+                    {' ・ '}
+                    {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ' / 料金未設定'}
+                  </div>
+                </div>
+                <div className="cart-item-actions">
+                  <button type="button" aria-label="編集" onClick={() => openEditItem(it)}>
+                    <Pencil size={16} />
+                  </button>
+                  <button type="button" aria-label="削除" onClick={() => removeItem(it.id)}>
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
+      {/* 月表示トグル＋日付ナビ＋月カレンダー。ワンちゃん未選択の間はグレーアウトし、
+          タップしたら「予約をはじめる」への案内を出す（操作順で迷わせない） */}
+      <div
+        className={cart.length === 0 ? 'cal-disabled' : undefined}
+        onClickCapture={(e) => {
+          if (cart.length === 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectPrompt(true);
+          }
+        }}
+      >
       {/* 月表示トグル＋日付ナビを1行に */}
       <div className="cal-bar">
         <button type="button" className="cal-toggle" onClick={() => setMonthOpen((o) => !o)} aria-label="月表示の開閉">
@@ -919,8 +959,10 @@ function BookingPage({ tenantId }: { tenantId: string }) {
               const dow = d.getDay();
               const past = ds < today || ds > horizonEnd; // 過去と受付範囲外は選べない
               const closed = closedMonth.has(ds);
-              // 選択中の内容が入らない日（休業/過去を除く）
-              const noFit = openMonth != null && !openMonth.has(ds) && !past && !closed;
+              // シフト未定（受付前）の日は「未定」表示（×とは区別）
+              const undecided = !past && !closed && undecidedMonth.has(ds);
+              // 選択中の内容が入らない日（休業/過去/未定を除く）
+              const noFit = openMonth != null && !openMonth.has(ds) && !past && !closed && !undecided;
               // 現状はダメでも、最短まで縮めれば入る日 → △（変更すれば可能）
               const maybe = noFit && openMonthMin != null && openMonthMin.has(ds);
               // 最短でも入らない日 → ×（本当にダメ）
@@ -932,17 +974,18 @@ function BookingPage({ tenantId }: { tenantId: string }) {
               if (past) cls.push('other');
               if (closed) cls.push('closed');
               if (maybe) cls.push('maybe');
-              if (hardFull) cls.push('nofit');
+              if (hardFull || undecided) cls.push('nofit');
               return (
                 <button
                   key={ds}
                   type="button"
                   className={cls.join(' ')}
-                  disabled={past || closed || hardFull}
+                  disabled={past || closed || hardFull || undecided}
                   onClick={() => pickDay(d)}
                 >
                   <span className={`cal-daynum${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}`}>{d.getDate()}</span>
                   {closed && <span className="cal-badge closed">休</span>}
+                  {undecided && <span className="cal-badge undecided">未定</span>}
                   {maybe && <span className="cal-badge maybe">△</span>}
                   {hardFull && <span className="cal-badge nofit">×</span>}
                 </button>
@@ -951,6 +994,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           </div>
         </div>
       )}
+      </div>
 
       {/* カレンダー（空き時間・合計時間ぶん） */}
       {cart.length === 0 ? (
@@ -1163,31 +1207,52 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           {/* メニュー/オプション/単品を選んだら下へ誘導 */}
           {draft.dogId && draftHasMenu && <FlowArrow />}
 
-          {/* トリマー指名（任意・全頭共通） */}
-          {draft.dogId && draftHasMenu && (
+          {/* トリマー指名（任意・全頭共通）。既定は「指名なし」で折りたたみ、タップでスタッフリストを開く */}
+          {draft.dogId && draftHasMenu && staffList.length > 0 && (
             <>
               <h3 className="pick-head">トリマー指名（任意）</h3>
               <p className="muted" style={{ margin: '0 0 6px' }}>指名は予約するすべての子で同じ担当になります。</p>
               <div className="opt-list">
                 <button
                   type="button"
-                  className={`opt-item${!staffId ? ' set' : ''}`}
+                  className={`opt-item${staffId ? ' set' : ''}`}
                   style={{ textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => setStaffId('')}
+                  onClick={() => setStaffPickerOpen((o) => !o)}
                 >
-                  指名なし（空いているスタッフ）
+                  {staffId ? staffName(staffId) : '指名なし（空いているスタッフ）'}
+                  <span className="opt-meta">
+                    {staffPickerOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </span>
                 </button>
-                {staffList.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className={`opt-item${staffId === s.id ? ' set' : ''}`}
-                    style={{ textAlign: 'left', cursor: 'pointer' }}
-                    onClick={() => setStaffId(s.id)}
-                  >
-                    {s.name}
-                  </button>
-                ))}
+                {staffPickerOpen && (
+                  <>
+                    <button
+                      type="button"
+                      className={`opt-item${!staffId ? ' set' : ''}`}
+                      style={{ textAlign: 'left', cursor: 'pointer' }}
+                      onClick={() => {
+                        setStaffId('');
+                        setStaffPickerOpen(false);
+                      }}
+                    >
+                      指名なし（空いているスタッフ）
+                    </button>
+                    {staffList.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={`opt-item${staffId === s.id ? ' set' : ''}`}
+                        style={{ textAlign: 'left', cursor: 'pointer' }}
+                        onClick={() => {
+                          setStaffId(s.id);
+                          setStaffPickerOpen(false);
+                        }}
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             </>
           )}
@@ -1204,54 +1269,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             </button>
             <button type="button" className="primary" disabled={!draft.dogId || !draftHasMenu} onClick={saveDraft}>
               {draft.id ? '更新' : '決定して日時を選ぶ'}
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* カート詳細 */}
-      {cartOpen && (
-        <Modal title={`ご予約リスト（${cart.length}頭）`} onClose={() => setCartOpen(false)}>
-          <div className="cart-list">
-            {cartEstimates.map(({ it, dur, amt }) => {
-              const dog = dogById(it.dogId);
-              const opts = allOptions.filter((o) => it.optionIds.includes(o.id));
-              return (
-                <div key={it.id} className="cart-item">
-                  <div className="cart-item-body">
-                    <div className="cart-item-title">
-                      {dog?.name}
-                      {breedName(dog?.breedId) ? `（${breedName(dog?.breedId)}）` : ''}
-                    </div>
-                    <div className="cart-item-meta">
-                      {menuLabel(it)}
-                      {it.serviceId && opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
-                    </div>
-                    <div className="cart-item-meta">
-                      {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ' / 料金未設定'}
-                    </div>
-                  </div>
-                  <div className="cart-item-actions">
-                    <button type="button" aria-label="編集" onClick={() => openEditItem(it)}>
-                      <Pencil size={16} />
-                    </button>
-                    <button type="button" aria-label="削除" onClick={() => removeItem(it.id)}>
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="book-summary" style={{ marginTop: 12 }}>
-            合計 {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
-          </div>
-          <div className="modal-actions">
-            <button type="button" onClick={openNewItem}>
-              <Plus size={16} style={{ verticalAlign: '-3px' }} /> 追加
-            </button>
-            <button type="button" className="primary" onClick={() => setCartOpen(false)}>
-              この内容で時間を選ぶ
             </button>
           </div>
         </Modal>
