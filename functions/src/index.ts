@@ -243,6 +243,8 @@ interface SettingsLike {
   timezone: string;
   cancelDeadlineHours: number;
   bookingCutoffHours: number;
+  /** 予約受付範囲: 今月を含めて何ヶ月先の月末まで受け付けるか。シフト管理画面と連動。既定 3 */
+  bookingHorizonMonths: number;
 }
 
 /** メッセージ文面に使う店舗情報（settings に保持・任意）。 */
@@ -263,7 +265,18 @@ async function loadSettings(tenantId: string): Promise<SettingsLike> {
     timezone: s.timezone ?? 'Asia/Tokyo',
     cancelDeadlineHours: s.cancelDeadlineHours ?? 24,
     bookingCutoffHours: s.bookingCutoffHours ?? 0,
+    bookingHorizonMonths: s.bookingHorizonMonths ?? 3,
   };
+}
+
+/**
+ * 予約受付範囲の最終日(YYYY-MM-DD)＝当月 + bookingHorizonMonths ヶ月先の月末。
+ * これを超える日付は顧客からは「空きなし」に見える（シフト未計画の期間を漏らさない）。
+ */
+function horizonEndDate(settings: SettingsLike): string {
+  const [y, m] = tzTodayStr(settings.timezone).split('-').map(Number);
+  const end = new Date(y, m - 1 + settings.bookingHorizonMonths + 1, 0);
+  return `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
 }
 
 /** タイムゾーンの現在時刻を「壁時計をUTCに見立てた」比較用ミリ秒で返す（同一tz同士の比較に使う）。 */
@@ -609,6 +622,10 @@ export const getAvailability = onCall<{
   if (await isClosedDate(tenantId, date)) {
     return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours, closed: true };
   }
+  // 予約受付範囲外は「空きなし」（休みとは見せない）
+  if (date > horizonEndDate(settings)) {
+    return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours };
+  }
 
   const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
 
@@ -677,6 +694,9 @@ export const createBooking = onCall<{
   }
 
   const [settings, dog] = await Promise.all([loadSettings(tenantId), loadDog(tenantId, dogId)]);
+  if (date > horizonEndDate(settings)) {
+    throw new HttpsError('failed-precondition', 'beyond the booking horizon');
+  }
   const opts = await loadSelectedOptions(tenantId, optionIds, dog?.optionAdjustments ?? {});
   const cell = await loadPriceCell(tenantId, dog?.breedId ?? null, serviceId);
   // トータル時間 = 基準(料金表セル + 犬のサービス別個別加算) + オプション（個別追加込み）
@@ -805,6 +825,10 @@ export const getGroupAvailability = onCall<{
   if (await isClosedDate(tenantId, date)) {
     return { slots: [], finishByStart: {}, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours, closed: true };
   }
+  // 予約受付範囲外は「空きなし」（休みとは見せない。シフト未計画期間の誤予約防止）
+  if (date > horizonEndDate(settings)) {
+    return { slots: [], finishByStart: {}, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours };
+  }
 
   const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
   // 1スタッフの空きに頭数を順に詰め、入る開始時刻(15分グリッド)→施術終了 の対応を作る（連続不可なら自動分割）。
@@ -914,13 +938,15 @@ export const getMonthAvailability = onCall<{
   };
 
   const openDates: string[] = [];
+  const horizon = horizonEndDate(settings);
   const [fy, fm, fd] = from.split('-').map(Number);
   const [ty, tm, td] = to.split('-').map(Number);
   const cur = new Date(fy, fm - 1, fd);
   const end = new Date(ty, tm - 1, td);
   while (cur <= end) {
     const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-    if (fitsOnDay(ds)) openDates.push(ds);
+    // 予約受付範囲外は開いている日に含めない（月カレンダーで×表示になる）
+    if (ds <= horizon && fitsOnDay(ds)) openDates.push(ds);
     cur.setDate(cur.getDate() + 1);
   }
   return { openDates };
@@ -958,6 +984,9 @@ export const createGroupBooking = onCall<{
   const settings = await loadSettings(tenantId);
   if (!afterCutoff(date, startTime, settings)) {
     throw new HttpsError('failed-precondition', 'past the booking cutoff');
+  }
+  if (date > horizonEndDate(settings)) {
+    throw new HttpsError('failed-precondition', 'beyond the booking horizon');
   }
   const computed = await computeGroupItems(tenantId, items);
   const durations = computed.map((c) => c.durationMin);
@@ -1153,6 +1182,8 @@ async function fetchBookingOptions(tenantId: string, customerId: string | null) 
       name: (tdata.name ?? '') as string,
       logoUrl: (tdata.settings?.logoUrl ?? null) as string | null,
     },
+    // 予約受付範囲（今月+Nヶ月の月末まで）。クライアントのカレンダー送りの上限に使う
+    bookingHorizonMonths: (tdata.settings?.bookingHorizonMonths ?? 3) as number,
     services: servicesSnap.docs.map((d) => ({ id: d.id, name: d.data().name })),
     options: optionsSnap.docs.map((d) => ({
       id: d.id,

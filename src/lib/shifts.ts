@@ -7,8 +7,9 @@ export interface TimeInterval {
   end: string;
 }
 
-/** tenants/{t}/shifts/{date} の staff マップの1エントリ */
+/** tenants/{t}/shifts/{date} の staff マップの1エントリ。work:true=出勤を明示確定（営業時間どおり） */
 export interface ShiftEntry {
+  work?: boolean;
   intervals?: TimeInterval[];
 }
 
@@ -44,14 +45,14 @@ export function intersectIntervals(a: TimeInterval[], b: TimeInterval[]): TimeIn
   return merged.map((x) => ({ start: toStr(x.start), end: toStr(x.end) }));
 }
 
-/** その日のスタッフの実効勤務時間帯。エントリ無し=営業時間どおり、intervals:[]=終日休み。 */
+/** その日のスタッフの実効勤務時間帯。エントリ無し/work:true=営業時間どおり、intervals:[]=終日休み。 */
 export function staffHoursFor(
   staffMap: Record<string, ShiftEntry> | undefined | null,
   staffId: string,
   businessHours: TimeInterval[],
 ): TimeInterval[] {
   const entry = staffMap?.[staffId];
-  if (!entry) return businessHours;
+  if (!entry || entry.work === true) return businessHours;
   const intervals = Array.isArray(entry.intervals) ? entry.intervals : [];
   return intersectIntervals(intervals, businessHours);
 }

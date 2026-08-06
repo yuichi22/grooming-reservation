@@ -7,14 +7,14 @@
 // シフト変更でシフト外になった既存予約は強制せず、管理画面の警告バッジのみ（運用で振替）。
 import { intersectIntervals, type TimeInterval } from './slots.js';
 
-/** shifts/{date} ドキュメントの形 */
+/** shifts/{date} ドキュメントの形。work:true = 「営業時間どおり出勤」を明示確定（シフトUIの設定済み表示用） */
 export interface ShiftDay {
-  staff?: Record<string, { intervals?: TimeInterval[] }>;
+  staff?: Record<string, { work?: boolean; intervals?: TimeInterval[] }>;
 }
 
 /**
  * その日のスタッフの実効勤務時間帯（純粋関数）。
- * シフト未設定なら営業時間そのまま、設定があれば 営業時間∩シフト。
+ * エントリ無し or work:true なら営業時間そのまま、intervals 設定があれば 営業時間∩シフト。
  */
 export function staffHoursFor(
   shiftDay: ShiftDay | null | undefined,
@@ -22,7 +22,7 @@ export function staffHoursFor(
   businessHours: TimeInterval[],
 ): TimeInterval[] {
   const entry = shiftDay?.staff?.[staffId];
-  if (!entry) return businessHours;
+  if (!entry || entry.work === true) return businessHours;
   const intervals = Array.isArray(entry.intervals) ? entry.intervals : [];
   return intersectIntervals(intervals, businessHours);
 }

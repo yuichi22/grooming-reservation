@@ -46,6 +46,8 @@ export interface TenantSettings {
   cancelDeadlineHours?: number;
   /** 予約受付の締切（予約開始の何時間前まで受付可）。0=直前まで（過去の時刻は常に不可）。既定 0 */
   bookingCutoffHours?: number;
+  /** 予約受付範囲: 今月を含めて何ヶ月先の月末まで受付・シフト計画するか（シフト管理画面で設定）。既定 3 */
+  bookingHorizonMonths?: number;
   /** 店舗情報（LINE 文面に使用・任意） */
   address?: string;
   mapUrl?: string;
@@ -94,7 +96,8 @@ export interface Staff {
  */
 export interface ShiftDayDoc {
   id: string; // = date
-  staff?: Record<string, { intervals?: { start: TimeStr; end: TimeStr }[] }>;
+  /** work:true = 出勤を明示確定（営業時間どおり）。intervals:[] = 終日休み / 部分区間 = 時間指定 */
+  staff?: Record<string, { work?: boolean; intervals?: { start: TimeStr; end: TimeStr }[] }>;
 }
 
 /** tenants/{tenantId}/breeds/{breedId} — 犬種マスタ */

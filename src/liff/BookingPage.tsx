@@ -447,6 +447,16 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     }
   }
 
+  // 予約受付範囲（今月+Nヶ月の月末まで）。超えた日付はサーバも空きなしを返すが、
+  // カレンダー送り自体をここで止めて「進めるのに空きが無い」体験を避ける。
+  const horizonMonths = options?.bookingHorizonMonths ?? 3;
+  const horizonEnd = (() => {
+    const now = new Date();
+    return fmt(new Date(now.getFullYear(), now.getMonth() + horizonMonths + 1, 0));
+  })();
+  const horizonView = { y: Number(horizonEnd.slice(0, 4)), m: Number(horizonEnd.slice(5, 7)) - 1 };
+  const atHorizonMonth = view.y === horizonView.y && view.m === horizonView.m;
+
   // ---- 表示ヘルパ ----
   // ゲスト入力の犬（未登録・ローカル保持）も登録済みと同じ形で引けるようにする（個別加算なし）
   const guestDogEntry = (g: GuestDog) => ({
@@ -635,11 +645,17 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   function shiftDay(delta: number) {
     if (!ensureSelected()) return;
     const [y, m, d] = date.split('-').map(Number);
-    setDate(fmt(new Date(y, m - 1, d + delta)));
+    const next = fmt(new Date(y, m - 1, d + delta));
+    if (delta > 0 && next > horizonEnd) return; // 受付範囲の月末まで
+    setDate(next);
   }
   function goMonth(delta: number) {
     setView((v) => {
       const d = new Date(v.y, v.m + delta, 1);
+      // 受付範囲の月まで（それより先の月は表示しない）
+      if (delta > 0 && (d.getFullYear() > horizonView.y || (d.getFullYear() === horizonView.y && d.getMonth() > horizonView.m))) {
+        return v;
+      }
       return { y: d.getFullYear(), m: d.getMonth() };
     });
   }
@@ -872,7 +888,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             </span>
             {date === today && <span className="day-today">今日</span>}
           </span>
-          <button type="button" onClick={() => shiftDay(1)} aria-label="翌日">
+          <button type="button" onClick={() => shiftDay(1)} aria-label="翌日" disabled={date >= horizonEnd}>
             ›
           </button>
         </div>
@@ -886,7 +902,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             <span className="cal-title">
               {view.y}年 {view.m + 1}月
             </span>
-            <button type="button" onClick={() => goMonth(1)} aria-label="次の月">
+            <button type="button" onClick={() => goMonth(1)} aria-label="次の月" disabled={atHorizonMonth}>
               ›
             </button>
           </div>
@@ -899,7 +915,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             {gridDays.map((d) => {
               const ds = fmt(d);
               const dow = d.getDay();
-              const past = ds < today;
+              const past = ds < today || ds > horizonEnd; // 過去と受付範囲外は選べない
               const closed = closedMonth.has(ds);
               // 選択中の内容が入らない日（休業/過去を除く）
               const noFit = openMonth != null && !openMonth.has(ds) && !past && !closed;

@@ -18,6 +18,8 @@ export interface ServiceOption {
 }
 export interface BookingOptions {
   store: { name: string; logoUrl: string | null };
+  /** 予約受付範囲（今月+Nヶ月の月末まで）。カレンダー送りの上限に使う */
+  bookingHorizonMonths?: number;
   services: { id: string; name: string }[];
   options: ServiceOption[];
   breeds: { id: string; name: string }[];

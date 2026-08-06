@@ -35,6 +35,10 @@ describe('staffHoursFor（シフト①の実効勤務時間）', () => {
   it('intervals: [] = 終日休み', () => {
     expect(staffHoursFor({ staff: { s1: { intervals: [] } } }, 's1', BH)).toEqual([]);
   });
+  it('work:true = 出勤を明示確定（営業時間どおり。intervalsが残っていても優先）', () => {
+    expect(staffHoursFor({ staff: { s1: { work: true } } }, 's1', BH)).toEqual(BH);
+    expect(staffHoursFor({ staff: { s1: { work: true, intervals: [] } } }, 's1', BH)).toEqual(BH);
+  });
   it('半休（午後出勤）は営業時間と交差した区間になる', () => {
     expect(staffHoursFor({ staff: { s1: { intervals: [{ start: '13:00', end: '19:00' }] } } }, 's1', BH)).toEqual([
       { start: '13:00', end: '19:00' },
