@@ -1,10 +1,11 @@
-import { Fragment, useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { deleteDoc, doc, documentId, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
   bookingsCol,
+  breedsCol,
   closuresCol,
   customersCol,
   dogsCol,
@@ -21,7 +22,7 @@ import { completeBooking, createBookingByStaff, sendCheckoutToPos } from '../lib
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import { isWithinHours, staffHoursFor, subtractIntervals } from '../lib/shifts';
-import type { Booking, Closure, Customer, Dog, Option, PriceEntry, Service, ServiceRecord, ShiftDayDoc, Staff, Tenant } from '../lib/types';
+import type { Booking, Breed, Closure, Customer, Dog, Option, PriceEntry, Service, ServiceRecord, ShiftDayDoc, Staff, Tenant } from '../lib/types';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const PX_PER_MIN = 1; // 時間軸の縮尺
@@ -329,6 +330,7 @@ function DaySection({
           customer={customers.find((c) => c.id === detailBooking.customerId) ?? null}
           staffName={staffName}
           serviceName={serviceName}
+          pricing={pricing}
           offShift={offShift}
           onClose={() => setDetailId(null)}
         />
@@ -767,10 +769,13 @@ function ListView({
 }
 
 /**
- * 予約詳細モーダル: リスト表示の操作（完了/キャンセル/無断欠席/POS送信）と
- * カルテ（ワンちゃん情報＋施術履歴）を1画面に合体。予約タップで開く。
- * booking は購読中のリストから渡されるため、操作後の状態変化も開いたまま反映される。
+ * 予約詳細モーダル: 予約操作とカルテ（作業時間・料金/オプション超過/メモ/アレルギー）を合体。
+ * 「完了して履歴を保存」でカルテの編集内容を犬docへ保存し、completeBooking で
+ * 確定時間・確定料金・施術メモを記録する。確定料金は料金表×個別加算からの自動合算（手修正可）。
+ * booking は購読中のリストから渡されるため、完了後もモーダルを開いたまま done 表示に切り替わる。
  */
+const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
+
 function BookingDetailModal({
   tenantId,
   booking,
@@ -778,6 +783,7 @@ function BookingDetailModal({
   customer,
   staffName,
   serviceName,
+  pricing,
   offShift,
   onClose,
 }: {
@@ -787,31 +793,122 @@ function BookingDetailModal({
   customer: Customer | null;
   staffName: Map<string, string>;
   serviceName: Map<string, string>;
+  pricing: PriceEntry[];
   offShift: (b: Booking) => boolean;
   onClose: () => void;
 }) {
   const navigate = useNavigate();
+  const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
   const { data: records } = useCollection<ServiceRecord>(recordsCol(tenantId, booking.dogId), [tenantId, booking.dogId]);
-  const recent = useMemo(() => [...records].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5), [records]);
+  const recent = useMemo(() => [...records].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3), [records]);
+  const breedLabel = dog?.breedId ? breeds.find((b) => b.id === dog.breedId)?.name ?? dog?.breed ?? '' : dog?.breed ?? '';
+
+  // この予約のサービスの料金表セル（犬種×サービス）
+  const cell = useMemo(
+    () =>
+      booking.serviceId && dog?.breedId
+        ? pricing.find((c) => c.breedId === dog.breedId && c.serviceId === booking.serviceId && c.active !== false) ?? null
+        : null,
+    [pricing, booking.serviceId, dog?.breedId],
+  );
+  const bookedOptions = booking.options ?? [];
+
+  // カルテ編集フォーム（開いた予約ごとに犬docから初期化）
+  const [svcAdj, setSvcAdj] = useState(0);
+  const [optAdj, setOptAdj] = useState<Record<string, number>>({});
+  const [notes, setNotes] = useState('');
+  const [allergies, setAllergies] = useState('');
+  const [recNotes, setRecNotes] = useState('');
+  const [price, setPrice] = useState(0);
+  const [priceTouched, setPriceTouched] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    setSvcAdj(booking.serviceId ? dog?.serviceAdjustments?.[booking.serviceId] ?? 0 : 0);
+    const oa: Record<string, number> = {};
+    for (const o of booking.options ?? []) oa[o.id] = dog?.optionAdjustments?.[o.id] ?? 0;
+    setOptAdj(oa);
+    setNotes(dog?.notes ?? '');
+    setAllergies(dog?.allergies ?? '');
+    setRecNotes('');
+    setPriceTouched(false);
+    setErr(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking.id]);
+
+  // 確定時間・確定料金の自動合算（料金表の標準＋個別加算・超過。加算分は分単価×時間を50円単位切上げ）
+  const svcDur = cell ? cell.durationMin + svcAdj : 0;
+  const svcPrice = cell ? cell.price + ceil50((cell.durationMin > 0 ? cell.price / cell.durationMin : 0) * svcAdj) : 0;
+  const optCalc = bookedOptions.map((o) => {
+    const add = optAdj[o.id] ?? 0;
+    const unit = o.durationMin > 0 ? o.price / o.durationMin : 0;
+    return { ...o, add, dur: o.durationMin + add, effPrice: o.price + ceil50(unit * add) };
+  });
+  const autoDur = svcDur + optCalc.reduce((s, o) => s + o.dur, 0);
+  const autoPrice = svcPrice + optCalc.reduce((s, o) => s + o.effPrice, 0);
+  useEffect(() => {
+    if (!priceTouched) setPrice(autoPrice);
+  }, [autoPrice, priceTouched]);
+
+  const finalDur = autoDur > 0 ? autoDur : booking.durationMin;
+
+  // 完了して履歴を保存: カルテ（犬doc）更新 → completeBooking（確定値＋施術メモ→records）
+  async function onCompleteAndSave() {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      if (dog) {
+        const nextSvcAdj = { ...(dog.serviceAdjustments ?? {}) };
+        if (booking.serviceId) {
+          if (svcAdj > 0) nextSvcAdj[booking.serviceId] = svcAdj;
+          else delete nextSvcAdj[booking.serviceId];
+        }
+        const nextOptAdj = { ...(dog.optionAdjustments ?? {}) };
+        for (const o of bookedOptions) {
+          const v = optAdj[o.id] ?? 0;
+          if (v > 0) nextOptAdj[o.id] = v;
+          else delete nextOptAdj[o.id];
+        }
+        await updateDoc(doc(dogsCol(tenantId), dog.id), {
+          serviceAdjustments: nextSvcAdj,
+          optionAdjustments: nextOptAdj,
+          notes,
+          allergies,
+        });
+      }
+      await completeBooking({
+        tenantId,
+        bookingId: booking.id,
+        finalDurationMin: finalDur,
+        finalPrice: price,
+        ...(recNotes.trim() ? { notes: recNotes.trim() } : {}),
+      });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '保存に失敗しました');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const menu = booking.serviceId
     ? `${serviceName.get(booking.serviceId) ?? booking.serviceId}${
-        booking.options && booking.options.length > 0 ? ` ＋${booking.options.map((o) => o.name).join('・')}` : ''
+        bookedOptions.length > 0 ? ` ＋${bookedOptions.map((o) => o.name).join('・')}` : ''
       }`
-    : booking.options?.map((o) => o.name).join('・') || '—';
+    : bookedOptions.map((o) => o.name).join('・') || '—';
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>
-            {dog?.name ?? 'ワンちゃん'}
-            {dog?.breed ? `（${dog.breed}）` : ''}
-          </h2>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="閉じる">
-            ✕
-          </button>
-        </div>
+        {/* 1. 予約の取り消し系（先頭・予約中のみ） */}
+        {booking.status === 'reserved' && (
+          <div className="row-form" style={{ margin: '0 0 8px' }}>
+            <button onClick={() => setStatus(tenantId, booking.id, 'canceled')}>キャンセル</button>
+            <button onClick={() => setStatus(tenantId, booking.id, 'noshow')}>無断欠席</button>
+          </div>
+        )}
 
+        {/* 2-3. 日時・状態 / メニュー・担当 */}
         <p style={{ margin: '0 0 2px' }}>
           <strong>
             {formatDateJa(booking.date)} {booking.startTime}〜{booking.slotEnd}
@@ -824,41 +921,139 @@ function BookingDetailModal({
             </span>
           )}
         </p>
-        <p className="muted" style={{ margin: '0 0 2px' }}>
+        <p className="muted" style={{ margin: '0 0 6px' }}>
           メニュー: {menu} ／ 担当: {booking.staffId ? staffName.get(booking.staffId) ?? booking.staffId : '未割当'}
         </p>
+
+        {/* 4. 犬種・名前＋カルテ導線 */}
+        <p style={{ margin: '0 0 2px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <strong>
+            {breedLabel ? `${breedLabel}　` : ''}
+            {dog?.name ?? 'ワンちゃん'}
+          </strong>
+          <button type="button" className="link-btn" onClick={() => navigate(`/karte/${booking.dogId}`)}>
+            カルテを見る
+          </button>
+        </p>
+
+        {/* 5-6. 飼い主・連絡手段 */}
         {customer && (
-          <p className="muted" style={{ margin: 0 }}>
-            飼い主: {customer.ownerName}
-            {customer.phone ? `（${customer.phone}）` : ''}
-          </p>
+          <>
+            <p className="muted" style={{ margin: 0 }}>
+              飼い主: {customer.ownerName}
+              {customer.phone ? `（${customer.phone}）` : ''}
+            </p>
+            <div className="row-form" style={{ margin: '6px 0 0' }}>
+              {customer.phone && (
+                <a className="header-btn" href={`tel:${customer.phone}`}>
+                  電話
+                </a>
+              )}
+              {customer.lineUserId && (
+                <a className="header-btn" href="https://chat.line.biz/" target="_blank" rel="noreferrer">
+                  LINEで連絡
+                </a>
+              )}
+            </div>
+          </>
         )}
 
-        {booking.status === 'reserved' && (
-          <div style={{ marginTop: 10 }}>
-            <CompleteForm tenantId={tenantId} booking={booking} />
-            <div className="row-form" style={{ margin: '6px 0 0' }}>
-              <button onClick={() => setStatus(tenantId, booking.id, 'canceled')}>キャンセル</button>
-              <button onClick={() => setStatus(tenantId, booking.id, 'noshow')}>無断欠席</button>
+        {booking.status === 'reserved' ? (
+          <>
+            {/* 7. カルテ（この予約のサービス/オプションに絞って編集） */}
+            <fieldset style={{ marginTop: 12 }}>
+              <legend>作業時間・料金（料金表 犬種×サービス）</legend>
+              {!booking.serviceId ? (
+                <p className="muted">単品オプションのご予約です（下のオプション超過で調整できます）。</p>
+              ) : !cell ? (
+                <p className="muted">この犬種×サービスの料金表が未設定です。メニューの料金表で登録してください。</p>
+              ) : (
+                <p style={{ margin: 0 }}>
+                  標準 {cell.durationMin}分 / ¥{cell.price.toLocaleString()}　個別加算 ＋
+                  <input
+                    type="number"
+                    min={0}
+                    step={5}
+                    value={svcAdj}
+                    onChange={(e) => setSvcAdj(Math.max(0, Number(e.target.value)))}
+                    style={{ width: 70 }}
+                  />
+                  分 → <strong>{svcDur}分 / ¥{svcPrice.toLocaleString()}</strong>
+                </p>
+              )}
+            </fieldset>
+
+            {optCalc.length > 0 && (
+              <fieldset style={{ marginTop: 8 }}>
+                <legend>オプション超過時間の設定</legend>
+                {optCalc.map((o) => (
+                  <p key={o.id} style={{ margin: '0 0 4px' }}>
+                    {o.name}（標準{o.durationMin}分 / ¥{o.price.toLocaleString()}）＋
+                    <input
+                      type="number"
+                      min={0}
+                      step={5}
+                      value={o.add}
+                      onChange={(e) => setOptAdj((m) => ({ ...m, [o.id]: Math.max(0, Number(e.target.value)) }))}
+                      style={{ width: 70 }}
+                    />
+                    分 → <strong>{o.dur}分 / ¥{o.effPrice.toLocaleString()}</strong>
+                  </p>
+                ))}
+              </fieldset>
+            )}
+
+            <label style={{ marginTop: 8 }}>
+              メモ（噛み癖・サイズ等）
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+            </label>
+            <label>
+              アレルギー
+              <textarea value={allergies} onChange={(e) => setAllergies(e.target.value)} rows={2} />
+            </label>
+            <label>
+              施術メモ（今回の施術内容・履歴に残ります）
+              <textarea value={recNotes} onChange={(e) => setRecNotes(e.target.value)} rows={2} />
+            </label>
+
+            {/* 8. 確定料金（自動合算・手修正可）＋確定時間 */}
+            <div className="book-summary" style={{ marginTop: 10 }}>
+              確定 {finalDur}分 ／ 確定料金 ¥
+              <input
+                type="number"
+                min={0}
+                step={100}
+                value={price}
+                onChange={(e) => {
+                  setPriceTouched(true);
+                  setPrice(Math.max(0, Number(e.target.value)));
+                }}
+                style={{ width: 110 }}
+              />
+              {priceTouched && price !== autoPrice && (
+                <button type="button" className="link-btn" style={{ marginLeft: 8 }} onClick={() => { setPriceTouched(false); setPrice(autoPrice); }}>
+                  自動計算に戻す（¥{autoPrice.toLocaleString()}）
+                </button>
+              )}
             </div>
-          </div>
-        )}
-        {booking.status === 'done' && (
+          </>
+        ) : booking.status === 'done' ? (
           <div style={{ marginTop: 10 }}>
             <span className="muted">
               確定: {booking.finalDurationMin}分 / ¥{(booking.finalPrice ?? 0).toLocaleString()}
             </span>
             <PosSendButton tenantId={tenantId} booking={booking} />
           </div>
-        )}
+        ) : null}
 
+        {/* 9. 前回の施術履歴 */}
         <h3 className="pick-head" style={{ marginTop: 14 }}>
-          カルテ（直近の施術履歴）
+          前回の施術履歴
         </h3>
-        {(dog?.allergies || dog?.notes) && (
+        {(dog?.allergies || dog?.notes) && booking.status !== 'reserved' && (
           <p className="muted" style={{ margin: '0 0 6px' }}>
             {dog?.allergies ? `アレルギー: ${dog.allergies}　` : ''}
-            {dog?.notes ? `特記: ${dog.notes}` : ''}
+            {dog?.notes ? `メモ: ${dog.notes}` : ''}
           </p>
         )}
         {recent.length === 0 ? (
@@ -871,10 +1066,11 @@ function BookingDetailModal({
                   <div className="cart-item-title">
                     {r.date}
                     {r.serviceId ? ` ${serviceName.get(r.serviceId) ?? ''}` : ''}
+                    {r.staffId ? `（${staffName.get(r.staffId) ?? ''}）` : ''}
                   </div>
                   <div className="cart-item-meta">
                     {r.durationMin}分 / ¥{r.price.toLocaleString()}
-                    {r.notes ? ` ・ ${r.notes}` : ''}
+                    {r.notes ? ` ・ 施術メモ: ${r.notes}` : ''}
                   </div>
                 </div>
               </div>
@@ -882,13 +1078,18 @@ function BookingDetailModal({
           </div>
         )}
 
+        {err && <p className="error">{err}</p>}
+
+        {/* 10. 完了して履歴を保存 / 閉じる */}
         <div className="modal-actions">
-          <button type="button" onClick={() => navigate(`/karte/${booking.dogId}`)}>
-            カルテ全体を開く
-          </button>
-          <button type="button" className="primary" onClick={onClose}>
+          <button type="button" onClick={onClose}>
             閉じる
           </button>
+          {booking.status === 'reserved' && (
+            <button type="button" className="primary" disabled={busy} onClick={onCompleteAndSave}>
+              {busy ? '保存中…' : '完了して履歴を保存'}
+            </button>
+          )}
         </div>
       </div>
     </div>
