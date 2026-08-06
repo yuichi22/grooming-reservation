@@ -55,7 +55,7 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
       <h1>設定</h1>
       <form onSubmit={onSave}>
         <fieldset>
-          <legend>営業時間 (§6 空き計算の基準)</legend>
+          <legend>営業時間（空き計算の基準）</legend>
           {settings.businessHours.map((h, i) => (
             <div className="row-form" key={i}>
               <input type="time" value={h.start} onChange={(e) => setHours(i, 'start', e.target.value)} />
@@ -83,7 +83,7 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
         </label>
 
         <label className="inline">
-          作業時間の選択肢（カンマ区切り・フリー入力不可 §6）
+          作業時間の選択肢（カンマ区切り・フリー入力不可）
           <input
             value={settings.workTimeOptions.join(', ')}
             onChange={(e) =>
@@ -111,7 +111,7 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
         </label>
 
         <label className="inline">
-          キャンセル締切（開始の何時間前まで可 §11）
+          キャンセル締切（開始の何時間前まで可）
           <input
             type="number"
             min={0}

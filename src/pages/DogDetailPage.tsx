@@ -176,7 +176,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
           {custMsg && <span className="muted" style={{ flexBasis: '100%' }}>{custMsg}</span>}
           {!lineLinked && (
             <span className="muted" style={{ flexBasis: '100%' }}>
-              この電話番号で LINE 登録されると、自動でこの犬が紐づきます（§3）。
+              この電話番号で LINE 登録されると、自動でこの犬が紐づきます。
             </span>
           )}
         </div>
@@ -444,7 +444,7 @@ function AttachCustomer({
     <div className="customer-card" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
       <strong>顧客が未登録です</strong>
       <span className="muted">
-        飼い主を登録/紐づけると、同じ電話番号で LINE 登録したとき自動で連携されます（§3）。
+        飼い主を登録/紐づけると、同じ電話番号で LINE 登録したとき自動で連携されます。
       </span>
       <div className="tabs" style={{ margin: '6px 0' }}>
         <button type="button" className={`tab${mode === 'new' ? ' active' : ''}`} onClick={() => setMode('new')}>

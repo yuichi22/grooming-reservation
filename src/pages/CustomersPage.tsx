@@ -45,7 +45,7 @@ function CustomersInner({ tenantId }: { tenantId: string }) {
     <section>
       <h1>顧客</h1>
 
-      <h2>手動マージ (§11)</h2>
+      <h2>手動マージ</h2>
       <p className="muted">重複した顧客を1つに統合します（統合元の識別子・犬・予約を統合先へ移動）。</p>
       <div className="row-form">
         <label className="inline">

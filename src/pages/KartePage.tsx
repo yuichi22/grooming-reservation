@@ -114,7 +114,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
                 <input placeholder="電話番号（任意）" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </label>
               <p className="muted">
-                電話番号を入れておくと、その方が同じ番号で LINE 登録したときに自動でこの犬が紐づきます（§3）。
+                電話番号を入れておくと、その方が同じ番号で LINE 登録したときに自動でこの犬が紐づきます。
               </p>
               <div className="modal-actions">
                 <button type="button" onClick={closeModal} disabled={busy}>

@@ -807,7 +807,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           <p className="muted">
             {cart.length}頭：{cart.map((c) => dogById(c.dogId)?.name).filter(Boolean).join('・')}
           </p>
-          <p className="muted">前日にLINEでリマインドをお送りします (§9)。</p>
+          <p className="muted">前日にLINEでリマインドをお送りします。</p>
           <button type="button" className="done-back primary" onClick={closeOrBack}>
             LINEに戻る
           </button>

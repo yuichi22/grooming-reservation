@@ -30,7 +30,7 @@ export default function LoginPage() {
   return (
     <div className="auth-card">
       <h1>GROOM HAUS 管理</h1>
-      <p className="muted">スタッフ・管理者ログイン (§2)</p>
+      <p className="muted">スタッフ・管理者ログイン</p>
       <form onSubmit={onSubmit}>
         <label>
           メールアドレス

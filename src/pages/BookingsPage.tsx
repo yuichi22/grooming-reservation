@@ -735,7 +735,7 @@ function ListView({
             <th>メニュー</th>
             <th>担当</th>
             <th>状態</th>
-            <th>施術完了 (§7)</th>
+            <th>施術完了</th>
           </tr>
         </thead>
         <tbody>
