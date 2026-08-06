@@ -848,56 +848,60 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         </p>
       )}
 
-      {/* 予約開始（主CTA）。2頭目以降は「ワンちゃんを追加」 */}
-      <div className="book-quick">
-        <button type="button" className="book-start" onClick={openNewItem}>
-          <Plus size={20} style={{ verticalAlign: '-4px', marginRight: 4 }} />
-          {cart.length ? 'ワンちゃんを追加' : '予約をはじめる'}
-        </button>
-      </div>
+      {/* 予約開始（主CTA）はカートが空の時だけ。追加後は下のカード内「ワンちゃんを追加」に集約 */}
+      {cart.length === 0 && (
+        <div className="book-quick">
+          <button type="button" className="book-start" onClick={openNewItem}>
+            <Plus size={20} style={{ verticalAlign: '-4px', marginRight: 4 }} />
+            予約をはじめる
+          </button>
+        </div>
+      )}
 
-      {/* ご予約内容（モーダルではなくそのままリスト表示。編集/削除もここから） */}
-      <div className={`cart-bar${cart.length ? ' set' : ''}`}>
-        <PawPrint size={18} />
-        <span className="cart-bar-main">
-          {cart.length ? `ご予約内容（${cart.length}頭）` : 'まだ追加されていません'}
-        </span>
-        {cart.length > 0 && (
-          <span className="cart-bar-sum">
-            {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
-          </span>
-        )}
-      </div>
+      {/* ご予約内容: 合計・犬リスト・追加ボタンを1枚のカードに統合 */}
       {cart.length > 0 && (
-        <div className="cart-list cart-inline">
-          {cartEstimates.map(({ it, dur, amt }) => {
-            const dog = dogById(it.dogId);
-            const opts = allOptions.filter((o) => it.optionIds.includes(o.id));
-            return (
-              <div key={it.id} className="cart-item">
-                <div className="cart-item-body">
-                  <div className="cart-item-title">
-                    {dog?.name}
-                    {breedName(dog?.breedId) ? `（${breedName(dog?.breedId)}）` : ''}
+        <div className="book-cart-card">
+          <div className="book-cart-head">
+            <PawPrint size={18} />
+            <span>ご予約内容（{cart.length}頭）</span>
+            <span className="book-cart-sum">
+              {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
+            </span>
+          </div>
+          <div className="cart-list" style={{ marginTop: 8 }}>
+            {cartEstimates.map(({ it, dur, amt }) => {
+              const dog = dogById(it.dogId);
+              const opts = allOptions.filter((o) => it.optionIds.includes(o.id));
+              return (
+                <div key={it.id} className="cart-item">
+                  <div className="cart-item-body">
+                    <div className="cart-item-title">
+                      {dog?.name}
+                      {breedName(dog?.breedId) ? `（${breedName(dog?.breedId)}）` : ''}
+                    </div>
+                    <div className="cart-item-meta">
+                      {menuLabel(it)}
+                      {it.serviceId && opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
+                      {' ・ '}
+                      {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ' / 料金未設定'}
+                    </div>
                   </div>
-                  <div className="cart-item-meta">
-                    {menuLabel(it)}
-                    {it.serviceId && opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
-                    {' ・ '}
-                    {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ' / 料金未設定'}
+                  <div className="cart-item-actions">
+                    <button type="button" aria-label="編集" onClick={() => openEditItem(it)}>
+                      <Pencil size={16} />
+                    </button>
+                    <button type="button" aria-label="削除" onClick={() => removeItem(it.id)}>
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
-                <div className="cart-item-actions">
-                  <button type="button" aria-label="編集" onClick={() => openEditItem(it)}>
-                    <Pencil size={16} />
-                  </button>
-                  <button type="button" aria-label="削除" onClick={() => removeItem(it.id)}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          <button type="button" className="book-cart-add" onClick={openNewItem}>
+            <Plus size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />
+            ワンちゃんを追加
+          </button>
         </div>
       )}
 

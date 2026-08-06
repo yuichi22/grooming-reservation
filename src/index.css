@@ -1087,9 +1087,39 @@ tr.row-link td.chevron-cell {
   background: #ece9e2;
   color: var(--muted);
 }
-/* カートのインライン表示（モーダル廃止・ご予約内容の直下に一覧） */
-.cart-inline {
-  margin: 8px 0 4px;
+/* ご予約内容カード（合計・犬リスト・追加ボタンを1枚に統合） */
+.book-cart-card {
+  border: 1.5px solid var(--brand-100);
+  background: #fff;
+  border-radius: 16px;
+  padding: 12px;
+  margin: 0 0 12px;
+  box-shadow: var(--shadow-sm);
+}
+.book-cart-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+.book-cart-sum {
+  margin-left: auto;
+  font-weight: 800;
+  color: var(--brand-dark);
+  white-space: nowrap;
+}
+.book-cart-add {
+  width: 100%;
+  margin-top: 8px;
+  min-height: 42px;
+  border: 1.5px dashed var(--brand);
+  background: transparent;
+  color: var(--brand-dark);
+  font-weight: 800;
+  border-radius: 12px;
+}
+.book-cart-add:hover {
+  background: var(--brand-50);
 }
 /* ワンちゃん未選択の間、日付ナビ・月カレンダーをグレーアウト（タップは案内モーダルへ） */
 .cal-disabled {
