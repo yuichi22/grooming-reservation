@@ -13,10 +13,10 @@ export const setStaffRole = httpsCallable<
   { tenantId: string; targetUid: string; role: StaffRole }
 >(functions, 'setStaffRole');
 
-/** メール招待でスタッフを追加（Authユーザー用意＋権限付与＋staff作成）。created=新規作成。resetLink=パスワード設定リンク。 */
+/** メール招待でスタッフを追加（Authユーザー用意＋権限付与＋staff作成）。created=新規作成。 */
 export const inviteStaff = httpsCallable<
   { tenantId: string; email: string; name: string; role: StaffRole },
-  { uid: string; email: string; role: StaffRole; created: boolean; resetLink: string | null }
+  { uid: string; email: string; role: StaffRole; created: boolean }
 >(functions, 'inviteStaff');
 
 /** スタッフのパスワード設定リンクを再発行（メール不達/期限切れ時の共有用）。 */

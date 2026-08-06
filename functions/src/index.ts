@@ -160,14 +160,10 @@ export const inviteStaff = onCall<{ tenantId: string; email: string; name: strin
     .doc(user.uid)
     .set({ name: name.trim(), email, role, active: true, firebaseUid: user.uid }, { merge: true });
 
-  // メールに加え、管理画面で直接共有できるパスワード設定リンクも返す（メール不達対策）
-  let resetLink: string | null = null;
-  try {
-    resetLink = await auth.generatePasswordResetLink(email);
-  } catch {
-    resetLink = null;
-  }
-  return { uid: user.uid, email, role, created, resetLink };
+  // 注: ここではパスワード設定リンクを生成しない。Firebase Auth は新しいコードの発行で
+  // 古いコードを失効させるため、この後クライアントが送るメール(sendPasswordResetEmail)と
+  // 二重発行になり、どちらかが必ず死ぬ。メール不達時は getStaffInviteLink で最新を再発行する。
+  return { uid: user.uid, email, role, created };
 });
 
 /**

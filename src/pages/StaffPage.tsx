@@ -55,11 +55,15 @@ function StaffInner({ tenantId }: { tenantId: string }) {
     try {
       // メール招待: Authユーザー用意＋custom claims付与＋staff作成 (§2)
       const res = await inviteStaff({ tenantId, email: email.trim(), name: name.trim(), role });
-      // 新規ユーザーにはパスワード設定メールを送る（Firebase標準メール）
+      // 新規ユーザーにはパスワード設定メールを送る（Firebase標準メール）。
+      // リンクは二重発行しない（新コード発行で古いコードが失効するため、メールと
+      // 表示リンクを同時に出すとどちらかが必ず無効になる）。不達時は「招待リンク」で再発行。
       if (res.data.created) {
         await sendPasswordResetEmail(auth, res.data.email);
-        setMsg(`招待しました: ${name}（${role}）。パスワード設定メールを ${res.data.email} に送信しました。`);
-        if (res.data.resetLink) setInviteLink({ name, link: res.data.resetLink });
+        setMsg(
+          `招待しました: ${name}（${role}）。パスワード設定メールを ${res.data.email} に送信しました。` +
+            '届かない場合は迷惑メールを確認するか、一覧の「招待リンク」から最新リンクを発行して共有してください（発行するとメールのリンクは無効になります）。',
+        );
       } else {
         setMsg(`権限を付与しました: ${name}（${role}）。${res.data.email} は既存ユーザーのため既存のパスワードでログインできます。`);
       }
