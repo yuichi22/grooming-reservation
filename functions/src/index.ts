@@ -245,6 +245,8 @@ interface SettingsLike {
   bookingCutoffHours: number;
   /** 予約受付範囲: 今月を含めて何ヶ月先の月末まで受け付けるか。シフト管理画面と連動。既定 3 */
   bookingHorizonMonths: number;
+  /** 予約可能スタッフ全員が終日休みの日を顧客に「休業日」として見せるか。既定 true */
+  autoCloseWhenAllOff: boolean;
 }
 
 /** メッセージ文面に使う店舗情報（settings に保持・任意）。 */
@@ -266,7 +268,22 @@ async function loadSettings(tenantId: string): Promise<SettingsLike> {
     cancelDeadlineHours: s.cancelDeadlineHours ?? 24,
     bookingCutoffHours: s.bookingCutoffHours ?? 0,
     bookingHorizonMonths: s.bookingHorizonMonths ?? 3,
+    autoCloseWhenAllOff: s.autoCloseWhenAllOff ?? true,
   };
+}
+
+/**
+ * 予約可能スタッフ全員がその日終日休みか（自動休業の導出）。
+ * closures ドキュメントは作らず空き計算時に導出する＝シフトを戻せば自動で解除され、同期ズレが無い。
+ * スタッフが1人もいない場合は false（従来どおり拠点営業時間で受け付ける）。
+ */
+function isAllStaffOff(
+  shiftDay: ShiftDay | null | undefined,
+  staffIds: string[],
+  settings: SettingsLike,
+): boolean {
+  if (!settings.autoCloseWhenAllOff || staffIds.length === 0) return false;
+  return staffIds.every((sid) => staffHoursFor(shiftDay, sid, settings.businessHours).length === 0);
 }
 
 /**
@@ -627,7 +644,16 @@ export const getAvailability = onCall<{
     return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours };
   }
 
-  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
+  const [bookings, shiftDay, allStaffIds] = await Promise.all([
+    loadDayBookings(tenantId, date),
+    loadShiftDay(tenantId, date),
+    loadBookableStaffIds(tenantId),
+  ]);
+
+  // 全員終日休みは「休業日」として見せる（自動休業。設定でOFF可）
+  if (isAllStaffOff(shiftDay, allStaffIds, settings)) {
+    return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours, closed: true };
+  }
 
   let slots: string[];
   if (staffId) {
@@ -640,7 +666,7 @@ export const getAvailability = onCall<{
     });
   } else {
     // 指名なし: 全アクティブスタッフの空きの和集合 (§8)
-    const staffIds = await loadBookableStaffIds(tenantId);
+    const staffIds = allStaffIds;
     if (staffIds.length === 0) {
       slots = availability({
         businessHours: settings.businessHours,
@@ -830,7 +856,16 @@ export const getGroupAvailability = onCall<{
     return { slots: [], finishByStart: {}, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours };
   }
 
-  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
+  const [bookings, shiftDay, allStaffIds] = await Promise.all([
+    loadDayBookings(tenantId, date),
+    loadShiftDay(tenantId, date),
+    loadBookableStaffIds(tenantId),
+  ]);
+
+  // 全員終日休みは「休業日」として見せる（自動休業。設定でOFF可）
+  if (isAllStaffOff(shiftDay, allStaffIds, settings)) {
+    return { slots: [], finishByStart: {}, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours, closed: true };
+  }
   // 1スタッフの空きに頭数を順に詰め、入る開始時刻(15分グリッド)→施術終了 の対応を作る（連続不可なら自動分割）。
   // hours = そのスタッフの実効勤務時間（シフト①）
   const planForStaff = (
@@ -1246,17 +1281,28 @@ export const getBookingOptions = onCall<{ tenantId: string; accessToken: string;
 
 /**
  * 休業日の一覧（顧客カレンダー表示用）。指定範囲 [from, to] の終日休業の日付を返す。
+ * closures に加え、「予約可能スタッフ全員が終日休みの日」も休業として返す（自動休業・設定でOFF可）。
  * 認証不要（ゲスト閲覧可。休業日はユーザー非依存の公開情報）。
  */
 export const getClosedDates = onCall<{ tenantId: string; accessToken?: string; from: string; to: string }>(
   async (request) => {
     const { tenantId, from, to } = request.data;
     if (!tenantId || !from || !to) throw new HttpsError('invalid-argument', 'tenantId, from, to required');
-    const snap = await db.collection('tenants').doc(tenantId).collection('closures').get();
-    const dates = snap.docs
-      .filter((d) => d.id >= from && d.id <= to && d.data()?.fullDay !== false)
-      .map((d) => d.id);
-    return { dates };
+    const [snap, settings] = await Promise.all([
+      db.collection('tenants').doc(tenantId).collection('closures').get(),
+      loadSettings(tenantId),
+    ]);
+    const dates = new Set(
+      snap.docs.filter((d) => d.id >= from && d.id <= to && d.data()?.fullDay !== false).map((d) => d.id),
+    );
+    if (settings.autoCloseWhenAllOff) {
+      const [shiftDays, staffIds] = await Promise.all([loadShiftDays(tenantId, from, to), loadBookableStaffIds(tenantId)]);
+      // シフトdocがある日だけ判定すれば十分（doc無し=全員営業時間どおり出勤）
+      for (const [date, shiftDay] of shiftDays) {
+        if (date >= from && date <= to && isAllStaffOff(shiftDay, staffIds, settings)) dates.add(date);
+      }
+    }
+    return { dates: [...dates].sort() };
   },
 );
 

@@ -99,6 +99,16 @@ export default function ShiftsPage() {
     }
   }
 
+  const autoClose = tenant?.settings?.autoCloseWhenAllOff ?? true;
+  async function saveAutoClose(on: boolean) {
+    setErr(null);
+    try {
+      await updateDoc(doc(db, 'tenants', tenantId), { 'settings.autoCloseWhenAllOff': on });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '設定の保存に失敗しました');
+    }
+  }
+
   function openTimeModal(date: string, staffId: string, staffName: string, entry: ShiftEntry | undefined) {
     const cur = entry && Array.isArray(entry.intervals) && entry.intervals.length > 0 ? entry.intervals[0] : null;
     setTimeModal({
@@ -127,6 +137,13 @@ export default function ShiftsPage() {
         <p className="muted" style={{ margin: '4px 0 0' }}>
           お客様のWeb予約カレンダーもこの範囲まで表示・受付されます（範囲外は「空きなし」に見えます）。
           未設定の日は営業時間（{businessHours.map((h) => `${h.start}〜${h.end}`).join(' / ')}）どおり出勤の扱いです。
+        </p>
+        <label className="inline" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+          <input type="checkbox" checked={autoClose} onChange={(e) => saveAutoClose(e.target.checked)} />
+          スタッフ全員が終日休みの日は、お客様に「休業日」として表示する
+        </label>
+        <p className="muted" style={{ margin: '2px 0 0' }}>
+          OFFの場合は「予約がいっぱい」に見えます。設定ページの休業日（臨時休業・祝日）は常に最優先です。
         </p>
       </div>
 

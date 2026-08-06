@@ -48,6 +48,8 @@ export interface TenantSettings {
   bookingCutoffHours?: number;
   /** 予約受付範囲: 今月を含めて何ヶ月先の月末まで受付・シフト計画するか（シフト管理画面で設定）。既定 3 */
   bookingHorizonMonths?: number;
+  /** 予約可能スタッフ全員が終日休みの日を顧客に「休業日」として見せるか（シフト管理画面で設定）。既定 true */
+  autoCloseWhenAllOff?: boolean;
   /** 店舗情報（LINE 文面に使用・任意） */
   address?: string;
   mapUrl?: string;

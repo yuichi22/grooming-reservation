@@ -215,17 +215,25 @@ function Closures({ tenantId }: { tenantId: string }) {
   const { data: closures } = useCollection<Closure>(closuresCol(tenantId), [tenantId]);
   const [date, setDate] = useState('');
   const [reason, setReason] = useState('');
+  const [err, setErr] = useState<string | null>(null);
 
   async function add(e: FormEvent) {
     e.preventDefault();
     if (!date) return;
-    // ドキュメント ID = 日付（1日1件・冪等）
-    await setDoc(doc(closuresCol(tenantId), date), {
-      reason: reason.trim() || undefined,
-      fullDay: true,
-    } as Omit<Closure, 'id'> as Closure);
-    setDate('');
-    setReason('');
+    setErr(null);
+    try {
+      // ドキュメント ID = 日付（1日1件・冪等）。
+      // 注: undefined のフィールドは Firestore が拒否するため、理由は空なら載せない
+      // （以前は reason: undefined を書こうとして例外→ボタンが無反応に見えていた）。
+      await setDoc(doc(closuresCol(tenantId), date), {
+        ...(reason.trim() ? { reason: reason.trim() } : {}),
+        fullDay: true,
+      } as Omit<Closure, 'id'> as Closure);
+      setDate('');
+      setReason('');
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : '休業日の追加に失敗しました');
+    }
   }
 
   return (
@@ -237,6 +245,7 @@ function Closures({ tenantId }: { tenantId: string }) {
         <input placeholder="理由（任意）" value={reason} onChange={(e) => setReason(e.target.value)} />
         <button type="submit">休業日を追加</button>
       </form>
+      {err && <p className="error">{err}</p>}
       <div className="table-wrap"><table>
         <thead>
           <tr>
