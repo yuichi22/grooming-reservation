@@ -219,8 +219,13 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
         </div>
       )}
 
-      {/* 日ナビ: 表の直上でスティッキー（スクロールしても日送りが常に見える。下固定は環境により効かないため上に） */}
-      <div className="day-nav day-nav-sticky">
+      <DaySection tenantId={tenantId} date={selected} closed={selectedClosed} dayView={dayView} />
+
+      {/* 下固定バーに隠れないための余白 */}
+      <div style={{ height: 56 }} aria-hidden />
+
+      {/* 日ナビ: 画面最下部に固定（表の長さに関係なく常にピッタリ下） */}
+      <div className="day-nav day-nav-fixed">
         <div className="day-center">
           <button type="button" onClick={() => shiftDay(-1)} aria-label="前日">
             ‹
@@ -231,8 +236,6 @@ function BookingsInner({ tenantId }: { tenantId: string }) {
           </button>
         </div>
       </div>
-
-      <DaySection tenantId={tenantId} date={selected} closed={selectedClosed} dayView={dayView} />
     </section>
   );
 }
