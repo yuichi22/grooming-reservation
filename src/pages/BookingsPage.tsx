@@ -1032,17 +1032,18 @@ function BookingDetailModal({
 
             {/* 8. 確定料金（自動合算・手修正可）＋確定時間 */}
             <div className="book-summary" style={{ marginTop: 10 }}>
-              確定 {finalDur}分 ／ 確定料金 ¥
+              確定 {finalDur}分 ／ 確定料金
+              {/* ¥とカンマ付きでフィールド内に表示（数字だけ拾って保存） */}
               <input
-                type="number"
-                min={0}
-                step={100}
-                value={price}
+                type="text"
+                inputMode="numeric"
+                className="bdm-price"
+                value={`¥${price.toLocaleString()}`}
                 onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, '');
                   setPriceTouched(true);
-                  setPrice(Math.max(0, Number(e.target.value)));
+                  setPrice(digits ? Math.min(9_999_999, Number(digits)) : 0);
                 }}
-                style={{ width: 110 }}
               />
               {priceTouched && price !== autoPrice && (
                 <button type="button" className="link-btn" style={{ marginLeft: 8 }} onClick={() => { setPriceTouched(false); setPrice(autoPrice); }}>

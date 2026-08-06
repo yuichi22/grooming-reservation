@@ -1161,6 +1161,14 @@ tr.row-link td.chevron-cell {
   min-height: 34px;
   text-align: right;
 }
+/* 確定料金の入力（¥・3桁カンマをフィールド内表示） */
+.bdm-price {
+  width: 120px;
+  margin-left: 8px;
+  min-height: 36px;
+  text-align: right;
+  font-weight: 800;
+}
 .modal fieldset {
   margin: 12px 0;
 }
