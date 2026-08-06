@@ -1125,6 +1125,47 @@ tr.row-link td.chevron-cell {
 .cal-disabled {
   opacity: 0.45;
 }
+/* 予約詳細モーダル（管理側）。名前を大きく・✕は右上・行間にゆとり */
+.bdm-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.bdm-head .modal-close {
+  margin-left: auto;
+}
+.bdm-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+/* カルテ行: 個別加算/超過の入力と「分」を折り返させない */
+.karte-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 4px;
+}
+.karte-adj {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.karte-adj input {
+  width: 58px;
+  min-height: 34px;
+  text-align: right;
+}
+.modal fieldset {
+  margin: 12px 0;
+}
+.modal label {
+  margin-top: 10px;
+}
+
 /* 常時表示カレンダーの選択日ラベル（月ナビに引っ付ける）と時間枠の見出し */
 .cal-selected-date {
   text-align: center;

@@ -900,23 +900,27 @@ function BookingDetailModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        {/* 1. 犬種・名前＋カルテ導線（先頭。閉じると誤認しやすいボタンは置かない） */}
-        <p style={{ margin: '0 0 2px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <strong>
-            {breedLabel ? `${breedLabel}　` : ''}
-            {dog?.name ?? 'ワンちゃん'}
-          </strong>
-          <button type="button" className="link-btn" onClick={() => navigate(`/karte/${booking.dogId}`)}>
-            カルテを見る
+        {/* 1. ヘッダー: 名前（大きめ）＋犬種、右上に閉じる✕ */}
+        <div className="bdm-head">
+          <div>
+            <div className="bdm-name">{dog?.name ?? 'ワンちゃん'}</div>
+            <div className="muted" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {breedLabel || '犬種未設定'}
+              <button type="button" className="link-btn" onClick={() => navigate(`/karte/${booking.dogId}`)}>
+                カルテを見る
+              </button>
+            </div>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="閉じる">
+            ✕
           </button>
-        </p>
+        </div>
 
-        {/* 2. 日時・状態 / 予約メニュー・担当 */}
-        <p style={{ margin: '0 0 2px' }}>
+        {/* 2. 時間 / 予約メニュー・担当（日付・状態表記は省略。開いた日の予約なので自明） */}
+        <p style={{ margin: '0 0 4px' }}>
           <strong>
-            {formatDateJa(booking.date)} {booking.startTime}〜{booking.slotEnd}
-          </strong>{' '}
-          ・ {statusLabel(booking.status)}
+            {booking.startTime}〜{booking.slotEnd}
+          </strong>
           {offShift(booking) && (
             <span className="error" title="担当スタッフのシフト外です。担当か日時の変更をご検討ください">
               {' '}
@@ -924,13 +928,13 @@ function BookingDetailModal({
             </span>
           )}
         </p>
-        <p className="muted" style={{ margin: '0 0 6px' }}>
+        <p className="muted" style={{ margin: '0 0 12px' }}>
           予約メニュー: {menu} ／ 担当: {booking.staffId ? staffName.get(booking.staffId) ?? booking.staffId : '未割当'}
         </p>
 
         {/* 3. 予約の取り消し系（予約情報の直下。ラベルも「予約キャンセル」で明示） */}
         {booking.status === 'reserved' && (
-          <div className="row-form" style={{ margin: '0 0 8px' }}>
+          <div className="row-form" style={{ margin: '0 0 14px' }}>
             <button onClick={() => setStatus(tenantId, booking.id, 'canceled')}>予約キャンセル</button>
             <button onClick={() => setStatus(tenantId, booking.id, 'noshow')}>無断欠席</button>
           </div>
@@ -968,18 +972,21 @@ function BookingDetailModal({
               ) : !cell ? (
                 <p className="muted">この犬種×サービスの料金表が未設定です。メニューの料金表で登録してください。</p>
               ) : (
-                <p style={{ margin: 0 }}>
-                  標準 {cell.durationMin}分 / ¥{cell.price.toLocaleString()}　個別加算 ＋
-                  <input
-                    type="number"
-                    min={0}
-                    step={5}
-                    value={svcAdj}
-                    onChange={(e) => setSvcAdj(Math.max(0, Number(e.target.value)))}
-                    style={{ width: 70 }}
-                  />
-                  分 → <strong>{svcDur}分 / ¥{svcPrice.toLocaleString()}</strong>
-                </p>
+                <div className="karte-line">
+                  <span className="muted">標準 {cell.durationMin}分 / ¥{cell.price.toLocaleString()}</span>
+                  <span className="karte-adj">
+                    個別加算 ＋
+                    <input
+                      type="number"
+                      min={0}
+                      step={5}
+                      value={svcAdj}
+                      onChange={(e) => setSvcAdj(Math.max(0, Number(e.target.value)))}
+                    />
+                    分
+                  </span>
+                  <strong>→ {svcDur}分 / ¥{svcPrice.toLocaleString()}</strong>
+                </div>
               )}
             </fieldset>
 
@@ -987,18 +994,24 @@ function BookingDetailModal({
               <fieldset style={{ marginTop: 8 }}>
                 <legend>オプション超過時間の設定</legend>
                 {optCalc.map((o) => (
-                  <p key={o.id} style={{ margin: '0 0 4px' }}>
-                    {o.name}（標準{o.durationMin}分 / ¥{o.price.toLocaleString()}）＋
-                    <input
-                      type="number"
-                      min={0}
-                      step={5}
-                      value={o.add}
-                      onChange={(e) => setOptAdj((m) => ({ ...m, [o.id]: Math.max(0, Number(e.target.value)) }))}
-                      style={{ width: 70 }}
-                    />
-                    分 → <strong>{o.dur}分 / ¥{o.effPrice.toLocaleString()}</strong>
-                  </p>
+                  <div key={o.id} className="karte-line">
+                    <span>
+                      {o.name}
+                      <span className="muted">（標準{o.durationMin}分 / ¥{o.price.toLocaleString()}）</span>
+                    </span>
+                    <span className="karte-adj">
+                      超過 ＋
+                      <input
+                        type="number"
+                        min={0}
+                        step={5}
+                        value={o.add}
+                        onChange={(e) => setOptAdj((m) => ({ ...m, [o.id]: Math.max(0, Number(e.target.value)) }))}
+                      />
+                      分
+                    </span>
+                    <strong>→ {o.dur}分 / ¥{o.effPrice.toLocaleString()}</strong>
+                  </div>
                 ))}
               </fieldset>
             )}
