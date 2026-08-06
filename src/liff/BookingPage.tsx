@@ -149,6 +149,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   const [slots, setSlots] = useState<string[] | null>(null);
   const [finishByStart, setFinishByStart] = useState<Record<string, string>>({});
   const [closedDay, setClosedDay] = useState(false);
+  const [undecidedDay, setUndecidedDay] = useState(false); // シフト未定で受付前
   const [loadingSlots, setLoadingSlots] = useState(false);
 
   const [selectPrompt, setSelectPrompt] = useState(false);
@@ -278,6 +279,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         setSlots(res.data.slots);
         setFinishByStart(res.data.finishByStart ?? {});
         setClosedDay(!!res.data.closed);
+        setUndecidedDay(!!res.data.undecided);
       } catch {
         if (!cancelled) setSlots([]);
       } finally {
@@ -960,11 +962,12 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           <AvailabilityGrid
             slots={slots ?? []}
             closed={closedDay}
+            undecided={undecidedDay}
             selected={confirmSlot}
             onPick={(s) => setConfirmSlot(s)}
           />
-          {/* 空きが無い日でも、内容を短くすれば入る場合は提案 */}
-          {!closedDay && slots != null && slots.length === 0 && buildReductions().length > 0 && (
+          {/* 空きが無い日でも、内容を短くすれば入る場合は提案（未定日は対象外） */}
+          {!closedDay && !undecidedDay && slots != null && slots.length === 0 && buildReductions().length > 0 && (
             <div className="suggest-cta">
               <button type="button" onClick={findSuggestions}>
                 内容を短くして空きを探す
@@ -1390,15 +1393,18 @@ function BookingPage({ tenantId }: { tenantId: string }) {
 function AvailabilityGrid({
   slots,
   closed,
+  undecided,
   selected,
   onPick,
 }: {
   slots: string[];
   closed: boolean;
+  undecided?: boolean;
   selected: string | null;
   onPick: (s: string) => void;
 }) {
   if (closed) return <div className="slot-empty">休業日</div>;
+  if (undecided) return <div className="slot-empty">この日はまだ受付前です（シフト調整中）</div>;
   if (slots.length === 0) return <div className="slot-empty">この日に空きはありません</div>;
   const sorted = [...slots].sort();
   return (

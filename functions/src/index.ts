@@ -247,6 +247,11 @@ interface SettingsLike {
   bookingHorizonMonths: number;
   /** 予約可能スタッフ全員が終日休みの日を顧客に「休業日」として見せるか。既定 true */
   autoCloseWhenAllOff: boolean;
+  /**
+   * シフトが誰も決まっていない日を「未定」として予約不可にするか。既定 false（=未設定は出勤扱い）。
+   * ON時: 1人でもシフトが決まればその決まったスタッフだけで受付（未定スタッフは枠に入らない）。
+   */
+  requireShiftForBooking: boolean;
 }
 
 /** メッセージ文面に使う店舗情報（settings に保持・任意）。 */
@@ -269,7 +274,28 @@ async function loadSettings(tenantId: string): Promise<SettingsLike> {
     bookingCutoffHours: s.bookingCutoffHours ?? 0,
     bookingHorizonMonths: s.bookingHorizonMonths ?? 3,
     autoCloseWhenAllOff: s.autoCloseWhenAllOff ?? true,
+    requireShiftForBooking: s.requireShiftForBooking ?? false,
   };
+}
+
+/** その日にシフトが決まっている（何らかのエントリがある）スタッフだけを返す（未定ゲート用）。 */
+function decidedStaffIds(shiftDay: ShiftDay | null | undefined, staffIds: string[]): string[] {
+  return staffIds.filter((sid) => !!shiftDay?.staff?.[sid]);
+}
+
+/**
+ * 未定ゲート適用後の「予約枠に入れるスタッフ」。
+ * requireShiftForBooking がONのとき、シフト未定のスタッフは枠に入らない。
+ * 全員未定なら null（=その日は「未定」として受付しない）。OFFなら従来どおり全員。
+ */
+function bookablePool(
+  shiftDay: ShiftDay | null | undefined,
+  staffIds: string[],
+  settings: SettingsLike,
+): string[] | null {
+  if (!settings.requireShiftForBooking || staffIds.length === 0) return staffIds;
+  const decided = decidedStaffIds(shiftDay, staffIds);
+  return decided.length === 0 ? null : decided;
 }
 
 /**
@@ -655,6 +681,12 @@ export const getAvailability = onCall<{
     return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours, closed: true };
   }
 
+  // 未定ゲート: シフトが誰も決まっていない日は「未定」で受付しない。未定スタッフの指名も不可（設定ONのとき）
+  const pool = bookablePool(shiftDay, allStaffIds, settings);
+  if (pool === null || (staffId && settings.requireShiftForBooking && allStaffIds.length > 0 && !pool.includes(staffId))) {
+    return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours, undecided: true };
+  }
+
   let slots: string[];
   if (staffId) {
     // 指名あり: そのスタッフの予約のみで計算 (§8)。勤務時間はシフト①で解決
@@ -665,8 +697,8 @@ export const getAvailability = onCall<{
       occupied: occupiedFor(bookings, staffId),
     });
   } else {
-    // 指名なし: 全アクティブスタッフの空きの和集合 (§8)
-    const staffIds = allStaffIds;
+    // 指名なし: 枠に入れるスタッフ（未定ゲート適用後）の空きの和集合 (§8)
+    const staffIds = pool;
     if (staffIds.length === 0) {
       slots = availability({
         businessHours: settings.businessHours,
@@ -730,7 +762,17 @@ export const createBooking = onCall<{
   const bufferMin = settings.bufferMin;
   const slotEnd = toTimeStr(toMinutes(startTime) + durationMin + bufferMin);
 
-  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
+  const [bookings, shiftDay, allStaffIds] = await Promise.all([
+    loadDayBookings(tenantId, date),
+    loadShiftDay(tenantId, date),
+    loadBookableStaffIds(tenantId),
+  ]);
+  // 未定ゲート: シフトが誰も決まっていない日・未定スタッフの指名は確定させない（設定ONのとき）
+  const pool = bookablePool(shiftDay, allStaffIds, settings);
+  if (pool === null) throw new HttpsError('failed-precondition', 'shift not planned for this date');
+  if (staffId && settings.requireShiftForBooking && allStaffIds.length > 0 && !pool.includes(staffId)) {
+    throw new HttpsError('failed-precondition', 'nominated staff is not available');
+  }
 
   // 割当スタッフを決定し、その視点で startTime が空いているか再検証（勤務時間はシフト①で解決）
   function isFree(sid: string): boolean {
@@ -747,7 +789,7 @@ export const createBooking = onCall<{
     if (!isFree(staffId)) throw new HttpsError('failed-precondition', 'nominated staff is not available');
     assigned = staffId;
   } else {
-    const staffIds = await loadBookableStaffIds(tenantId);
+    const staffIds = pool;
     assigned = staffIds.find((sid) => isFree(sid)) ?? null;
     if (staffIds.length > 0 && assigned == null) {
       throw new HttpsError('failed-precondition', 'no staff available at this time');
@@ -866,6 +908,12 @@ export const getGroupAvailability = onCall<{
   if (isAllStaffOff(shiftDay, allStaffIds, settings)) {
     return { slots: [], finishByStart: {}, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours, closed: true };
   }
+
+  // 未定ゲート: シフトが誰も決まっていない日は「未定」で受付しない。未定スタッフの指名も不可（設定ONのとき）
+  const pool = bookablePool(shiftDay, allStaffIds, settings);
+  if (pool === null || (staffId && settings.requireShiftForBooking && allStaffIds.length > 0 && !pool.includes(staffId))) {
+    return { slots: [], finishByStart: {}, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours, undecided: true };
+  }
   // 1スタッフの空きに頭数を順に詰め、入る開始時刻(15分グリッド)→施術終了 の対応を作る（連続不可なら自動分割）。
   // hours = そのスタッフの実効勤務時間（シフト①）
   const planForStaff = (
@@ -895,7 +943,7 @@ export const getGroupAvailability = onCall<{
   if (staffId) {
     mergePlan(planForStaff(hoursOf(staffId), occupiedFor(bookings, staffId)));
   } else {
-    const staffIds = await loadBookableStaffIds(tenantId);
+    const staffIds = pool;
     if (staffIds.length === 0)
       mergePlan(planForStaff(settings.businessHours, bookings.map((b) => ({ start: b.startTime, end: b.slotEnd }))));
     else for (const sid of staffIds) mergePlan(planForStaff(hoursOf(sid), occupiedFor(bookings, sid)));
@@ -954,6 +1002,9 @@ export const getMonthAvailability = onCall<{
     if (closed.has(date)) return false;
     const dayBookings = byDate.get(date) ?? [];
     const shiftDay = shiftDays.get(date) ?? null;
+    // 未定ゲート: シフトが誰も決まっていない日（指名時は未定スタッフ）は開いていない扱い
+    const pool = bookablePool(shiftDay, staffIds, settings);
+    if (pool === null) return false;
     const checkOccupied = (hours: { start: string; end: string }[], occupied: { start: string; end: string }[]): boolean => {
       const gaps = freeIntervals(hours, occupied);
       for (const g of gaps) {
@@ -967,7 +1018,7 @@ export const getMonthAvailability = onCall<{
     };
     if (staffIds.length === 0)
       return checkOccupied(settings.businessHours, dayBookings.map((b) => ({ start: b.startTime, end: b.slotEnd })));
-    return staffIds.some((sid) =>
+    return pool.some((sid) =>
       checkOccupied(staffHoursFor(shiftDay, sid, settings.businessHours), occupiedFor(dayBookings, sid)),
     );
   };
@@ -1028,7 +1079,17 @@ export const createGroupBooking = onCall<{
   const totalDuration = durations.reduce((s, d) => s + d, 0);
   // バッファはメニュー（サービス）にのみ適用。単品オプションのみの予約はバッファ0。
   const bufferMin = computed.some((c) => c.serviceId) ? settings.bufferMin : 0;
-  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
+  const [bookings, shiftDay, allStaffIds] = await Promise.all([
+    loadDayBookings(tenantId, date),
+    loadShiftDay(tenantId, date),
+    loadBookableStaffIds(tenantId),
+  ]);
+  // 未定ゲート: シフトが誰も決まっていない日・未定スタッフの指名は確定させない（設定ONのとき）
+  const pool = bookablePool(shiftDay, allStaffIds, settings);
+  if (pool === null) throw new HttpsError('failed-precondition', 'shift not planned for this date');
+  if (staffId && settings.requireShiftForBooking && allStaffIds.length > 0 && !pool.includes(staffId)) {
+    throw new HttpsError('failed-precondition', 'nominated staff is not available');
+  }
   const startMin = toMinutes(startTime);
 
   // startTime から頭数を詰めた配置（連続不可なら自動分割）。先頭が startTime ちょうどでなければ空き無し扱い。
@@ -1045,7 +1106,7 @@ export const createGroupBooking = onCall<{
     if (!packed) throw new HttpsError('failed-precondition', 'nominated staff is not available');
     assigned = staffId;
   } else {
-    const staffIds = await loadBookableStaffIds(tenantId);
+    const staffIds = pool;
     if (staffIds.length === 0) {
       packed = planFor(settings.businessHours, bookings.map((b) => ({ start: b.startTime, end: b.slotEnd })));
     } else {

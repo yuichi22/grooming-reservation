@@ -12,7 +12,7 @@ import { useAuth } from '../auth/AuthContext';
 import { closuresCol, shiftDoc, shiftsCol, staffCol, tenantDoc } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import type { TimeInterval } from '../lib/shifts';
+import { staffHoursFor, type TimeInterval } from '../lib/shifts';
 import type { Closure, ShiftDayDoc, Staff, Tenant } from '../lib/types';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
@@ -130,6 +130,34 @@ export default function ShiftsPage() {
     }
   }
 
+  const requireShift = tenant?.settings?.requireShiftForBooking ?? false;
+  async function saveRequireShift(on: boolean) {
+    setErr(null);
+    try {
+      await updateDoc(doc(db, 'tenants', tenantId), { 'settings.requireShiftForBooking': on });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '設定の保存に失敗しました');
+    }
+  }
+
+  // 日付ヘッダーのマーク: 手動休業 > 全員終日休み(自動休業) > 未定(誰もシフト未設定・ゲートON時)
+  const bookableIds = bookableStaff.map((s) => s.id);
+  function dayMark(ds: string): 'closed' | 'auto' | 'undecided' | null {
+    if (closedDates.has(ds)) return 'closed';
+    if (bookableIds.length === 0) return null;
+    const sd = shiftByDate.get(ds);
+    const decided = bookableIds.filter((sid) => !!sd?.staff?.[sid]);
+    if (
+      autoClose &&
+      decided.length === bookableIds.length &&
+      bookableIds.every((sid) => staffHoursFor(sd?.staff, sid, businessHours).length === 0)
+    ) {
+      return 'auto';
+    }
+    if (requireShift && decided.length === 0) return 'undecided';
+    return null;
+  }
+
   function openTimeModal(date: string, staffId: string, staffName: string, entry: ShiftEntry | undefined) {
     const cur = entry && Array.isArray(entry.intervals) && entry.intervals.length > 0 ? entry.intervals[0] : null;
     setTimeModal({
@@ -180,12 +208,21 @@ export default function ShiftsPage() {
               （範囲外は「空きなし」に見えます）。未設定の日は営業時間（
               {businessHours.map((h) => `${h.start}〜${h.end}`).join(' / ')}）どおり出勤の扱いです。
             </p>
-            <label className="inline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label className="shift-check">
               <input type="checkbox" checked={autoClose} onChange={(e) => saveAutoClose(e.target.checked)} />
-              スタッフ全員が終日休みの日は、お客様に「休業日」として表示する
+              <span>スタッフ全員が終日休みの日は、お客様に「休業日」として表示する</span>
+            </label>
+            <p className="muted" style={{ margin: '2px 0 12px' }}>
+              OFFの場合は「予約がいっぱい」に見えます。手動の休業日（臨時休業・祝日）は常に最優先です。
+            </p>
+            <label className="shift-check">
+              <input type="checkbox" checked={requireShift} onChange={(e) => saveRequireShift(e.target.checked)} />
+              <span>シフトが未定の日は予約を受け付けない（お客様には「受付前」表示）</span>
             </label>
             <p className="muted" style={{ margin: '2px 0 0' }}>
-              OFFの場合は「予約がいっぱい」に見えます。手動の休業日（臨時休業・祝日）は常に最優先です。
+              誰か1人でもシフトを設定した日は、その決まったスタッフだけで受け付けます。
+              OFFの場合は未設定の日も営業時間どおり全員出勤の扱いで受け付けます。
+              ⚠ONにする場合は、受付範囲内のシフトを先に入力してください（未入力の日が全て受付停止になります）。
             </p>
             <div className="modal-actions">
               <button type="button" className="primary" onClick={() => setSettingsOpen(false)}>
@@ -215,30 +252,38 @@ export default function ShiftsPage() {
                   <thead>
                     <tr>
                       <th className="shift-sticky">スタッフ</th>
-                      {days.map((d) => (
-                        <th key={d.ds} className={closedDates.has(d.ds) ? 'shift-closed-day' : ''}>
-                          {/* 日付タップで休業日の設定/解除（過去日は表示のみ） */}
-                          <button
-                            type="button"
-                            className="shift-day-head"
-                            disabled={d.ds < today}
-                            title="タップで休業日を設定/解除"
-                            onClick={() =>
-                              setClosureModal({
-                                date: d.ds,
-                                isClosed: closedDates.has(d.ds),
-                                reason: closures.find((c) => c.id === d.ds)?.reason ?? '',
-                              })
-                            }
-                          >
-                            <span className={d.dow === 0 ? 'sun' : d.dow === 6 ? 'sat' : ''}>
-                              {d.day}
-                              <small>（{DOW[d.dow]}）</small>
-                            </span>
-                            {closedDates.has(d.ds) && <small className="shift-closed-mark">休業</small>}
-                          </button>
-                        </th>
-                      ))}
+                      {days.map((d) => {
+                        const mark = dayMark(d.ds);
+                        return (
+                          <th key={d.ds} className={mark === 'closed' || mark === 'auto' ? 'shift-closed-day' : ''}>
+                            {/* 日付タップで休業日の設定/解除（過去日は表示のみ） */}
+                            <button
+                              type="button"
+                              className="shift-day-head"
+                              disabled={d.ds < today}
+                              title="タップで休業日を設定/解除"
+                              onClick={() =>
+                                setClosureModal({
+                                  date: d.ds,
+                                  isClosed: closedDates.has(d.ds),
+                                  reason: closures.find((c) => c.id === d.ds)?.reason ?? '',
+                                })
+                              }
+                            >
+                              <span className={d.dow === 0 ? 'sun' : d.dow === 6 ? 'sat' : ''}>
+                                {d.day}
+                                <small>（{DOW[d.dow]}）</small>
+                              </span>
+                              {(mark === 'closed' || mark === 'auto') && (
+                                <small className="shift-closed-mark" title={mark === 'auto' ? '全員終日休みのため休業表示' : '休業日'}>
+                                  休業
+                                </small>
+                              )}
+                              {mark === 'undecided' && <small className="shift-undecided-mark">未定</small>}
+                            </button>
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>

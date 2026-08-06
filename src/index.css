@@ -303,7 +303,9 @@ label.inline > select {
   order: 3;
   text-align: center;
 }
-/* デスクトップ: ＜ | 予約/カルテ | ロゴ中央 | ログインID の横並び */
+/* デスクトップ: ＜ | 予約/カルテ/シフト/QR | ロゴ中央 | ログインID の横並び。
+   左（ボタン群）と右（ログインID）を等分フレックスにしてロゴを常に真ん中へ
+   （ボタンが増えても片側の重みでロゴがずれない）。 */
 @media (min-width: 820px) {
   .topbar {
     flex-direction: row;
@@ -316,14 +318,23 @@ label.inline > select {
   .header-quick {
     order: 1;
     margin-top: 0;
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: flex-start;
+    flex-wrap: wrap; /* 狭い幅では折り返してロゴを侵食しない */
   }
   .header-center {
     order: 2;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
   }
   .topbar .user {
     order: 3;
-    text-align: left;
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 .nav-icon {
@@ -1450,6 +1461,26 @@ button.tg-block.done:hover {
   display: block;
   color: #c0392b;
   font-weight: 800;
+}
+.shift-undecided-mark {
+  display: block;
+  color: var(--muted);
+  font-weight: 800;
+}
+/* 設定モーダルのチェックボックス行（チェックとテキストを横並びに。テキストのみ折返し） */
+.shift-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.shift-check input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  flex: 0 0 auto;
+  margin: 2px 0 0;
 }
 .shift-cell-stack {
   display: flex;

@@ -134,6 +134,8 @@ export const getGroupAvailability = httpsCallable<
     price: number | null;
     businessHours: { start: string; end: string }[];
     closed?: boolean;
+    /** シフト未定のため受付前（requireShiftForBooking がONのテナントのみ） */
+    undecided?: boolean;
   }
 >(functions, 'getGroupAvailability');
 
