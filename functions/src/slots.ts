@@ -88,6 +88,34 @@ export function availability(args: AvailabilityArgs): string[] {
   return starts.map(toTimeStr);
 }
 
+/**
+ * 2つの時間帯リストの交差（シフト∩営業時間）。シフト①: スタッフの実効勤務時間の算出に使う。
+ * どちらも "HH:MM" 区間の配列。結果は昇順・重複マージ済み。
+ */
+export function intersectIntervals(a: TimeInterval[], b: TimeInterval[]): TimeInterval[] {
+  const norm = (list: TimeInterval[]): Interval[] =>
+    list
+      .map((x) => ({ start: toMinutes(x.start), end: toMinutes(x.end) }))
+      .filter((x) => x.end > x.start)
+      .sort((x, y) => x.start - y.start);
+  const out: Interval[] = [];
+  for (const ia of norm(a)) {
+    for (const ib of norm(b)) {
+      const start = Math.max(ia.start, ib.start);
+      const end = Math.min(ia.end, ib.end);
+      if (end > start) out.push({ start, end });
+    }
+  }
+  out.sort((x, y) => x.start - y.start);
+  const merged: Interval[] = [];
+  for (const o of out) {
+    const last = merged[merged.length - 1];
+    if (last && o.start <= last.end) last.end = Math.max(last.end, o.end);
+    else merged.push({ ...o });
+  }
+  return merged.map((x) => ({ start: toTimeStr(x.start), end: toTimeStr(x.end) }));
+}
+
 /** 営業時間から占有を引いた「空き区間」（分・昇順）。 */
 export function freeIntervals(businessHours: TimeInterval[], occupied: TimeInterval[]): Interval[] {
   const business: Interval[] = businessHours.map((b) => ({ start: toMinutes(b.start), end: toMinutes(b.end) }));

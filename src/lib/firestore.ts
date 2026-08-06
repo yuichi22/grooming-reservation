@@ -19,6 +19,7 @@ import type {
   PriceEntry,
   Service,
   ServiceRecord,
+  ShiftDayDoc,
   Staff,
   Tenant,
 } from './types';
@@ -40,6 +41,7 @@ function converter<T extends { id: string }>(): FirestoreDataConverter<T> {
 
 const tenantConverter = converter<Tenant>();
 const closureConverter = converter<Closure>();
+const shiftDayConverter = converter<ShiftDayDoc>();
 const staffConverter = converter<Staff>();
 const breedConverter = converter<Breed>();
 const serviceConverter = converter<Service>();
@@ -87,3 +89,8 @@ export const bookingsCol = (tenantId: string): CollectionReference<Booking> =>
 
 export const closuresCol = (tenantId: string): CollectionReference<Closure> =>
   collection(db, 'tenants', tenantId, 'closures').withConverter(closureConverter);
+
+export const shiftsCol = (tenantId: string): CollectionReference<ShiftDayDoc> =>
+  collection(db, 'tenants', tenantId, 'shifts').withConverter(shiftDayConverter);
+
+export const shiftDoc = (tenantId: string, date: string) => doc(shiftsCol(tenantId), date);

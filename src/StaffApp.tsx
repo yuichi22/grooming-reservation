@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import BookingsPage from './pages/BookingsPage';
 import MenusPage from './pages/MenusPage';
 import StaffPage from './pages/StaffPage';
+import ShiftsPage from './pages/ShiftsPage';
 import SettingsPage from './pages/SettingsPage';
 import KartePage from './pages/KartePage';
 import DogDetailPage from './pages/DogDetailPage';
@@ -46,6 +47,14 @@ export default function StaffApp() {
             element={
               <RequireAuth adminOnly>
                 <StaffPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="shifts"
+            element={
+              <RequireAuth adminOnly>
+                <ShiftsPage />
               </RequireAuth>
             }
           />

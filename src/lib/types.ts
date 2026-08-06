@@ -88,6 +88,15 @@ export interface Staff {
   email?: string;
 }
 
+/**
+ * tenants/{tenantId}/shifts/{date} — スタッフ日別シフト（シフト①）。id = YYYY-MM-DD。
+ * staff にエントリが無いスタッフは拠点営業時間どおり出勤。intervals: [] = 終日休み。
+ */
+export interface ShiftDayDoc {
+  id: string; // = date
+  staff?: Record<string, { intervals?: { start: TimeStr; end: TimeStr }[] }>;
+}
+
 /** tenants/{tenantId}/breeds/{breedId} — 犬種マスタ */
 export interface Breed {
   id: string;

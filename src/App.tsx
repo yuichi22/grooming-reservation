@@ -19,6 +19,7 @@ const LOCAL_TOP_PATHS = new Set([
   'karte',
   'menus',
   'staff',
+  'shifts',
   'customers',
   'settings',
 ]);

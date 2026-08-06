@@ -2,7 +2,7 @@
 // 認証は custom claims に基づく (§2)。
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, FieldValue, type DocumentReference } from 'firebase-admin/firestore';
+import { getFirestore, FieldPath, FieldValue, type DocumentReference } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -11,6 +11,7 @@ import { defineInt } from 'firebase-functions/params';
 import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
 import { verifyLineAccessToken, pushLineMessage, isLineFriend } from './line.js';
 import { availability, freeIntervals, packDogs, toMinutes, toTimeStr, unionStarts } from './slots.js';
+import { staffHoursFor, type ShiftDay } from './shifts.js';
 import { buildPointEvent, deliverPointEvent, crmWebhookSecret, type PointEventStatus } from './crm.js';
 import { buildCheckoutRequest, checkoutRequestId, deliverCheckoutRequest } from './posCheckout.js';
 import { buildConfirmationMessage, buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
@@ -443,6 +444,26 @@ function occupiedFor(bookings: BookingRow[], staffId: string): { start: string; 
     .map((b) => ({ start: b.startTime, end: b.slotEnd }));
 }
 
+/** その日のシフトdoc（シフト①）。無ければ null（=全員が営業時間どおり）。 */
+async function loadShiftDay(tenantId: string, date: string): Promise<ShiftDay | null> {
+  const snap = await db.collection('tenants').doc(tenantId).collection('shifts').doc(date).get();
+  return snap.exists ? (snap.data() as ShiftDay) : null;
+}
+
+/** 日付範囲 [from, to] のシフトdocをまとめて取得（月カレンダー判定用）。 */
+async function loadShiftDays(tenantId: string, from: string, to: string): Promise<Map<string, ShiftDay>> {
+  const snap = await db
+    .collection('tenants')
+    .doc(tenantId)
+    .collection('shifts')
+    .where(FieldPath.documentId(), '>=', from)
+    .where(FieldPath.documentId(), '<=', to)
+    .get();
+  const map = new Map<string, ShiftDay>();
+  snap.docs.forEach((d) => map.set(d.id, d.data() as ShiftDay));
+  return map;
+}
+
 /**
  * 顧客セッション確立 + find-or-link (§3)。
  * LINE トークンを検証し、tenant 内の customers を識別子照合して結びつける/作成する。
@@ -593,13 +614,13 @@ export const getAvailability = onCall<{
     return { slots: [], durationMin, bufferMin: settings.bufferMin, price, businessHours: settings.businessHours, closed: true };
   }
 
-  const bookings = await loadDayBookings(tenantId, date);
+  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
 
   let slots: string[];
   if (staffId) {
-    // 指名あり: そのスタッフの予約のみで計算 (§8)
+    // 指名あり: そのスタッフの予約のみで計算 (§8)。勤務時間はシフト①で解決
     slots = availability({
-      businessHours: settings.businessHours,
+      businessHours: staffHoursFor(shiftDay, staffId, settings.businessHours),
       bufferMin: settings.bufferMin,
       durationMin,
       occupied: occupiedFor(bookings, staffId),
@@ -618,7 +639,7 @@ export const getAvailability = onCall<{
       slots = unionStarts(
         staffIds.map((sid) =>
           availability({
-            businessHours: settings.businessHours,
+            businessHours: staffHoursFor(shiftDay, sid, settings.businessHours),
             bufferMin: settings.bufferMin,
             durationMin,
             occupied: occupiedFor(bookings, sid),
@@ -667,12 +688,12 @@ export const createBooking = onCall<{
   const bufferMin = settings.bufferMin;
   const slotEnd = toTimeStr(toMinutes(startTime) + durationMin + bufferMin);
 
-  const bookings = await loadDayBookings(tenantId, date);
+  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
 
-  // 割当スタッフを決定し、その視点で startTime が空いているか再検証
+  // 割当スタッフを決定し、その視点で startTime が空いているか再検証（勤務時間はシフト①で解決）
   function isFree(sid: string): boolean {
     return availability({
-      businessHours: settings.businessHours,
+      businessHours: staffHoursFor(shiftDay, sid, settings.businessHours),
       bufferMin,
       durationMin,
       occupied: occupiedFor(bookings, sid),
@@ -789,10 +810,14 @@ export const getGroupAvailability = onCall<{
     return { slots: [], finishByStart: {}, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours, closed: true };
   }
 
-  const bookings = await loadDayBookings(tenantId, date);
-  // 1スタッフの空きに頭数を順に詰め、入る開始時刻(15分グリッド)→施術終了 の対応を作る（連続不可なら自動分割）
-  const planForStaff = (occupied: { start: string; end: string }[]): Map<number, number> => {
-    const gaps = freeIntervals(settings.businessHours, occupied);
+  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
+  // 1スタッフの空きに頭数を順に詰め、入る開始時刻(15分グリッド)→施術終了 の対応を作る（連続不可なら自動分割）。
+  // hours = そのスタッフの実効勤務時間（シフト①）
+  const planForStaff = (
+    hours: { start: string; end: string }[],
+    occupied: { start: string; end: string }[],
+  ): Map<number, number> => {
+    const gaps = freeIntervals(hours, occupied);
     const out = new Map<number, number>();
     for (const g of gaps) {
       const first = Math.ceil(g.start / 15) * 15;
@@ -811,12 +836,14 @@ export const getGroupAvailability = onCall<{
       if (cur == null || fin < cur) plan.set(t, fin); // 指名なしは最も早く終わる担当を採用
     }
   };
+  const hoursOf = (sid: string) => staffHoursFor(shiftDay, sid, settings.businessHours);
   if (staffId) {
-    mergePlan(planForStaff(occupiedFor(bookings, staffId)));
+    mergePlan(planForStaff(hoursOf(staffId), occupiedFor(bookings, staffId)));
   } else {
     const staffIds = await loadBookableStaffIds(tenantId);
-    if (staffIds.length === 0) mergePlan(planForStaff(bookings.map((b) => ({ start: b.startTime, end: b.slotEnd }))));
-    else for (const sid of staffIds) mergePlan(planForStaff(occupiedFor(bookings, sid)));
+    if (staffIds.length === 0)
+      mergePlan(planForStaff(settings.businessHours, bookings.map((b) => ({ start: b.startTime, end: b.slotEnd }))));
+    else for (const sid of staffIds) mergePlan(planForStaff(hoursOf(sid), occupiedFor(bookings, sid)));
   }
 
   // 受付締切＋過去時刻を除外し、開始時刻→終了時刻のマップを作る
@@ -853,7 +880,7 @@ export const getMonthAvailability = onCall<{
   const effBuffer = computed.some((c) => c.serviceId) ? settings.bufferMin : 0;
 
   const base = db.collection('tenants').doc(tenantId);
-  const closSnap = await base.collection('closures').get();
+  const [closSnap, shiftDays] = await Promise.all([base.collection('closures').get(), loadShiftDays(tenantId, from, to)]);
   const closed = new Set(closSnap.docs.filter((d) => d.id >= from && d.id <= to && d.data()?.fullDay !== false).map((d) => d.id));
   const bSnap = await base.collection('bookings').where('date', '>=', from).where('date', '<=', to).get();
   const byDate = new Map<string, BookingRow[]>();
@@ -867,12 +894,13 @@ export const getMonthAvailability = onCall<{
   });
   const staffIds = staffId ? [staffId] : await loadBookableStaffIds(tenantId);
 
-  // その日に「全頭が収まる開始時刻が1つでもあるか」（締切・過去時刻も考慮）
+  // その日に「全頭が収まる開始時刻が1つでもあるか」（締切・過去時刻も考慮。勤務時間はシフト①で解決）
   const fitsOnDay = (date: string): boolean => {
     if (closed.has(date)) return false;
     const dayBookings = byDate.get(date) ?? [];
-    const checkOccupied = (occupied: { start: string; end: string }[]): boolean => {
-      const gaps = freeIntervals(settings.businessHours, occupied);
+    const shiftDay = shiftDays.get(date) ?? null;
+    const checkOccupied = (hours: { start: string; end: string }[], occupied: { start: string; end: string }[]): boolean => {
+      const gaps = freeIntervals(hours, occupied);
       for (const g of gaps) {
         const first = Math.ceil(g.start / 15) * 15;
         for (let t = first; t < g.end; t += 15) {
@@ -882,8 +910,11 @@ export const getMonthAvailability = onCall<{
       }
       return false;
     };
-    if (staffIds.length === 0) return checkOccupied(dayBookings.map((b) => ({ start: b.startTime, end: b.slotEnd })));
-    return staffIds.some((sid) => checkOccupied(occupiedFor(dayBookings, sid)));
+    if (staffIds.length === 0)
+      return checkOccupied(settings.businessHours, dayBookings.map((b) => ({ start: b.startTime, end: b.slotEnd })));
+    return staffIds.some((sid) =>
+      checkOccupied(staffHoursFor(shiftDay, sid, settings.businessHours), occupiedFor(dayBookings, sid)),
+    );
   };
 
   const openDates: string[] = [];
@@ -937,28 +968,29 @@ export const createGroupBooking = onCall<{
   const totalDuration = durations.reduce((s, d) => s + d, 0);
   // バッファはメニュー（サービス）にのみ適用。単品オプションのみの予約はバッファ0。
   const bufferMin = computed.some((c) => c.serviceId) ? settings.bufferMin : 0;
-  const bookings = await loadDayBookings(tenantId, date);
+  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
   const startMin = toMinutes(startTime);
 
   // startTime から頭数を詰めた配置（連続不可なら自動分割）。先頭が startTime ちょうどでなければ空き無し扱い。
-  const planFor = (occupied: { start: string; end: string }[]) => {
-    const packed = packDogs(freeIntervals(settings.businessHours, occupied), durations, bufferMin, startMin);
+  // hours = そのスタッフの実効勤務時間（シフト①）
+  const planFor = (hours: { start: string; end: string }[], occupied: { start: string; end: string }[]) => {
+    const packed = packDogs(freeIntervals(hours, occupied), durations, bufferMin, startMin);
     return packed && packed.starts[0] === startMin ? packed : null;
   };
 
   let assigned: string | null = null;
   let packed: { starts: number[]; finishMin: number } | null = null;
   if (staffId) {
-    packed = planFor(occupiedFor(bookings, staffId));
+    packed = planFor(staffHoursFor(shiftDay, staffId, settings.businessHours), occupiedFor(bookings, staffId));
     if (!packed) throw new HttpsError('failed-precondition', 'nominated staff is not available');
     assigned = staffId;
   } else {
     const staffIds = await loadBookableStaffIds(tenantId);
     if (staffIds.length === 0) {
-      packed = planFor(bookings.map((b) => ({ start: b.startTime, end: b.slotEnd })));
+      packed = planFor(settings.businessHours, bookings.map((b) => ({ start: b.startTime, end: b.slotEnd })));
     } else {
       for (const sid of staffIds) {
-        const p = planFor(occupiedFor(bookings, sid));
+        const p = planFor(staffHoursFor(shiftDay, sid, settings.businessHours), occupiedFor(bookings, sid));
         if (p) {
           assigned = sid;
           packed = p;
@@ -1050,10 +1082,11 @@ export const createBookingByStaff = onCall<{
   const bufferMin = settings.bufferMin;
   const slotEnd = toTimeStr(toMinutes(startTime) + durationMin + bufferMin);
 
-  const bookings = await loadDayBookings(tenantId, date);
+  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
+  // スタッフ作成でもシフトを尊重する（休みの人に入れたい場合はシフトを直してから）
   function isFree(sid: string): boolean {
     return availability({
-      businessHours: settings.businessHours,
+      businessHours: staffHoursFor(shiftDay, sid, settings.businessHours),
       bufferMin,
       durationMin,
       occupied: occupiedFor(bookings, sid),

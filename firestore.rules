@@ -92,6 +92,13 @@ service cloud.firestore {
         allow write: if isSuperAdmin() || isAdmin(tenantId);
       }
 
+      // スタッフ日別シフト（シフト①）。{ staff: { [staffId]: { intervals } } }。
+      // 閲覧は所属スタッフ（予約グリッドの警告バッジで参照）、変更は admin。
+      match /shifts/{date} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+
       // 中央台帳イベントのアウトボックス (§10)。
       // 生成・配信は Cloud Functions(admin SDK)のみ。クライアントは admin が閲覧のみ可。
       match /pointEvents/{eventId} {

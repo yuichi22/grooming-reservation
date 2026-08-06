@@ -11,13 +11,15 @@ import {
   optionsCol,
   pricingCol,
   servicesCol,
+  shiftDoc,
   staffCol,
   tenantDoc,
 } from '../lib/firestore';
 import { completeBooking, createBookingByStaff, sendCheckoutToPos } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import type { Booking, Closure, Customer, Dog, Option, PriceEntry, Service, Staff, Tenant } from '../lib/types';
+import { isWithinHours, staffHoursFor } from '../lib/shifts';
+import type { Booking, Closure, Customer, Dog, Option, PriceEntry, Service, ShiftDayDoc, Staff, Tenant } from '../lib/types';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const PX_PER_MIN = 1; // 時間軸の縮尺
@@ -246,6 +248,14 @@ function DaySection({
       ? tenant.settings.businessHours
       : [{ start: '09:00', end: '19:00' }];
 
+  // シフト①: この日のシフト。シフト外になった既存予約は動かさず警告バッジのみ（運用で振替）
+  const { data: shiftDay } = useDocument<ShiftDayDoc>(shiftDoc(tenantId, date), [tenantId, date]);
+  const offShift = (b: Booking): boolean => {
+    if (!b.staffId || b.status !== 'reserved') return false;
+    const hours = staffHoursFor(shiftDay?.staff, b.staffId, businessHours);
+    return !isWithinHours(hours, b.startTime, b.slotEnd);
+  };
+
   const sorted = [...bookings].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   return (
@@ -261,6 +271,7 @@ function DaySection({
             dogName={dogName}
             serviceName={serviceName}
             closed={closed}
+            offShift={offShift}
             onCreateAt={(start, staffId) => setCreateInfo({ start, staffId })}
           />
           {!closed && <p className="tg-hint">空き時間をクリックすると予約を作成できます。</p>}
@@ -272,6 +283,7 @@ function DaySection({
           dogName={dogName}
           staffName={staffName}
           serviceName={serviceName}
+          offShift={offShift}
         />
       )}
 
@@ -301,6 +313,7 @@ function TimeGrid({
   dogName,
   serviceName,
   closed,
+  offShift,
   onCreateAt,
 }: {
   bookings: Booking[];
@@ -309,6 +322,7 @@ function TimeGrid({
   dogName: Map<string, string>;
   serviceName: Map<string, string>;
   closed: boolean;
+  offShift: (b: Booking) => boolean;
   onCreateAt: (startTime: string, staffId: string) => void;
 }) {
   const navigate = useNavigate();
@@ -406,6 +420,12 @@ function TimeGrid({
               >
                 <div className="b-time">
                   {b.startTime}–{b.slotEnd}
+                  {offShift(b) && (
+                    <span title="担当スタッフのシフト外です（シフト変更後の振替待ち）" style={{ color: '#c0392b' }}>
+                      {' '}
+                      ⚠
+                    </span>
+                  )}
                 </div>
                 {dogName.get(b.dogId) ?? b.dogId}
                 <div style={{ opacity: 0.9, fontSize: '0.7rem' }}>
@@ -580,12 +600,14 @@ function ListView({
   dogName,
   staffName,
   serviceName,
+  offShift,
 }: {
   tenantId: string;
   bookings: Booking[];
   dogName: Map<string, string>;
   staffName: Map<string, string>;
   serviceName: Map<string, string>;
+  offShift: (b: Booking) => boolean;
 }) {
   const navigate = useNavigate();
   return (
@@ -620,7 +642,15 @@ function ListView({
                     : '—'}
               </td>
               <td data-label="担当">{b.staffId ? staffName.get(b.staffId) ?? b.staffId : '未割当'}</td>
-              <td data-label="状態">{statusLabel(b.status)}</td>
+              <td data-label="状態">
+                {statusLabel(b.status)}
+                {offShift(b) && (
+                  <span className="error" title="担当スタッフのシフト外です。担当か日時の変更をご検討ください">
+                    {' '}
+                    ⚠シフト外
+                  </span>
+                )}
+              </td>
               <td data-label="施術完了" className="bl-action">
                 {b.status === 'reserved' ? (
                   <>
