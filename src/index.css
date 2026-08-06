@@ -1141,6 +1141,15 @@ tr.row-link td.chevron-cell {
   font-weight: 800;
   margin: 12px 0 6px;
 }
+/* 時間枠エリア: 高さを確保して読込中もレイアウトが揺れないように */
+.slot-area {
+  min-height: 300px;
+}
+.slot-loading {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
 .cal-detail-head {
   display: flex;
   align-items: center;

@@ -661,11 +661,12 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       const top = el.getBoundingClientRect().top + window.scrollY - 6;
       window.scrollTo({ top, behavior: 'smooth' });
       // 一部環境（バックグラウンドタブ等）でsmoothが中断される保険。届いていなければ即時ジャンプ
+      // （実機のsmooth完了を待ってから判定し、アニメーション中に割り込んで揺らさない）
       setTimeout(() => {
         if (el.getBoundingClientRect().top > 60) {
           window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 6 });
         }
-      }, 500);
+      }, 800);
     }, 120);
   }
 
@@ -982,30 +983,35 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         </div>
       </div>
 
-      {/* 選択日の時間枠（カレンダーの直下に常時表示） */}
+      {/* 選択日の時間枠（カレンダーの直下に常時表示）。
+          エリアの高さを固定し、読込中は前の枠を薄く残す＝差し替えでカレンダー位置が揺れない */}
       {cart.length === 0 ? (
         <p className="tg-hint">上の「予約をはじめる」から、ワンちゃんとメニューを選んでください。</p>
-      ) : loadingSlots ? (
-        <p className="tg-hint">空き時間を読み込み中…</p>
       ) : (
-        <>
+        <div className="slot-area">
           <h3 className="slot-head">時間を選択してください</h3>
-          <AvailabilityGrid
-            slots={slots ?? []}
-            closed={closedDay}
-            undecided={undecidedDay}
-            selected={confirmSlot}
-            onPick={(s) => setConfirmSlot(s)}
-          />
-          {/* 空きが無い日でも、内容を短くすれば入る場合は提案（未定日は対象外） */}
-          {!closedDay && !undecidedDay && slots != null && slots.length === 0 && buildReductions().length > 0 && (
-            <div className="suggest-cta">
-              <button type="button" onClick={findSuggestions}>
-                内容を短くして空きを探す
-              </button>
+          {slots == null && loadingSlots ? (
+            <p className="tg-hint">空き時間を読み込み中…</p>
+          ) : (
+            <div className={loadingSlots ? 'slot-loading' : undefined}>
+              <AvailabilityGrid
+                slots={slots ?? []}
+                closed={closedDay}
+                undecided={undecidedDay}
+                selected={confirmSlot}
+                onPick={(s) => setConfirmSlot(s)}
+              />
+              {/* 空きが無い日でも、内容を短くすれば入る場合は提案（未定日・読込中は出さない） */}
+              {!loadingSlots && !closedDay && !undecidedDay && slots != null && slots.length === 0 && buildReductions().length > 0 && (
+                <div className="suggest-cta">
+                  <button type="button" onClick={findSuggestions}>
+                    内容を短くして空きを探す
+                  </button>
+                </div>
+              )}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* 追加/編集モーダル（犬→メニュー→オプション） */}
