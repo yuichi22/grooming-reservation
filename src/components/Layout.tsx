@@ -10,12 +10,12 @@ import type { Tenant } from '../lib/types';
 
 type NavItem = { to: string; label: string; icon: string; end?: boolean; admin?: boolean };
 
+// 予約・カルテ・シフトはヘッダーのボタンに集約（サイドバーからは除外）。
+// ダッシュボードは内容が無いため廃止し、顧客を先頭に。
 const NAV: NavItem[] = [
-  { to: '/dashboard', label: 'ダッシュボード', icon: '🏠' },
-  // 予約・カルテはヘッダーのボタンに集約（サイドバーからは除外）
+  { to: '/customers', label: '顧客', icon: '👥', admin: true },
   { to: '/menus', label: 'メニュー', icon: '✂️', admin: true },
   { to: '/staff', label: 'スタッフ', icon: '👤', admin: true },
-  { to: '/customers', label: '顧客', icon: '👥', admin: true },
   { to: '/settings', label: '設定', icon: '⚙️', admin: true },
 ];
 

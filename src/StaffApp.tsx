@@ -4,7 +4,6 @@ import { RequireAuth } from './auth/RequireAuth';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
 import Layout from './components/Layout';
-import DashboardPage from './pages/DashboardPage';
 import BookingsPage from './pages/BookingsPage';
 import MenusPage from './pages/MenusPage';
 import StaffPage from './pages/StaffPage';
@@ -30,7 +29,6 @@ export default function StaffApp() {
           }
         >
           <Route index element={<Navigate to="/bookings" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
           <Route path="bookings" element={<BookingsPage />} />
           <Route path="karte" element={<KartePage />} />
           <Route path="karte/:dogId" element={<DogDetailPage />} />
@@ -74,6 +72,8 @@ export default function StaffApp() {
               </RequireAuth>
             }
           />
+          {/* 廃止した /dashboard 等の未知パスは予約へ（空白画面を出さない） */}
+          <Route path="*" element={<Navigate to="/bookings" replace />} />
         </Route>
       </Routes>
     </AuthProvider>
