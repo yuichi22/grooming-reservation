@@ -900,7 +900,11 @@ function BookingDetailModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        {/* 1. ヘッダー: 名前（大きめ）＋犬種、右上に閉じる✕ */}
+        {/* 1. 閉じる✕は最上段の右寄せ（名前より上・独立行） */}
+        <button type="button" className="modal-close bdm-close" onClick={onClose} aria-label="閉じる">
+          ✕
+        </button>
+        {/* 名前（大きめ）＋犬種 */}
         <div className="bdm-head">
           <div>
             <div className="bdm-name">{dog?.name ?? 'ワンちゃん'}</div>
@@ -911,9 +915,6 @@ function BookingDetailModal({
               </button>
             </div>
           </div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="閉じる">
-            ✕
-          </button>
         </div>
 
         {/* 2. 時間 / 予約メニュー・担当（日付・状態表記は省略。開いた日の予約なので自明） */}

@@ -1132,8 +1132,10 @@ tr.row-link td.chevron-cell {
   gap: 10px;
   margin: 0 0 12px;
 }
-.bdm-head .modal-close {
-  margin-left: auto;
+/* ✕は名前より上の独立行・右寄せ */
+.bdm-close {
+  display: block;
+  margin: -6px -4px 2px auto;
 }
 .bdm-name {
   font-size: 1.25rem;
