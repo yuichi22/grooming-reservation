@@ -1203,7 +1203,21 @@ export const createBookingByStaff = onCall<{
   const bufferMin = settings.bufferMin;
   const slotEnd = toTimeStr(toMinutes(startTime) + durationMin + bufferMin);
 
-  const [bookings, shiftDay] = await Promise.all([loadDayBookings(tenantId, date), loadShiftDay(tenantId, date)]);
+  const [bookings, shiftDay, allStaffIds] = await Promise.all([
+    loadDayBookings(tenantId, date),
+    loadShiftDay(tenantId, date),
+    loadBookableStaffIds(tenantId),
+  ]);
+  // 未定ゲートON時はスタッフ作成もシフト未定のスタッフ/日を弾く（管理グリッドの「未定」表示と対）
+  const staffPool = bookablePool(shiftDay, allStaffIds, settings);
+  if (settings.requireShiftForBooking && allStaffIds.length > 0) {
+    if (staffPool === null) {
+      throw new HttpsError('failed-precondition', 'shift not planned for this date');
+    }
+    if (staffId && !staffPool.includes(staffId)) {
+      throw new HttpsError('failed-precondition', 'staff shift is undecided for this date');
+    }
+  }
   // スタッフ作成でもシフトを尊重する（休みの人に入れたい場合はシフトを直してから）
   function isFree(sid: string): boolean {
     return availability({
@@ -1219,7 +1233,7 @@ export const createBookingByStaff = onCall<{
     if (!isFree(staffId)) throw new HttpsError('failed-precondition', 'nominated staff is not available');
     assigned = staffId;
   } else {
-    const staffIds = await loadBookableStaffIds(tenantId);
+    const staffIds = staffPool ?? allStaffIds;
     assigned = staffIds.find((sid) => isFree(sid)) ?? null;
     if (staffIds.length > 0 && assigned == null) {
       throw new HttpsError('failed-precondition', 'no staff available at this time');
@@ -1307,6 +1321,14 @@ export const rescheduleBooking = onCall<{ tenantId: string; bookingId: string; d
       if (closed.has(ds)) return [];
       const others = byDate.get(ds) ?? [];
       const shiftDay = shiftDays.get(ds) ?? null;
+      // 未定ゲートON時: シフト未定の担当/日は移動先候補にしない（スタッフ作成と同じ扱い）
+      if (settings.requireShiftForBooking && pool.length > 0) {
+        if (b.staffId) {
+          if (!shiftDay?.staff?.[b.staffId]) return [];
+        } else if (decidedStaffIds(shiftDay, pool).length === 0) {
+          return [];
+        }
+      }
       const hoursFor = (sid: string) => staffHoursFor(shiftDay, sid, settings.businessHours);
       if (b.staffId) {
         return availability({

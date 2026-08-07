@@ -324,6 +324,9 @@ function DaySection({
   // スタッフ列のシフト休み帯（営業時間 − 実効勤務時間）。グリッドのグレー表示＋作成ブロックに使う
   const offIntervalsFor = (staffId: string) =>
     subtractIntervals(businessHours, staffHoursFor(shiftDay?.staff, staffId, businessHours));
+  // 未定ゲートON時: シフト未定のスタッフ列は「未定」表示にして予約作成も弾く（サーバ側も拒否）
+  const requireShift = tenant?.settings?.requireShiftForBooking ?? false;
+  const undecidedFor = (staffId: string) => requireShift && !shiftDay?.staff?.[staffId];
 
   const sorted = [...bookings].sort((a, b) => a.startTime.localeCompare(b.startTime));
   const detailBooking = detailId ? sorted.find((b) => b.id === detailId) ?? null : null;
@@ -343,6 +346,7 @@ function DaySection({
             closed={closed}
             offShift={offShift}
             offIntervalsFor={offIntervalsFor}
+            undecidedFor={undecidedFor}
             onCreateAt={(start, staffId) => setCreateInfo({ start, staffId })}
             onOpen={(b) => setDetailId(b.id)}
           />
@@ -402,6 +406,7 @@ function TimeGrid({
   closed,
   offShift,
   offIntervalsFor,
+  undecidedFor,
   onCreateAt,
   onOpen,
 }: {
@@ -413,6 +418,7 @@ function TimeGrid({
   closed: boolean;
   offShift: (b: Booking) => boolean;
   offIntervalsFor: (staffId: string) => { start: string; end: string }[];
+  undecidedFor: (staffId: string) => boolean;
   onCreateAt: (startTime: string, staffId: string) => void;
   onOpen: (b: Booking) => void;
 }) {
@@ -436,7 +442,8 @@ function TimeGrid({
     const colW = layer.clientWidth / colCount;
     const col = Math.min(colCount - 1, Math.max(0, Math.floor(e.nativeEvent.offsetX / colW)));
     const colStaffId = columns[col]?.id ?? '';
-    // シフト休みの時間帯には作成させない（オーバーレイが吸うが、保険としてここでも判定）
+    // シフト休み・未定の列には作成させない（オーバーレイが吸うが、保険としてここでも判定）
+    if (colStaffId && undecidedFor(colStaffId)) return;
     if (colStaffId && offIntervalsFor(colStaffId).some((iv) => min >= toMin(iv.start) && min < toMin(iv.end))) return;
     onCreateAt(toHHMM(min), colStaffId);
   }
@@ -490,8 +497,30 @@ function TimeGrid({
         ))}
         {/* クリックで作成 */}
         <div className="tg-clicklayer" onClick={handleClick} />
+        {/* シフト未定の列（未定ゲートON時）。列全体を覆い、作成もブロック */}
+        {columns.map((s, i) => {
+          if (!undecidedFor(s.id)) return null;
+          const bhStart = Math.min(...businessHours.map((h) => toMin(h.start)));
+          const bhEnd = Math.max(...businessHours.map((h) => toMin(h.end)));
+          return (
+            <div
+              key={`undecided:${s.id}`}
+              className="tg-off tg-undecided"
+              title={`${s.name} はこの日のシフトが未定です（シフトを設定すると予約できます）`}
+              style={{
+                top: (bhStart - axisStart) * PX_PER_MIN,
+                height: (bhEnd - bhStart) * PX_PER_MIN,
+                left: `calc(56px + ${i} * (100% - 66px) / ${colCount} + 2px)`,
+                width: `calc((100% - 66px) / ${colCount} - 4px)`,
+              }}
+            >
+              未定
+            </div>
+          );
+        })}
         {/* シフト休みの帯（スタッフ列単位）。クリック層より上に重ねて作成もブロック */}
         {columns.map((s, i) => {
+          if (undecidedFor(s.id)) return null;
           const offs = offIntervalsFor(s.id);
           const bhStart = Math.min(...businessHours.map((h) => toMin(h.start)));
           const bhEnd = Math.max(...businessHours.map((h) => toMin(h.end)));

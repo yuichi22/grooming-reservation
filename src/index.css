@@ -1775,6 +1775,16 @@ button.tg-block.done:hover {
   border-radius: 4px;
   cursor: not-allowed;
 }
+/* シフト未定の列（休み帯より薄く・文字はミュート） */
+.tg-off.tg-undecided {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(110, 100, 90, 0.07),
+    rgba(110, 100, 90, 0.07) 6px,
+    rgba(110, 100, 90, 0.03) 6px,
+    rgba(110, 100, 90, 0.03) 12px
+  );
+}
 .tg-closed {
   position: absolute;
   inset: 0;
