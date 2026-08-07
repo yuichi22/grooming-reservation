@@ -18,7 +18,7 @@ import {
   staffCol,
   tenantDoc,
 } from '../lib/firestore';
-import { completeBooking, createBookingByStaff, sendCheckoutToPos } from '../lib/functions';
+import { completeBooking, createBookingByStaff, rescheduleBooking, sendCheckoutToPos } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import { isWithinHours, staffHoursFor, subtractIntervals } from '../lib/shifts';
@@ -866,8 +866,48 @@ function BookingDetailModal({
     setRecNotes('');
     setPriceTouched(false);
     setErr(null);
+    setReschedSlots(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id]);
+
+  // 予約変更: 同日の移動先候補（サーバ算出・シフト/他予約考慮）を現時刻に近い順で提示
+  const [reschedSlots, setReschedSlots] = useState<string[] | null>(null);
+  const [reschedBusy, setReschedBusy] = useState(false);
+  const curMin = toMin(booking.startTime);
+  const sortedResched = useMemo(
+    () => (reschedSlots ? [...reschedSlots].sort((a, b) => Math.abs(toMin(a) - curMin) - Math.abs(toMin(b) - curMin)) : []),
+    [reschedSlots, curMin],
+  );
+  async function openResched() {
+    if (reschedSlots != null) {
+      setReschedSlots(null);
+      return;
+    }
+    setReschedBusy(true);
+    setErr(null);
+    try {
+      const res = await rescheduleBooking({ tenantId, bookingId: booking.id });
+      setReschedSlots(res.data.slots);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '空き時間を取得できませんでした');
+    } finally {
+      setReschedBusy(false);
+    }
+  }
+  async function doResched(s: string) {
+    if (reschedBusy) return;
+    if (!confirm(`${booking.startTime} → ${s} に変更しますか？`)) return;
+    setReschedBusy(true);
+    setErr(null);
+    try {
+      await rescheduleBooking({ tenantId, bookingId: booking.id, startTime: s });
+      setReschedSlots(null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '変更できませんでした（他の予約と重なった可能性があります）');
+    } finally {
+      setReschedBusy(false);
+    }
+  }
 
   // 確定時間・確定料金の自動合算（料金表の標準＋個別加算・超過。加算分は分単価×時間を50円単位切上げ）
   const svcDur = cell ? cell.durationMin + svcAdj : 0;
@@ -966,12 +1006,39 @@ function BookingDetailModal({
           予約メニュー: {menu} ／ 担当: {booking.staffId ? staffName.get(booking.staffId) ?? booking.staffId : '未割当'}
         </p>
 
-        {/* 3. 予約の取り消し系（予約情報の直下。ラベルも「予約キャンセル」で明示） */}
+        {/* 3. 予約の操作（変更・取り消し系。予約情報の直下） */}
         {booking.status === 'reserved' && (
-          <div className="row-form" style={{ margin: '0 0 14px' }}>
-            <button onClick={() => setStatus(tenantId, booking.id, 'canceled')}>予約キャンセル</button>
-            <button onClick={() => setStatus(tenantId, booking.id, 'noshow')}>無断欠席</button>
-          </div>
+          <>
+            <div className="row-form" style={{ margin: '0 0 8px' }}>
+              <button onClick={openResched} disabled={reschedBusy}>
+                {reschedBusy ? '空きを確認中…' : '予約変更'}
+              </button>
+              <button onClick={() => setStatus(tenantId, booking.id, 'canceled')}>キャンセル</button>
+              <button onClick={() => setStatus(tenantId, booking.id, 'noshow')}>無断欠席</button>
+            </div>
+            {reschedSlots != null && (
+              <div style={{ margin: '0 0 14px' }}>
+                {sortedResched.length === 0 ? (
+                  <p className="muted" style={{ margin: 0 }}>
+                    この日の他の時間に空きはありません。
+                  </p>
+                ) : (
+                  <>
+                    <p className="muted" style={{ margin: '0 0 4px' }}>
+                      近い順に表示。タップすると {booking.startTime} から変更します。
+                    </p>
+                    <div className="slot-chips">
+                      {sortedResched.slice(0, 12).map((s) => (
+                        <button key={s} type="button" className="slot-chip" onClick={() => doResched(s)}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         {/* 4. 飼い主・連絡手段 */}

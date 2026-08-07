@@ -31,6 +31,12 @@ export const updateStaff = httpsCallable<
   { targetUid: string; name: string; role: StaffRole }
 >(functions, 'updateStaff');
 
+/** 予約の時間変更（スタッフ用）。startTime無し=同日の移動先候補を取得 / 指定=移動を確定。 */
+export const rescheduleBooking = httpsCallable<
+  { tenantId: string; bookingId: string; startTime?: string },
+  { date: string; current: string; slots: string[] }
+>(functions, 'rescheduleBooking');
+
 export const completeBooking = httpsCallable<
   { tenantId: string; bookingId: string; finalDurationMin: number; finalPrice: number; notes?: string },
   { bookingId: string; status: 'done' }

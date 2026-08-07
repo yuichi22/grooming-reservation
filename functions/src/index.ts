@@ -1249,6 +1249,94 @@ export const createBookingByStaff = onCall<{
   return { bookingId: ref.id, staffId: assigned, slotEnd, durationMin };
 });
 
+/**
+ * 予約の時間変更（スタッフ用）。startTime 無しで同日の移動先候補を返し、指定すると移動を確定する。
+ * 候補・検証とも本人の予約を占有から除外し、担当のシフト（勤務時間）を尊重する。
+ * 受付締切(afterCutoff)は適用しない（当日の繰り上げ等はスタッフ判断でできるように）。
+ */
+export const rescheduleBooking = onCall<{ tenantId: string; bookingId: string; startTime?: string }>(
+  async (request) => {
+    const caller = request.auth?.token;
+    const { tenantId, bookingId, startTime } = request.data;
+    if (!tenantId || !bookingId) throw new HttpsError('invalid-argument', 'tenantId, bookingId required');
+    const isSuper = caller?.superAdmin === true;
+    const isStaff = caller?.tenantId === tenantId && (caller?.role === 'admin' || caller?.role === 'trimmer');
+    if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
+
+    const base = db.collection('tenants').doc(tenantId);
+    const ref = base.collection('bookings').doc(bookingId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'booking not found');
+    const b = snap.data() as {
+      date: string;
+      startTime: string;
+      durationMin: number;
+      bufferMin?: number;
+      staffId: string | null;
+      status: string;
+    };
+    if (b.status !== 'reserved') throw new HttpsError('failed-precondition', 'only reserved bookings can be moved');
+
+    const settings = await loadSettings(tenantId);
+    const [daySnap, shiftDay] = await Promise.all([
+      base.collection('bookings').where('date', '==', b.date).get(),
+      loadShiftDay(tenantId, b.date),
+    ]);
+    // 本人を除いた占有（loadDayBookings と同じ絞り込み）
+    const others = daySnap.docs
+      .filter((d) => d.id !== bookingId)
+      .map((d) => d.data() as BookingRow)
+      .filter((x) => x.status === 'reserved' || x.status === 'done');
+    const duration = b.durationMin;
+    const buffer = b.bufferMin ?? 0;
+    const hoursFor = (sid: string) => staffHoursFor(shiftDay, sid, settings.businessHours);
+
+    let slots: string[];
+    if (b.staffId) {
+      slots = availability({
+        businessHours: hoursFor(b.staffId),
+        bufferMin: buffer,
+        durationMin: duration,
+        occupied: occupiedFor(others, b.staffId),
+      });
+    } else {
+      const pool = await loadBookableStaffIds(tenantId);
+      if (pool.length === 0) {
+        slots = availability({
+          businessHours: settings.businessHours,
+          bufferMin: buffer,
+          durationMin: duration,
+          occupied: others.map((o) => ({ start: o.startTime, end: o.slotEnd })),
+        });
+      } else {
+        // 指名なし(null)は全スタッフを塞ぐ予約のため、全員が空いている枠のみ候補にする
+        slots = pool
+          .map((sid) =>
+            availability({
+              businessHours: hoursFor(sid),
+              bufferMin: buffer,
+              durationMin: duration,
+              occupied: occupiedFor(others, sid),
+            }),
+          )
+          .reduce((acc, list) => acc.filter((s) => list.includes(s)));
+      }
+    }
+    slots = slots.filter((s) => s !== b.startTime);
+
+    if (!startTime) return { date: b.date, current: b.startTime, slots };
+
+    if (!slots.includes(startTime)) {
+      throw new HttpsError('failed-precondition', 'the selected time is not available');
+    }
+    await ref.update({
+      startTime,
+      slotEnd: toTimeStr(toMinutes(startTime) + duration + buffer),
+    });
+    return { date: b.date, current: startTime, slots: [] };
+  },
+);
+
 /** customerId が当該 LINE ユーザのものか検証する共通ガード。 */
 async function assertCustomerOwnership(tenantId: string, customerId: string, lineUserId: string) {
   const snap = await db.collection('tenants').doc(tenantId).collection('customers').doc(customerId).get();
