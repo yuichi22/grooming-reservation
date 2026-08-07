@@ -39,6 +39,11 @@ function formatDateJa(ds: string): string {
   const [y, m, d] = ds.split('-').map(Number);
   return `${y}年${m}月${d}日（${DOW[new Date(y, m - 1, d).getDay()]}）`;
 }
+/** 予約変更リスト用の短い日付表示（例: 8/9（日）） */
+function mdLabel(ds: string): string {
+  const [y, m, d] = ds.split('-').map(Number);
+  return `${m}/${d}（${DOW[new Date(y, m - 1, d).getDay()]}）`;
+}
 const toMin = (t: string) => {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
@@ -866,42 +871,37 @@ function BookingDetailModal({
     setRecNotes('');
     setPriceTouched(false);
     setErr(null);
-    setReschedSlots(null);
+    setReschedDays(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id]);
 
-  // 予約変更: 同日の移動先候補（サーバ算出・シフト/他予約考慮）を現時刻に近い順で提示
-  const [reschedSlots, setReschedSlots] = useState<string[] | null>(null);
+  // 予約変更: 今日〜受付範囲の日別空き候補（サーバ算出・シフト/休業/他予約考慮）をスクロールリストで提示
+  const [reschedDays, setReschedDays] = useState<{ date: string; slots: string[] }[] | null>(null);
   const [reschedBusy, setReschedBusy] = useState(false);
-  const curMin = toMin(booking.startTime);
-  const sortedResched = useMemo(
-    () => (reschedSlots ? [...reschedSlots].sort((a, b) => Math.abs(toMin(a) - curMin) - Math.abs(toMin(b) - curMin)) : []),
-    [reschedSlots, curMin],
-  );
   async function openResched() {
-    if (reschedSlots != null) {
-      setReschedSlots(null);
+    if (reschedDays != null) {
+      setReschedDays(null);
       return;
     }
     setReschedBusy(true);
     setErr(null);
     try {
       const res = await rescheduleBooking({ tenantId, bookingId: booking.id });
-      setReschedSlots(res.data.slots);
+      setReschedDays(res.data.days);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '空き時間を取得できませんでした');
     } finally {
       setReschedBusy(false);
     }
   }
-  async function doResched(s: string) {
+  async function doResched(ds: string, s: string) {
     if (reschedBusy) return;
-    if (!confirm(`${booking.startTime} → ${s} に変更しますか？`)) return;
+    if (!confirm(`${mdLabel(booking.date)} ${booking.startTime} → ${mdLabel(ds)} ${s} に変更しますか？`)) return;
     setReschedBusy(true);
     setErr(null);
     try {
-      await rescheduleBooking({ tenantId, bookingId: booking.id, startTime: s });
-      setReschedSlots(null);
+      await rescheduleBooking({ tenantId, bookingId: booking.id, date: ds, startTime: s });
+      setReschedDays(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '変更できませんでした（他の予約と重なった可能性があります）');
     } finally {
@@ -1016,22 +1016,32 @@ function BookingDetailModal({
               <button onClick={() => setStatus(tenantId, booking.id, 'canceled')}>キャンセル</button>
               <button onClick={() => setStatus(tenantId, booking.id, 'noshow')}>無断欠席</button>
             </div>
-            {reschedSlots != null && (
+            {reschedDays != null && (
               <div style={{ margin: '0 0 14px' }}>
-                {sortedResched.length === 0 ? (
+                {reschedDays.length === 0 ? (
                   <p className="muted" style={{ margin: 0 }}>
-                    この日の他の時間に空きはありません。
+                    受付範囲内に空きがありません。
                   </p>
                 ) : (
                   <>
                     <p className="muted" style={{ margin: '0 0 4px' }}>
-                      近い順に表示。タップすると {booking.startTime} から変更します。
+                      日付ごとの空きです。時間をタップすると {mdLabel(booking.date)} {booking.startTime} から変更します。
                     </p>
-                    <div className="slot-chips">
-                      {sortedResched.slice(0, 12).map((s) => (
-                        <button key={s} type="button" className="slot-chip" onClick={() => doResched(s)}>
-                          {s}
-                        </button>
+                    <div className="resched-list">
+                      {reschedDays.map((d) => (
+                        <div key={d.date} className="resched-day">
+                          <div className={`resched-date${d.date === booking.date ? ' current' : ''}`}>
+                            {mdLabel(d.date)}
+                            {d.date === booking.date && <span className="muted">（現在の日）</span>}
+                          </div>
+                          <div className="slot-chips">
+                            {d.slots.map((s) => (
+                              <button key={s} type="button" className="slot-chip" onClick={() => doResched(d.date, s)}>
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </>

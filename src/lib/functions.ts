@@ -31,10 +31,10 @@ export const updateStaff = httpsCallable<
   { targetUid: string; name: string; role: StaffRole }
 >(functions, 'updateStaff');
 
-/** 予約の時間変更（スタッフ用）。startTime無し=同日の移動先候補を取得 / 指定=移動を確定。 */
+/** 予約の日時変更（スタッフ用）。date/startTime無し=今日〜受付範囲の日別空き候補 / 指定=移動を確定。 */
 export const rescheduleBooking = httpsCallable<
-  { tenantId: string; bookingId: string; startTime?: string },
-  { date: string; current: string; slots: string[] }
+  { tenantId: string; bookingId: string; date?: string; startTime?: string },
+  { current: { date: string; startTime: string }; days: { date: string; slots: string[] }[] }
 >(functions, 'rescheduleBooking');
 
 export const completeBooking = httpsCallable<

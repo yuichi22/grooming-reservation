@@ -1250,14 +1250,15 @@ export const createBookingByStaff = onCall<{
 });
 
 /**
- * 予約の時間変更（スタッフ用）。startTime 無しで同日の移動先候補を返し、指定すると移動を確定する。
- * 候補・検証とも本人の予約を占有から除外し、担当のシフト（勤務時間）を尊重する。
+ * 予約の日時変更（スタッフ用）。date/startTime 無しで「今日〜受付範囲」の日別空き候補を返し、
+ * 指定すると移動を確定する（別日への移動も可。日付が変わったら前日リマインドを再送対象に戻す）。
+ * 候補・検証とも本人の予約を占有から除外し、担当のシフト（勤務時間）と手動休業日を尊重する。
  * 受付締切(afterCutoff)は適用しない（当日の繰り上げ等はスタッフ判断でできるように）。
  */
-export const rescheduleBooking = onCall<{ tenantId: string; bookingId: string; startTime?: string }>(
+export const rescheduleBooking = onCall<{ tenantId: string; bookingId: string; date?: string; startTime?: string }>(
   async (request) => {
     const caller = request.auth?.token;
-    const { tenantId, bookingId, startTime } = request.data;
+    const { tenantId, bookingId, date, startTime } = request.data;
     if (!tenantId || !bookingId) throw new HttpsError('invalid-argument', 'tenantId, bookingId required');
     const isSuper = caller?.superAdmin === true;
     const isStaff = caller?.tenantId === tenantId && (caller?.role === 'admin' || caller?.role === 'trimmer');
@@ -1278,62 +1279,98 @@ export const rescheduleBooking = onCall<{ tenantId: string; bookingId: string; s
     if (b.status !== 'reserved') throw new HttpsError('failed-precondition', 'only reserved bookings can be moved');
 
     const settings = await loadSettings(tenantId);
-    const [daySnap, shiftDay] = await Promise.all([
-      base.collection('bookings').where('date', '==', b.date).get(),
-      loadShiftDay(tenantId, b.date),
+    const pool = await loadBookableStaffIds(tenantId);
+    const from = tzTodayStr(settings.timezone);
+    const to = horizonEndDate(settings);
+    const [bSnap, closSnap, shiftDays] = await Promise.all([
+      base.collection('bookings').where('date', '>=', from).where('date', '<=', to).get(),
+      base.collection('closures').get(),
+      loadShiftDays(tenantId, from, to),
     ]);
-    // 本人を除いた占有（loadDayBookings と同じ絞り込み）
-    const others = daySnap.docs
-      .filter((d) => d.id !== bookingId)
-      .map((d) => d.data() as BookingRow)
-      .filter((x) => x.status === 'reserved' || x.status === 'done');
+    const closed = new Set(
+      closSnap.docs.filter((d) => d.id >= from && d.id <= to && d.data()?.fullDay !== false).map((d) => d.id),
+    );
+    // 本人を除いた占有を日付ごとに（loadDayBookings と同じ絞り込み）
+    const byDate = new Map<string, BookingRow[]>();
+    bSnap.docs.forEach((d) => {
+      if (d.id === bookingId) return;
+      const row = d.data() as BookingRow & { date: string };
+      if (row.status !== 'reserved' && row.status !== 'done') return;
+      const arr = byDate.get(row.date) ?? [];
+      arr.push(row);
+      byDate.set(row.date, arr);
+    });
+
     const duration = b.durationMin;
     const buffer = b.bufferMin ?? 0;
-    const hoursFor = (sid: string) => staffHoursFor(shiftDay, sid, settings.businessHours);
-
-    let slots: string[];
-    if (b.staffId) {
-      slots = availability({
-        businessHours: hoursFor(b.staffId),
-        bufferMin: buffer,
-        durationMin: duration,
-        occupied: occupiedFor(others, b.staffId),
-      });
-    } else {
-      const pool = await loadBookableStaffIds(tenantId);
+    const slotsFor = (ds: string): string[] => {
+      if (closed.has(ds)) return [];
+      const others = byDate.get(ds) ?? [];
+      const shiftDay = shiftDays.get(ds) ?? null;
+      const hoursFor = (sid: string) => staffHoursFor(shiftDay, sid, settings.businessHours);
+      if (b.staffId) {
+        return availability({
+          businessHours: hoursFor(b.staffId),
+          bufferMin: buffer,
+          durationMin: duration,
+          occupied: occupiedFor(others, b.staffId),
+        });
+      }
       if (pool.length === 0) {
-        slots = availability({
+        return availability({
           businessHours: settings.businessHours,
           bufferMin: buffer,
           durationMin: duration,
           occupied: others.map((o) => ({ start: o.startTime, end: o.slotEnd })),
         });
-      } else {
-        // 指名なし(null)は全スタッフを塞ぐ予約のため、全員が空いている枠のみ候補にする
-        slots = pool
-          .map((sid) =>
-            availability({
-              businessHours: hoursFor(sid),
-              bufferMin: buffer,
-              durationMin: duration,
-              occupied: occupiedFor(others, sid),
-            }),
-          )
-          .reduce((acc, list) => acc.filter((s) => list.includes(s)));
       }
+      // 指名なし(null)は全スタッフを塞ぐ予約のため、全員が空いている枠のみ候補にする
+      return pool
+        .map((sid) =>
+          availability({
+            businessHours: hoursFor(sid),
+            bufferMin: buffer,
+            durationMin: duration,
+            occupied: occupiedFor(others, sid),
+          }),
+        )
+        .reduce((acc, list) => acc.filter((s) => list.includes(s)));
+    };
+
+    if (!startTime) {
+      // 候補一覧: 今日〜受付範囲で空きのある日だけ返す（本人の現枠は除外）
+      const days: { date: string; slots: string[] }[] = [];
+      const [fy, fm, fd] = from.split('-').map(Number);
+      const [ty, tm, td] = to.split('-').map(Number);
+      const cur = new Date(fy, fm - 1, fd);
+      const endD = new Date(ty, tm - 1, td);
+      while (cur <= endD) {
+        const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+        const s = slotsFor(ds).filter((t) => !(ds === b.date && t === b.startTime));
+        if (s.length > 0) days.push({ date: ds, slots: s });
+        cur.setDate(cur.getDate() + 1);
+      }
+      return { current: { date: b.date, startTime: b.startTime }, days };
     }
-    slots = slots.filter((s) => s !== b.startTime);
 
-    if (!startTime) return { date: b.date, current: b.startTime, slots };
-
-    if (!slots.includes(startTime)) {
+    const targetDate = date ?? b.date;
+    if (targetDate < from || targetDate > to) {
+      throw new HttpsError('failed-precondition', 'the selected date is out of range');
+    }
+    if (targetDate === b.date && startTime === b.startTime) {
+      throw new HttpsError('failed-precondition', 'same as the current time');
+    }
+    if (!slotsFor(targetDate).includes(startTime)) {
       throw new HttpsError('failed-precondition', 'the selected time is not available');
     }
     await ref.update({
+      date: targetDate,
       startTime,
       slotEnd: toTimeStr(toMinutes(startTime) + duration + buffer),
+      // 日付が変わったら前日リマインドを再送対象に戻す
+      ...(targetDate !== b.date ? { reminderSentAt: null } : {}),
     });
-    return { date: b.date, current: startTime, slots: [] };
+    return { current: { date: targetDate, startTime }, days: [] };
   },
 );
 
