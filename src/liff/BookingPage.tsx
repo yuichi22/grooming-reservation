@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { ADD_FRIEND_URL, closeLiff, getAccessToken, getProfile, initLiff, initLiffOptional, isDevMode, loginForBooking, openAddFriend } from './liff';
+import { ADD_FRIEND_URL, buildLiffDeepLink, closeLiff, getAccessToken, getProfile, initLiff, initLiffOptional, isDevMode, loginForBooking, openAddFriend } from './liff';
 import {
   createGroupBooking,
   customerSession,
@@ -94,6 +94,57 @@ function clearGuestDraft(): void {
   }
 }
 
+/** 下書きの妥当性検証（テナント一致・中身あり・TTL内）。URL経由/localStorage経由の共通判定 */
+function isValidDraft(d: GuestDraft | null, tenantId: string): d is GuestDraft {
+  return (
+    !!d &&
+    d.tenantId === tenantId &&
+    Array.isArray(d.cart) &&
+    d.cart.length > 0 &&
+    Date.now() - (d.savedAt ?? 0) <= GUEST_DRAFT_TTL_MS
+  );
+}
+
+// LINEアプリ内ブラウザは外部ブラウザ(Safari等)とストレージが別のため、
+// 下書きはURLパラメータ(base64)でも運ぶ。UTF-8安全なエンコードにする。
+function encodeDraft(d: GuestDraft): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(d));
+  let bin = '';
+  bytes.forEach((b) => {
+    bin += String.fromCharCode(b);
+  });
+  return btoa(bin);
+}
+function decodeDraft(s: string): GuestDraft | null {
+  try {
+    const bin = atob(s);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes)) as GuestDraft;
+  } catch {
+    return null;
+  }
+}
+
+/** URLの draft パラメータ → localStorage の順で下書きを探す */
+function findPendingDraft(tenantId: string): GuestDraft | null {
+  const p = new URLSearchParams(window.location.search).get('draft');
+  if (p) {
+    const d = decodeDraft(p);
+    if (isValidDraft(d, tenantId)) return d;
+  }
+  const d = loadGuestDraft(tenantId);
+  return isValidDraft(d, tenantId) ? d : null;
+}
+
+/** 予約成立後にURLの draft パラメータを消す（リロードや「続けて予約」での再復元を防ぐ） */
+function stripDraftParam(): void {
+  const u = new URL(window.location.href);
+  if (u.searchParams.has('draft')) {
+    u.searchParams.delete('draft');
+    window.history.replaceState(null, '', u.toString());
+  }
+}
+
 function fmt(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -168,9 +219,10 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   }
 
   // LINEログイン往復（＋友だち追加・電話番号登録）後にゲスト下書きを復元する。
+  // LINEアプリ内で開いた場合はURLパラメータから、同一ブラウザならlocalStorageから。
   // 下書きは予約成功まで消さない（途中離脱しても再開できる）。
   function resumeGuestDraft() {
-    const saved = loadGuestDraft(tenantId);
+    const saved = findPendingDraft(tenantId);
     if (!saved) return;
     setGuestDogs(saved.guestDogs ?? []);
     setCart(saved.cart);
@@ -190,7 +242,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         setOptions({ ...res.data, dogs: [] });
         setStoreInfo(res.data.store);
         setGuest(true);
-        const saved = loadGuestDraft(tenantId);
+        const saved = findPendingDraft(tenantId);
         if (saved) {
           setGuestDogs(saved.guestDogs ?? []);
           setCart(saved.cart);
@@ -674,9 +726,12 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     if (!confirmSlot || cart.length === 0 || submitting) return;
 
     // ゲストはここでLINEログインへ（Web集客導線: LINE登録は最後）。
-    // リダイレクトで状態が消えるため下書きを保存してから遷移し、戻り後に復元して確定する。
+    // スマホではliff.line.meディープリンクでLINEアプリを起動し、アプリのログイン状態を
+    // そのまま使う（Webログインのパスワード入力を回避）。アプリ内はストレージが別のため
+    // 下書きはURLに載せて運び、localStorageは同一ブラウザで戻ってきた場合の保険。
     if (guest) {
-      saveGuestDraft({ tenantId, guestDogs, cart, staffId, date, slot: confirmSlot, savedAt: Date.now() });
+      const draft: GuestDraft = { tenantId, guestDogs, cart, staffId, date, slot: confirmSlot, savedAt: Date.now() };
+      saveGuestDraft(draft);
       if (isDevMode) {
         // 開発モード: ?guest=1 を外してリロード＝「ログインして戻ってきた」を再現
         const url = new URL(window.location.href);
@@ -684,7 +739,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         window.location.href = url.toString();
         return;
       }
-      loginForBooking();
+      const deepLink = buildLiffDeepLink({ tenant: tenantId, draft: encodeDraft(draft) });
+      if (deepLink) window.location.href = deepLink;
+      else loginForBooking();
       return;
     }
 
@@ -701,6 +758,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         staffId: staffId || undefined,
       });
       clearGuestDraft();
+      stripDraftParam();
       setConfirmation({ startTime: confirmSlot, slotEnd: res.data.slotEnd });
       setPhase('done');
     } catch (e) {

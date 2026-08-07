@@ -47,12 +47,24 @@ export async function initLiffOptional(): Promise<boolean> {
 }
 
 /**
- * ゲストが予約確定に進むときのLINEログイン。認証後に元のURLへ戻る
- * （呼び出し側が下書きを保存してから呼ぶこと。リダイレクトでページ状態は失われる）。
+ * ゲストが予約確定に進むときのLINEログイン（Webログインへのリダイレクト）。
+ * 通常は buildLiffDeepLink を優先し、こちらはフォールバック。
  */
 export function loginForBooking(): void {
   if (isDevMode) return;
   liff.login({ redirectUri: window.location.href });
+}
+
+/**
+ * liff.line.me 経由のディープリンクURL。スマホではユニバーサルリンクでLINEアプリが起動し、
+ * アプリのログイン状態がそのまま使われる（Webログインのパスワード入力が不要になる）。
+ * アプリ未導入/PCはLINEのWebログインへ自然にフォールバックする。
+ * 注: LINEアプリ内ブラウザは外部ブラウザとストレージが別のため、状態はURLパラメータで運ぶこと。
+ */
+export function buildLiffDeepLink(params: Record<string, string>): string | null {
+  if (isDevMode || !LIFF_ID) return null;
+  const q = new URLSearchParams(params).toString();
+  return `https://liff.line.me/${LIFF_ID}${q ? `?${q}` : ''}`;
 }
 
 export async function getProfile(): Promise<LiffProfile> {
