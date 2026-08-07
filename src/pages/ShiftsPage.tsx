@@ -1,7 +1,7 @@
 // スタッフ日別シフト管理（シフト①UI改良版・admin専用）。
 // - 月ごとの横スクロール表（行=スタッフ×列=日）を「今月〜Nヶ月先」まで縦に並べる
-// - セルは 出勤/休み/時間 の縦ボタン。出勤・休みはタップで即確定して色付きチップになり、
-//   チップを再タップすると選択中を強調した状態で選び直せる。時間のみモーダル（決定/キャンセル）
+// - セルは 出勤/休み/時間 の縦ボタン。タップで即確定して色付きチップになり、
+//   チップをタップすると未定（未設定）に戻る。時間のみモーダル（決定/キャンセル）
 // - 先頭の「範囲」セレクタ = tenants.settings.bookingHorizonMonths。
 //   お客様のWeb予約カレンダーの表示・受付範囲もこの設定に連動する（サーバ側で強制）
 import { useMemo, useState } from 'react';
@@ -76,8 +76,6 @@ export default function ShiftsPage() {
 
   // 設定モーダル（範囲・自動休業。説明もここに集約）
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // 選び直し中のセルと、時間指定モーダル
-  const [editing, setEditing] = useState<{ date: string; staffId: string } | null>(null);
   const [timeModal, setTimeModal] = useState<{ date: string; staffId: string; staffName: string; start: string; end: string } | null>(null);
   // 休業日（closures）の設定モーダル。日付ヘッダーのタップで開く（設定ページから移設・集約）
   const [closureModal, setClosureModal] = useState<{ date: string; isClosed: boolean; reason: string } | null>(null);
@@ -105,7 +103,6 @@ export default function ShiftsPage() {
       await setDoc(shiftDoc(tenantId, date), { staff: { [staffId]: entry } } as never, {
         mergeFields: [`staff.${staffId}`],
       });
-      setEditing(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '保存に失敗しました');
     }
@@ -118,7 +115,6 @@ export default function ShiftsPage() {
       await setDoc(shiftDoc(tenantId, date), { staff: { [staffId]: deleteField() } } as never, {
         mergeFields: [`staff.${staffId}`],
       });
-      setEditing(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '保存に失敗しました');
     }
@@ -308,20 +304,20 @@ export default function ShiftsPage() {
                           const status = entryStatus(entry);
                           const isPast = d.ds < today;
                           const isClosed = closedDates.has(d.ds);
-                          const isEditing = editing?.date === d.ds && editing?.staffId === s.id;
                           return (
                             <td key={d.ds} className={isClosed ? 'shift-closed-day' : ''}>
                               {isClosed ? (
                                 <span className="muted" style={{ fontSize: '0.7rem' }}>
                                   休業
                                 </span>
-                              ) : status !== 'unset' && !isEditing ? (
-                                // 設定済み: 色付きチップ。タップで選び直し（過去日は閲覧のみ）
+                              ) : status !== 'unset' ? (
+                                // 設定済み: 色付きチップ。タップで未定（未設定）に戻す（過去日は閲覧のみ）
                                 <button
                                   type="button"
                                   className={`shift-chip ${status}`}
                                   disabled={isPast}
-                                  onClick={() => setEditing({ date: d.ds, staffId: s.id })}
+                                  title="タップで未定に戻します"
+                                  onClick={() => clearEntry(d.ds, s.id)}
                                 >
                                   {status === 'work' && '出勤'}
                                   {status === 'off' && '休み'}
@@ -333,38 +329,29 @@ export default function ShiftsPage() {
                                   )}
                                 </button>
                               ) : (
-                                // 未設定 or 選び直し中: 縦3ボタン。選択中のステータスをもう一度押すと未定に戻す
+                                // 未設定（未定）: 縦3ボタンから選ぶ
                                 <div className="shift-cell-stack">
                                   <button
                                     type="button"
-                                    className={`shift-opt work${isEditing && status === 'work' ? ' current' : ''}`}
+                                    className="shift-opt work"
                                     disabled={isPast}
-                                    title={isEditing && status === 'work' ? 'もう一度押すと未定に戻します' : undefined}
-                                    onClick={() =>
-                                      isEditing && status === 'work' ? clearEntry(d.ds, s.id) : writeEntry(d.ds, s.id, { work: true })
-                                    }
+                                    onClick={() => writeEntry(d.ds, s.id, { work: true })}
                                   >
                                     出勤
                                   </button>
                                   <button
                                     type="button"
-                                    className={`shift-opt off${isEditing && status === 'off' ? ' current' : ''}`}
+                                    className="shift-opt off"
                                     disabled={isPast}
-                                    title={isEditing && status === 'off' ? 'もう一度押すと未定に戻します' : undefined}
-                                    onClick={() =>
-                                      isEditing && status === 'off' ? clearEntry(d.ds, s.id) : writeEntry(d.ds, s.id, { intervals: [] })
-                                    }
+                                    onClick={() => writeEntry(d.ds, s.id, { intervals: [] })}
                                   >
                                     休み
                                   </button>
                                   <button
                                     type="button"
-                                    className={`shift-opt custom${isEditing && status === 'custom' ? ' current' : ''}`}
+                                    className="shift-opt custom"
                                     disabled={isPast}
-                                    title={isEditing && status === 'custom' ? 'もう一度押すと未定に戻します' : undefined}
-                                    onClick={() =>
-                                      isEditing && status === 'custom' ? clearEntry(d.ds, s.id) : openTimeModal(d.ds, s.id, s.name, entry)
-                                    }
+                                    onClick={() => openTimeModal(d.ds, s.id, s.name, entry)}
                                   >
                                     時間
                                   </button>
