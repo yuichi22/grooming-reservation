@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import { isAdminRole } from '../lib/types';
 
 /**
  * 認証ガード。未ログインは /login へ。
@@ -19,7 +20,7 @@ export function RequireAuth({
   if (loading) return <p style={{ padding: '2rem' }}>読み込み中…</p>;
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
 
-  if (adminOnly && !(claims.role === 'admin' || claims.superAdmin)) {
+  if (adminOnly && !(isAdminRole(claims.role) || claims.superAdmin)) {
     return (
       <div style={{ padding: '2rem' }}>
         <h2>権限がありません</h2>

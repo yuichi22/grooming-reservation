@@ -23,11 +23,12 @@ service cloud.firestore {
       return isSignedIn() && claims().tenantId == tenantId;
     }
     function isAdmin(tenantId) {
-      return inTenant(tenantId) && claims().role == 'admin';
+      return inTenant(tenantId) && (claims().role == 'admin' || claims().role == 'admin_trimmer');
     }
-    /** admin または trimmer（= このテナントのスタッフ） */
+    /** 管理者系（admin / admin_trimmer）または trimmer（= このテナントのスタッフ） */
     function isStaff(tenantId) {
-      return inTenant(tenantId) && (claims().role == 'admin' || claims().role == 'trimmer');
+      return inTenant(tenantId)
+        && (claims().role == 'admin' || claims().role == 'admin_trimmer' || claims().role == 'trimmer');
     }
 
     // スーパーアドミン名簿: superAdmin のみ

@@ -6,7 +6,7 @@ import { auth } from '../firebaseStaff';
 import { staffCol } from '../lib/firestore';
 import { getStaffInviteLink, inviteStaff, updateStaff } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
-import type { Staff, StaffRole } from '../lib/types';
+import { STAFF_ROLE_LABELS, type Staff, type StaffRole } from '../lib/types';
 
 export default function StaffPage() {
   const { claims } = useAuth();
@@ -61,11 +61,11 @@ function StaffInner({ tenantId }: { tenantId: string }) {
       if (res.data.created) {
         await sendPasswordResetEmail(auth, res.data.email);
         setMsg(
-          `招待しました: ${name}（${role}）。パスワード設定メールを ${res.data.email} に送信しました。` +
+          `招待しました: ${name}（${STAFF_ROLE_LABELS[role]}）。パスワード設定メールを ${res.data.email} に送信しました。` +
             '届かない場合は迷惑メールを確認するか、一覧の「招待リンク」から最新リンクを発行して共有してください（発行するとメールのリンクは無効になります）。',
         );
       } else {
-        setMsg(`権限を付与しました: ${name}（${role}）。${res.data.email} は既存ユーザーのため既存のパスワードでログインできます。`);
+        setMsg(`権限を付与しました: ${name}（${STAFF_ROLE_LABELS[role]}）。${res.data.email} は既存ユーザーのため既存のパスワードでログインできます。`);
       }
       setEmail('');
       setName('');
@@ -105,7 +105,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
       await updateStaff({ tenantId, targetUid: s.id, name: editName.trim(), role: editRole });
       setMsg(
         roleChanged
-          ? `更新しました: ${editName}（${editRole}）。ロール変更は本人の再ログイン後に反映されます。`
+          ? `更新しました: ${editName}（${STAFF_ROLE_LABELS[editRole]}）。ロール変更は本人の再ログイン後に反映されます。`
           : `更新しました: ${editName}`,
       );
       setEditId(null);
@@ -128,7 +128,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
       <h1>スタッフ</h1>
       <p className="muted">
         氏名・メール・ロールを入力して招待します。初めての方にはパスワード設定メールが届き、設定後にログインできます。
-        ロールが「admin（管理者）」のスタッフは予約枠には入りません。
+        「管理者」は予約枠・シフト表に入りません（「管理者兼トリマー」は管理権限を持ちつつ予約枠にも入ります）。
       </p>
       <form className="row-form" onSubmit={onInvite}>
         <input
@@ -140,8 +140,9 @@ function StaffInner({ tenantId }: { tenantId: string }) {
         />
         <input placeholder="氏名" value={name} onChange={(e) => setName(e.target.value)} required />
         <select value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
-          <option value="trimmer">trimmer（トリマー）</option>
-          <option value="admin">admin（管理者）</option>
+          <option value="trimmer">トリマー</option>
+          <option value="admin_trimmer">管理者兼トリマー</option>
+          <option value="admin">管理者</option>
         </select>
         <button type="submit" disabled={busy}>
           {busy ? '招待中…' : '招待する'}
@@ -174,7 +175,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
           <thead>
             <tr>
               <th>氏名</th>
-              <th>role</th>
+              <th>ロール</th>
               <th>メール</th>
               <th>状態</th>
               <th></th>
@@ -189,8 +190,9 @@ function StaffInner({ tenantId }: { tenantId: string }) {
                   </td>
                   <td>
                     <select value={editRole} onChange={(e) => setEditRole(e.target.value as StaffRole)} aria-label="ロール">
-                      <option value="trimmer">trimmer</option>
-                      <option value="admin">admin</option>
+                      <option value="trimmer">トリマー</option>
+                      <option value="admin_trimmer">管理者兼トリマー</option>
+                      <option value="admin">管理者</option>
                     </select>
                   </td>
                   <td>{s.email ?? '—'}</td>
@@ -207,7 +209,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
               ) : (
                 <tr key={s.id}>
                   <td>{s.name}</td>
-                  <td>{s.role}</td>
+                  <td>{STAFF_ROLE_LABELS[s.role] ?? s.role}</td>
                   <td>{s.email ?? '—'}</td>
                   <td>{s.active ? '在籍' : '停止'}</td>
                   <td className="row-actions">

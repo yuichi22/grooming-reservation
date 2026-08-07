@@ -25,7 +25,12 @@ setGlobalOptions({ region: 'asia-northeast1' });
 const db = getFirestore();
 const auth = getAuth();
 
-type StaffRole = 'admin' | 'trimmer';
+type StaffRole = 'admin' | 'admin_trimmer' | 'trimmer';
+const VALID_ROLES: StaffRole[] = ['admin', 'admin_trimmer', 'trimmer'];
+/** 管理者権限を持つロール（管理者・管理者兼トリマー） */
+const isAdminRole = (r: unknown): boolean => r === 'admin' || r === 'admin_trimmer';
+/** テナント所属スタッフのロール（管理者系＋トリマー） */
+const isStaffRole = (r: unknown): boolean => isAdminRole(r) || r === 'trimmer';
 
 // 顧客フローの要関数のウォーム維持台数。deploy 時に .env.<projectId> の MIN_INSTANCES から解決。
 // prod のみ 1（.env.groomhaus-prod）、dev は default 0（無料）。
@@ -86,12 +91,12 @@ export const setStaffRole = onCall<SetStaffRoleData>(async (request) => {
   const caller = request.auth?.token;
   const { tenantId, targetUid, name, role } = request.data;
 
-  if (!tenantId || !targetUid || !name || (role !== 'admin' && role !== 'trimmer')) {
+  if (!tenantId || !targetUid || !name || !VALID_ROLES.includes(role)) {
     throw new HttpsError('invalid-argument', 'tenantId, targetUid, name, role(admin|trimmer) required');
   }
 
   const isSuper = caller?.superAdmin === true;
-  const isTenantAdmin = caller?.tenantId === tenantId && caller?.role === 'admin';
+  const isTenantAdmin = caller?.tenantId === tenantId && isAdminRole(caller?.role);
   if (!isSuper && !isTenantAdmin) {
     throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
   }
@@ -124,11 +129,11 @@ export const inviteStaff = onCall<{ tenantId: string; email: string; name: strin
   const caller = request.auth?.token;
   const { tenantId, name, role } = request.data;
   const email = (request.data.email ?? '').trim().toLowerCase();
-  if (!tenantId || !email || !email.includes('@') || !name?.trim() || (role !== 'admin' && role !== 'trimmer')) {
+  if (!tenantId || !email || !email.includes('@') || !name?.trim() || !VALID_ROLES.includes(role)) {
     throw new HttpsError('invalid-argument', 'tenantId, email, name, role(admin|trimmer) required');
   }
   const isSuper = caller?.superAdmin === true;
-  const isTenantAdmin = caller?.tenantId === tenantId && caller?.role === 'admin';
+  const isTenantAdmin = caller?.tenantId === tenantId && isAdminRole(caller?.role);
   if (!isSuper && !isTenantAdmin) {
     throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
   }
@@ -175,7 +180,7 @@ export const getStaffInviteLink = onCall<{ tenantId: string; targetUid: string }
   const { tenantId, targetUid } = request.data;
   if (!tenantId || !targetUid) throw new HttpsError('invalid-argument', 'tenantId, targetUid required');
   const isSuper = caller?.superAdmin === true;
-  const isTenantAdmin = caller?.tenantId === tenantId && caller?.role === 'admin';
+  const isTenantAdmin = caller?.tenantId === tenantId && isAdminRole(caller?.role);
   if (!isSuper && !isTenantAdmin) {
     throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
   }
@@ -198,15 +203,15 @@ export const updateStaff = onCall<{ tenantId: string; targetUid: string; name: s
     const caller = request.auth?.token;
     const callerUid = request.auth?.uid;
     const { tenantId, targetUid, name, role } = request.data;
-    if (!tenantId || !targetUid || !name?.trim() || (role !== 'admin' && role !== 'trimmer')) {
+    if (!tenantId || !targetUid || !name?.trim() || !VALID_ROLES.includes(role)) {
       throw new HttpsError('invalid-argument', 'tenantId, targetUid, name, role(admin|trimmer) required');
     }
     const isSuper = caller?.superAdmin === true;
-    const isTenantAdmin = caller?.tenantId === tenantId && caller?.role === 'admin';
+    const isTenantAdmin = caller?.tenantId === tenantId && isAdminRole(caller?.role);
     if (!isSuper && !isTenantAdmin) {
       throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
     }
-    if (callerUid === targetUid && role !== 'admin') {
+    if (callerUid === targetUid && !isAdminRole(role)) {
       throw new HttpsError('failed-precondition', 'cannot remove your own admin role');
     }
 
@@ -1188,7 +1193,7 @@ export const createBookingByStaff = onCall<{
   }
   const caller = request.auth?.token;
   const isSuper = caller?.superAdmin === true;
-  const isStaff = caller?.tenantId === tenantId && (caller?.role === 'admin' || caller?.role === 'trimmer');
+  const isStaff = caller?.tenantId === tenantId && isStaffRole(caller?.role);
   if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
 
   if (await isClosedDate(tenantId, date)) {
@@ -1275,7 +1280,7 @@ export const rescheduleBooking = onCall<{ tenantId: string; bookingId: string; d
     const { tenantId, bookingId, date, startTime } = request.data;
     if (!tenantId || !bookingId) throw new HttpsError('invalid-argument', 'tenantId, bookingId required');
     const isSuper = caller?.superAdmin === true;
-    const isStaff = caller?.tenantId === tenantId && (caller?.role === 'admin' || caller?.role === 'trimmer');
+    const isStaff = caller?.tenantId === tenantId && isStaffRole(caller?.role);
     if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
 
     const base = db.collection('tenants').doc(tenantId);
@@ -1622,7 +1627,7 @@ export const completeBooking = onCall<{
     throw new HttpsError('invalid-argument', 'tenantId, bookingId, finalDurationMin, finalPrice required');
   }
   const isSuper = caller?.superAdmin === true;
-  const isStaff = caller?.tenantId === tenantId && (caller?.role === 'admin' || caller?.role === 'trimmer');
+  const isStaff = caller?.tenantId === tenantId && isStaffRole(caller?.role);
   if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
 
   const base = db.collection('tenants').doc(tenantId);
@@ -1678,7 +1683,7 @@ export const sendCheckoutToPos = onCall<{ tenantId: string; bookingId: string }>
     throw new HttpsError('invalid-argument', 'tenantId and bookingId required');
   }
   const isSuper = caller?.superAdmin === true;
-  const isStaff = caller?.tenantId === tenantId && (caller?.role === 'admin' || caller?.role === 'trimmer');
+  const isStaff = caller?.tenantId === tenantId && isStaffRole(caller?.role);
   if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
 
   const base = db.collection('tenants').doc(tenantId);
@@ -1957,7 +1962,7 @@ export const sendRemindersNow = onCall<{ tenantId: string; date: string }>(async
   const caller = request.auth?.token;
   const { tenantId, date } = request.data;
   if (!tenantId || !date) throw new HttpsError('invalid-argument', 'tenantId, date required');
-  const ok = caller?.superAdmin === true || (caller?.tenantId === tenantId && caller?.role === 'admin');
+  const ok = caller?.superAdmin === true || (caller?.tenantId === tenantId && isAdminRole(caller?.role));
   if (!ok) throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
   return runReminders(tenantId, date);
 });
@@ -2054,7 +2059,7 @@ export const mergeCustomers = onCall<{ tenantId: string; sourceCustomerId: strin
     if (!tenantId || !sourceCustomerId || !targetCustomerId || sourceCustomerId === targetCustomerId) {
       throw new HttpsError('invalid-argument', 'distinct tenantId, sourceCustomerId, targetCustomerId required');
     }
-    const ok = caller?.superAdmin === true || (caller?.tenantId === tenantId && caller?.role === 'admin');
+    const ok = caller?.superAdmin === true || (caller?.tenantId === tenantId && isAdminRole(caller?.role));
     if (!ok) throw new HttpsError('permission-denied', 'superAdmin or tenant admin only');
 
     const base = db.collection('tenants').doc(tenantId);

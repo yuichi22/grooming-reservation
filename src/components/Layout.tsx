@@ -6,7 +6,7 @@ import BookingQrModal from './BookingQrModal';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
 import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
-import type { Tenant } from '../lib/types';
+import { STAFF_ROLE_LABELS, type Tenant } from '../lib/types';
 
 type NavItem = { to: string; label: string; icon: string; end?: boolean; admin?: boolean };
 
@@ -82,7 +82,7 @@ export default function Layout() {
         </div>
         <span className="user">
           {user?.email}
-          {claims.role ? `（${claims.role}）` : claims.superAdmin ? '（superAdmin）' : ''}
+          {claims.role ? `（${STAFF_ROLE_LABELS[claims.role] ?? claims.role}）` : claims.superAdmin ? '（superAdmin）' : ''}
         </span>
         <div className="header-quick">
           <NavLink to="/bookings" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>

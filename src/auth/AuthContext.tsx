@@ -13,7 +13,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth } from '../firebaseStaff';
-import type { StaffRole } from '../lib/types';
+import { isAdminRole, type StaffRole } from '../lib/types';
 
 /** custom claims から取り出すアプリ権限 (§2) */
 export interface AppClaims {
@@ -82,6 +82,8 @@ export function useAuth(): AuthState {
 
 /** admin もしくは superAdmin か */
 export function useIsAdmin(): boolean {
+
   const { claims } = useAuth();
-  return claims.role === 'admin' || claims.superAdmin;
+  // 管理者兼トリマー(admin_trimmer)も管理者権限を持つ
+  return isAdminRole(claims.role) || claims.superAdmin;
 }

@@ -1,7 +1,17 @@
 // Firestore データモデル (§5) の型定義。
 // 時刻は "HH:MM"（24h, ローカル）、所要時間は分。
 
-export type StaffRole = 'admin' | 'trimmer';
+export type StaffRole = 'admin' | 'admin_trimmer' | 'trimmer';
+
+/** ロールの表示名（UIは日本語ラベルで統一） */
+export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  admin: '管理者',
+  admin_trimmer: '管理者兼トリマー',
+  trimmer: 'トリマー',
+};
+
+/** 管理者権限を持つロールか（管理者・管理者兼トリマー） */
+export const isAdminRole = (r: string | null | undefined): boolean => r === 'admin' || r === 'admin_trimmer';
 export type BookingStatus = 'reserved' | 'done' | 'canceled' | 'noshow';
 export type TenantStatus = 'active' | 'suspended';
 
