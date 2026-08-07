@@ -847,7 +847,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       {isDevMode && <p className="muted" style={{ textAlign: 'center' }}>（開発モード: モックの LINE ユーザ{guest ? '・ゲスト' : ''}）</p>}
       {guest && (
         <p className="muted" style={{ textAlign: 'center', margin: '0 0 8px' }}>
-          ご予約内容の確認まで、そのままお進みいただけます（LINEログインは最後です）
+          最後にLINEログインで本人確認が必要です。
         </p>
       )}
 
