@@ -6,7 +6,7 @@
 //   お客様のWeb予約カレンダーの表示・受付範囲もこの設定に連動する（サーバ側で強制）
 import { useMemo, useState } from 'react';
 import { Settings as SettingsIcon } from 'lucide-react';
-import { deleteDoc, doc, documentId, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { deleteDoc, deleteField, doc, documentId, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../firebaseStaff';
 import { useAuth } from '../auth/AuthContext';
 import { closuresCol, shiftDoc, shiftsCol, staffCol, tenantDoc } from '../lib/firestore';
