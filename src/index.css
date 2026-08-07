@@ -1235,10 +1235,17 @@ tr.row-link td.chevron-cell {
 .resched-day {
   margin: 0 0 10px;
 }
+/* 日付見出しはスクロール中リスト上端に張り付き、次の日付が来ると押し出される */
 .resched-date {
+  position: sticky;
+  top: -8px; /* コンテナのpadding(8px)ぶん上げて内側上端にピッタリ */
+  z-index: 1;
   font-weight: 800;
   font-size: 0.82rem;
-  margin: 0 0 4px;
+  background: #fdfcfa;
+  margin: 0 -10px 4px;
+  padding: 6px 10px 4px;
+  border-bottom: 1px solid #efe9df;
 }
 .resched-date.current {
   color: var(--brand-dark);
