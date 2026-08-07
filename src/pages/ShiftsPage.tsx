@@ -111,6 +111,19 @@ export default function ShiftsPage() {
     }
   }
 
+  /** エントリを削除して未定（未設定）に戻す。選択中のステータスをもう一度押したときに使う */
+  async function clearEntry(date: string, staffId: string) {
+    setErr(null);
+    try {
+      await setDoc(shiftDoc(tenantId, date), { staff: { [staffId]: deleteField() } } as never, {
+        mergeFields: [`staff.${staffId}`],
+      });
+      setEditing(null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '保存に失敗しました');
+    }
+  }
+
   async function saveHorizon(n: number) {
     setErr(null);
     try {
@@ -320,13 +333,16 @@ export default function ShiftsPage() {
                                   )}
                                 </button>
                               ) : (
-                                // 未設定 or 選び直し中: 縦3ボタン。選択中は色で分かるように
+                                // 未設定 or 選び直し中: 縦3ボタン。選択中のステータスをもう一度押すと未定に戻す
                                 <div className="shift-cell-stack">
                                   <button
                                     type="button"
                                     className={`shift-opt work${isEditing && status === 'work' ? ' current' : ''}`}
                                     disabled={isPast}
-                                    onClick={() => writeEntry(d.ds, s.id, { work: true })}
+                                    title={isEditing && status === 'work' ? 'もう一度押すと未定に戻します' : undefined}
+                                    onClick={() =>
+                                      isEditing && status === 'work' ? clearEntry(d.ds, s.id) : writeEntry(d.ds, s.id, { work: true })
+                                    }
                                   >
                                     出勤
                                   </button>
@@ -334,7 +350,10 @@ export default function ShiftsPage() {
                                     type="button"
                                     className={`shift-opt off${isEditing && status === 'off' ? ' current' : ''}`}
                                     disabled={isPast}
-                                    onClick={() => writeEntry(d.ds, s.id, { intervals: [] })}
+                                    title={isEditing && status === 'off' ? 'もう一度押すと未定に戻します' : undefined}
+                                    onClick={() =>
+                                      isEditing && status === 'off' ? clearEntry(d.ds, s.id) : writeEntry(d.ds, s.id, { intervals: [] })
+                                    }
                                   >
                                     休み
                                   </button>
@@ -342,7 +361,10 @@ export default function ShiftsPage() {
                                     type="button"
                                     className={`shift-opt custom${isEditing && status === 'custom' ? ' current' : ''}`}
                                     disabled={isPast}
-                                    onClick={() => openTimeModal(d.ds, s.id, s.name, entry)}
+                                    title={isEditing && status === 'custom' ? 'もう一度押すと未定に戻します' : undefined}
+                                    onClick={() =>
+                                      isEditing && status === 'custom' ? clearEntry(d.ds, s.id) : openTimeModal(d.ds, s.id, s.name, entry)
+                                    }
                                   >
                                     時間
                                   </button>
