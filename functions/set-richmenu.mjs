@@ -1,12 +1,22 @@
 // リッチメニューの確認/設定（LINE Messaging API）。
-// 全面タップ→素の LIFF（?tenant= なし）を開く＝/book の店舗解決(BookEntry)に乗せる。
+// 全面タップ→LIFF を開く。
+//
+// ⚠ リッチメニューは「OA単位」。拠点OA（テナント専用OA）を作ったら、そのOAにも
+//   別途セットしないとボタンが1つも出ない（新規OAは既定メニューなしのため）。
+//   テナントに設定させる必要はなく、lineConfig のトークンでここから配れる。
 //
 // 使い方:
 //   MODE=get   MESSAGING_TOKEN=xxx node functions/set-richmenu.mjs
 //     → 既存のリッチメニュー一覧・既定・各エリアの遷移先URLを表示（変更なし）
-//   MODE=set   MESSAGING_TOKEN=xxx LIFF_ID=2010431019-EJ1xAj6t IMAGE=/tmp/richmenu-prod.png \
-//              node functions/set-richmenu.mjs
-//     → 画像付きで作成→既定に設定→古い既定は削除。URLは https://liff.line.me/<LIFF_ID>（素）
+//   MODE=set   MESSAGING_TOKEN=xxx LIFF_ID=2010431019-EJ1xAj6t IMAGE=/tmp/rm.png \
+//              [TENANT_ID=groomhaus] node functions/set-richmenu.mjs
+//     → 画像付きで作成→既定に設定→古い既定は削除
+//
+// TENANT_ID の有無で遷移先が変わる:
+//   あり（拠点OA）… https://liff.line.me/<LIFF_ID>?tenant=<id>
+//                    その店専用のOAなので店を直接指定できる＝BookEntryの店舗解決を1手省ける
+//   なし（共有OA）… https://liff.line.me/<LIFF_ID>（素）
+//                    全テナント共通のメニューなので、開いた後に getMyTenants で解決させる
 //
 // 注意: 本番OAに対して実行すると即時反映。トークン(MESSAGING_TOKEN)は使い捨て前提で扱う。
 
@@ -53,7 +63,11 @@ if (MODE === 'set') {
   const IMAGE = process.env.IMAGE;
   if (!LIFF_ID) throw new Error('LIFF_ID required for set');
   if (!IMAGE) throw new Error('IMAGE (png path) required for set');
-  const uri = `https://liff.line.me/${LIFF_ID}`; // 素のLIFF＝?tenant=なし
+  // 拠点OAは店が確定しているので ?tenant= を埋める。共有OAは素のLIFF（開いた後に解決）
+  const TENANT_ID = process.env.TENANT_ID || '';
+  const uri = TENANT_ID
+    ? `https://liff.line.me/${LIFF_ID}?tenant=${encodeURIComponent(TENANT_ID)}`
+    : `https://liff.line.me/${LIFF_ID}`;
 
   const { defaultId: prevDefault } = await showCurrent();
 
