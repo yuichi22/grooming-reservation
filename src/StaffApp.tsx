@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { RequireAuth } from './auth/RequireAuth';
@@ -16,6 +17,15 @@ import CustomersPage from './pages/CustomersPage';
 // スタッフ用アプリ全体（Auth + 管理画面）。App.tsx から遅延読み込みされ、
 // /book（顧客）バンドルには含まれない（バンドル削減 A）。
 export default function StaffApp() {
+  // 管理側だけAKUTOカラーのファビコンに差し替える（顧客側 /book は index.html の既定のまま）。
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) return;
+    link.href = '/favicon-admin.svg';
+    return () => {
+      link.href = '/favicon.svg';
+    };
+  }, []);
   return (
     <AuthProvider>
       <Routes>
