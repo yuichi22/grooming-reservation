@@ -43,6 +43,9 @@ interface Draft {
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const rid = () => Math.random().toString(36).slice(2, 10);
 
+// スマホ判定（案内文の出し分け用）。スマホはLINEアプリへの自動ジャンプ、PCはWebログインになる
+const isMobileUA = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
 /** ゲスト（LINEログイン前）がその場で入力した犬。確定時に newDog としてサーバ登録される */
 interface GuestDog {
   id: string; // 'guest:' プレフィックス付きのローカルID
@@ -905,7 +908,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       {isDevMode && <p className="muted" style={{ textAlign: 'center' }}>（開発モード: モックの LINE ユーザ{guest ? '・ゲスト' : ''}）</p>}
       {guest && (
         <p className="muted" style={{ textAlign: 'center', margin: '0 0 8px' }}>
-          最後にLINEログインで本人確認が必要です。
+          {isMobileUA ? '最後に本人確認のためLINEアプリが開きます。' : '最後にLINEログインで本人確認が必要です。'}
         </p>
       )}
 
