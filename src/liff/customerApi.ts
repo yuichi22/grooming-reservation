@@ -17,7 +17,7 @@ export interface ServiceOption {
   standalone?: boolean;
 }
 export interface BookingOptions {
-  store: { name: string; logoUrl: string | null };
+  store: { name: string; logoUrl: string | null; addFriendUrl?: string };
   /** 予約受付範囲（今月+Nヶ月の月末まで）。カレンダー送りの上限に使う */
   bookingHorizonMonths?: number;
   services: { id: string; name: string }[];
@@ -42,7 +42,7 @@ export const customerSession = httpsCallable<
     lineUserId: string;
     needsPhone: boolean;
     options: BookingOptions | null;
-    store: { name: string; logoUrl: string | null };
+    store: { name: string; logoUrl: string | null; addFriendUrl?: string };
   }
 >(functions, 'customerSession');
 

@@ -170,7 +170,11 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState('');
   const [options, setOptions] = useState<BookingOptions | null>(null);
-  const [storeInfo, setStoreInfo] = useState<{ name: string; logoUrl: string | null } | null>(null);
+  const [storeInfo, setStoreInfo] = useState<{
+    name: string;
+    logoUrl: string | null;
+    addFriendUrl?: string;
+  } | null>(null);
 
   // ゲストモード（Web集客導線）: LINE未ログインのまま閲覧〜内容決定まで進め、確定時にログインへ誘導。
   // ?guest=1 は開発モードでゲスト動線を試すための強制フラグ。
@@ -275,6 +279,15 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       const msg = e instanceof Error ? e.message : '';
       // サーバ側の友だち必須化に弾かれた場合も案内画面へ
       if (/line-friend-required/.test(msg)) {
+        // customerSession が例外で抜けているため店舗情報が未取得。
+        // 公開カタログ（認証不要）から取り直す。ロゴ表示と、
+        // テナントごとの友だち追加URLの取得に必要。
+        try {
+          const pub = await getPublicBookingOptions({ tenantId });
+          setStoreInfo(pub.data.store);
+        } catch {
+          // 取得できなくても案内画面自体は出す（フォールバックURLで動く）
+        }
         setPhase('needFriend');
         return;
       }
@@ -814,8 +827,14 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           <p className="muted">
             ご予約の確認や前日のリマインドを LINE でお送りするため、まず公式アカウントの友だち追加が必要です。
           </p>
-          {ADD_FRIEND_URL ? (
-            <button type="button" className="book-start" style={{ width: '100%' }} onClick={openAddFriend}>
+          {/* テナント設定のURLを優先。未設定テナントは環境変数のフォールバック */}
+          {(storeInfo?.addFriendUrl || ADD_FRIEND_URL) ? (
+            <button
+              type="button"
+              className="book-start"
+              style={{ width: '100%' }}
+              onClick={() => openAddFriend(storeInfo?.addFriendUrl)}
+            >
               友だち追加する
             </button>
           ) : (

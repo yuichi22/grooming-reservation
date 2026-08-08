@@ -593,6 +593,7 @@ export const customerSession = onCall<{
   const store = {
     name: (tSnap.data()?.name ?? '') as string,
     logoUrl: (tSnap.data()?.settings?.logoUrl ?? null) as string | null,
+    addFriendUrl: (tSnap.data()?.lineConfig?.addFriendUrl ?? '') as string,
   };
   // 「このLINEユーザーが使った店」をインデックス化（リッチメニューの店選択/直近店に使用）
   await upsertUserTenant(lineUserId, tenantId, store.name, store.logoUrl);
@@ -1429,6 +1430,9 @@ async function fetchBookingOptions(tenantId: string, customerId: string | null) 
     store: {
       name: (tdata.name ?? '') as string,
       logoUrl: (tdata.settings?.logoUrl ?? null) as string | null,
+      // ⚠ 友だち追加URLはテナントごと。拠点OAのテナントが混在すると
+      //   ビルド時固定のURLでは他店のOAへ誘導してしまうため必ずここから返す。
+      addFriendUrl: (tdata.lineConfig?.addFriendUrl ?? '') as string,
     },
     // 予約受付範囲（今月+Nヶ月の月末まで）。クライアントのカレンダー送りの上限に使う
     bookingHorizonMonths: (tdata.settings?.bookingHorizonMonths ?? 3) as number,

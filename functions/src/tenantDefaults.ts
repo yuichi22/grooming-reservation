@@ -13,4 +13,11 @@ export const EMPTY_LINE_CONFIG = {
   miniAppChannelId: '',
   messagingApiChannelId: '',
   liffId: '',
+  /**
+   * OAの友だち追加URL（https://lin.ee/xxxx）。
+   * ⚠ テナントごとに持つ必要がある。拠点OAを1つでも作ると、
+   *   ビルド時の環境変数(VITE_LINE_ADD_FRIEND_URL)では
+   *   別テナントの顧客に他店のOAを友だち追加させてしまうため。
+   */
+  addFriendUrl: '',
 };

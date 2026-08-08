@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "groom-guest",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--mode", "devguest", "--port", "5177", "--strictPort"],
+      "port": 5177
+    },
+    {
       "name": "mobile-order",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/mobile_order-app", "run", "dev", "--", "--port", "5174", "--strictPort"],
@@ -18,6 +24,36 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/akuto-lp", "run", "dev", "--", "-p", "3100"],
       "port": 3100
+    },
+    {
+      "name": "suomi-site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/suomi-site", "run", "dev"],
+      "port": 3200
+    },
+    {
+      "name": "decolle-site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/decolle-site", "run", "dev"],
+      "port": 3300
+    },
+    {
+      "name": "decolle-shop-site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/decolle-shop-site", "run", "dev"],
+      "port": 3400
+    },
+    {
+      "name": "kukkula-site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/kukkula-site", "run", "dev"],
+      "port": 3500
+    },
+    {
+      "name": "groom-site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/groom-site", "run", "dev"],
+      "port": 3600
     },
     {
       "name": "suomi-admin",

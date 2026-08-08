@@ -10,7 +10,14 @@ export interface LiffProfile {
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID as string | undefined;
 const DEV_USER_ID = 'Udev_local_tester';
-/** OA 友だち追加URL（例: https://lin.ee/xxxx）。A方式の友だち必須化で使用。 */
+/**
+ * OA 友だち追加URL（例: https://lin.ee/xxxx）のフォールバック。
+ *
+ * ⚠ ビルド時に1つしか焼き込めないため、拠点OAを持つテナントが混在すると
+ *   別テナントの顧客に他店のOAを追加させてしまう。
+ *   正はテナント設定（lineConfig.addFriendUrl → store.addFriendUrl）で、
+ *   これは未設定テナント向けの後方互換用。
+ */
 export const ADD_FRIEND_URL = (import.meta.env.VITE_LINE_ADD_FRIEND_URL as string | undefined) ?? '';
 
 let initialized = false;
@@ -89,13 +96,17 @@ export async function isFriend(): Promise<boolean> {
   }
 }
 
-/** LINE内で OA の友だち追加画面を開く。 */
-export function openAddFriend(): void {
-  if (!ADD_FRIEND_URL) return;
+/**
+ * LINE内で OA の友だち追加画面を開く。
+ * @param url テナント設定の友だち追加URL。未指定なら環境変数のフォールバックを使う。
+ */
+export function openAddFriend(url?: string): void {
+  const target = url || ADD_FRIEND_URL;
+  if (!target) return;
   try {
-    liff.openWindow({ url: ADD_FRIEND_URL, external: false });
+    liff.openWindow({ url: target, external: false });
   } catch {
-    window.open(ADD_FRIEND_URL, '_blank');
+    window.open(target, '_blank');
   }
 }
 

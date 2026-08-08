@@ -135,7 +135,7 @@ export const provisionTenantForSpace = onRequest({ region: 'asia-northeast1', co
     const defaultsSnap = await db.doc('platform/lineDefaults').get();
     const shared = defaultsSnap.exists ? defaultsSnap.data() ?? {} : {};
     const lineDefaults: Record<string, string> = {};
-    for (const k of ['messagingChannelAccessToken', 'providerId', 'miniAppChannelId', 'messagingApiChannelId', 'liffId']) {
+    for (const k of ['messagingChannelAccessToken', 'providerId', 'miniAppChannelId', 'messagingApiChannelId', 'liffId', 'addFriendUrl']) {
       const v = str((shared as Record<string, unknown>)[k]);
       if (v) lineDefaults[k] = v;
     }
