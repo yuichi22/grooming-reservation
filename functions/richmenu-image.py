@@ -2,13 +2,15 @@
 """リッチメニュー画像を生成する（2500x843 = コンパクトサイズ）。
 
 使い方:
-  python3 functions/richmenu-image.py OUT.png [店名]
-    共有OA用（店名なし） : python3 functions/richmenu-image.py /tmp/rm.png
-    拠点OA用（店名あり） : python3 functions/richmenu-image.py /tmp/rm.png "GROOM HAUS"
+  python3 functions/richmenu-image.py OUT.png
 
-⚠ 共有OA（複数テナントが相乗り）には店名を入れないこと。
-  特定の店名を入れると、他店の顧客にその名前が表示されてしまう。
-  拠点OA（テナント専用）だけ店名を入れてよい。
+⚠ 店名は入れないこと（共有OA・拠点OAとも）。
+  ・リッチメニューはそのOAのトーク画面内に出るため、画面上部に店名と
+    アイコンがすでに表示されている。メニュー内で繰り返すのは重複。
+  ・共有OAは複数テナントが相乗りするので、特定の店名を入れると
+    他店の顧客にその名前が見えてしまう。
+  結果として全OAで同じ画像を使えるので、テナントが増えても作り直し不要。
+  店ごとに変えるのは画像ではなく遷移先URL（set-richmenu.mjs の TENANT_ID）。
 
 ⚠ LINEのリッチメニュー画像はサイズが厳密。2500x1686(大) か 2500x843(小) のみ。
   ボタンを増やす場合は set-richmenu.mjs のエリア定義とこの画像の分割位置を
@@ -58,7 +60,6 @@ def centered(d, text, font, cx, top, fill):
 
 def main() -> None:
     out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/richmenu.png"
-    store = sys.argv[2] if len(sys.argv) > 2 else ""
 
     img = Image.new("RGBA", (W, H), TOP)
     gradient(img)
@@ -66,24 +67,15 @@ def main() -> None:
 
     d = ImageDraw.Draw(img)
     cx = W // 2
+    centered(d, "トリミングのご予約", ImageFont.truetype(JP_BOLD, 148), cx, 210, WHITE)
 
-    if store:
-        # 拠点OA: 店名 ＋ 用途
-        # index=0 は Futura Medium（正体）。1 は Italic なので使わない
-        centered(d, store, ImageFont.truetype(EN, 96, index=0), cx, 150, WHITE)
-        centered(d, "トリミングのご予約", ImageFont.truetype(JP_BOLD, 132), cx, 270, WHITE)
-        pill_top = 530
-    else:
-        # 共有OA: 用途のみ（店名は入れない）
-        centered(d, "トリミングのご予約", ImageFont.truetype(JP_BOLD, 148), cx, 210, WHITE)
-        pill_top = 490
-
-    # 白いピルボタン
-    pw, ph = 1120, 175
-    x0, y0 = cx - pw // 2, pill_top
+    # 白いピルボタン。元デザインの実測値（幅1101 高さ181 / 文字の高さ90）に合わせる
+    pw, ph = 1120, 180
+    x0, y0 = cx - pw // 2, 500
     d.rounded_rectangle((x0, y0, x0 + pw, y0 + ph), radius=ph // 2, fill=WHITE)
     label = "予約する  ＞"
-    f = ImageFont.truetype(JP_BOLD, 74)
+    # ⚠ 96px。74pxにしたら文字の高さが90→70pxになり「ボタンが小さい」印象になった
+    f = ImageFont.truetype(JP_BOLD, 96)
     b = d.textbbox((0, 0), label, font=f)
     d.text(
         (cx - (b[2] - b[0]) / 2 - b[0], y0 + ph / 2 - (b[3] - b[1]) / 2 - b[1]),
@@ -93,7 +85,7 @@ def main() -> None:
     )
 
     img.convert("RGB").save(out, "PNG", optimize=True)
-    print(f"{out} ({W}x{H}) store={store or '(なし=共有OA用)'}")
+    print(f"{out} ({W}x{H})")
 
 
 if __name__ == "__main__":
