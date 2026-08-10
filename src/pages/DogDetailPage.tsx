@@ -1,12 +1,23 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { addDoc, doc, updateDoc } from 'firebase/firestore';
-import { ChevronLeft, MessageCircle, Phone } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { addDoc, deleteDoc, doc, query, updateDoc, where } from 'firebase/firestore';
+import { Archive, ArchiveRestore, ChevronLeft, MessageCircle, Pencil, Phone, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { breedsCol, customersCol, dogsCol, optionsCol, pricingCol, recordsCol, servicesCol } from '../lib/firestore';
+import AdjStepper from '../components/AdjStepper';
+import { actualMin, adjustedPrice, customerMin } from '../lib/adjust';
+import {
+  bookingsCol,
+  breedsCol,
+  customersCol,
+  dogsCol,
+  optionsCol,
+  pricingCol,
+  recordsCol,
+  servicesCol,
+} from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import type { Breed, Customer, Dog, Option, PriceEntry, Service, ServiceRecord } from '../lib/types';
+import type { Booking, Breed, Customer, Dog, Option, PriceEntry, Service, ServiceRecord } from '../lib/types';
 
 /** 順序非依存で number マップを比較。 */
 function sameMap(a: Record<string, number>, b: Record<string, number>): boolean {
@@ -29,8 +40,14 @@ export default function DogDetailPage() {
 }
 
 function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }) {
+  const navigate = useNavigate();
   const { data: dog, loading } = useDocument<Dog>(doc(dogsCol(tenantId), dogId), [tenantId, dogId]);
   const { data: records } = useCollection<ServiceRecord>(recordsCol(tenantId, dogId), [tenantId, dogId]);
+  // 削除の可否判定に使う。履歴が無くても予約が残っていれば消せない（予約側が名前を引けなくなる）
+  const { data: dogBookings } = useCollection<Booking>(
+    query(bookingsCol(tenantId), where('dogId', '==', dogId)),
+    [tenantId, dogId],
+  );
   const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
   const { data: services } = useCollection<Service>(servicesCol(tenantId), [tenantId]);
   const { data: optionItems } = useCollection<Option>(optionsCol(tenantId), [tenantId]);
@@ -40,11 +57,13 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const { data: customer } = useDocument<Customer>(doc(customersCol(tenantId), customerId), [tenantId, customerId]);
   const { data: customers } = useCollection<Customer>(customersCol(tenantId), [tenantId]);
 
-  const [form, setForm] = useState<{ breedId: string | null; notes: string; allergies: string }>({
+  const [form, setForm] = useState<{ name: string; breedId: string | null; notes: string; allergies: string }>({
+    name: '',
     breedId: null,
     notes: '',
     allergies: '',
   });
+  const [editingName, setEditingName] = useState(false);
   const [serviceAdj, setServiceAdj] = useState<Record<string, number>>({}); // サービス別の個別加算時間
   const [optAdj, setOptAdj] = useState<Record<string, number>>({}); // オプション別の個別追加(超過)時間
   const [optPick, setOptPick] = useState(''); // 追加するオプションの選択
@@ -54,7 +73,12 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
 
   useEffect(() => {
     if (!dog) return;
-    setForm({ breedId: dog.breedId ?? null, notes: dog.notes ?? '', allergies: dog.allergies ?? '' });
+    setForm({
+      name: dog.name ?? '',
+      breedId: dog.breedId ?? null,
+      notes: dog.notes ?? '',
+      allergies: dog.allergies ?? '',
+    });
     setServiceAdj(dog.serviceAdjustments ?? {});
     setOptAdj(dog.optionAdjustments ?? {});
   }, [dog]);
@@ -66,17 +90,13 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   if (loading) return <p>読み込み中…</p>;
   if (!dog) return <p className="error">カルテが見つかりません。</p>;
 
-  const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
   const cellFor = (svcId: string) =>
     pricing.find((p) => p.breedId === form.breedId && p.serviceId === svcId) ?? null;
   const activeServices = services.filter((s) => s.active);
   // この犬種に料金表があるサービス（時間・料金が割り出せるもの）
   const pricedServices = activeServices.filter((s) => cellFor(s.id));
-  // 確定（サービス別個別加算込み）。料金は 標準 + 単価×個別加算 を50円切上げ
+  // 確定（サービス別個別加算込み）。計算規則は lib/adjust.ts に集約
   const adjFor = (svcId: string) => serviceAdj[svcId] ?? 0;
-  const confirmTime = (svcId: string, durationMin: number) => durationMin + adjFor(svcId);
-  const confirmPrice = (svcId: string, price: number, durationMin: number) =>
-    price + ceil50((durationMin > 0 ? price / durationMin : 0) * adjFor(svcId));
   // オプション: 個別追加時間を設定済み（optAdj にキーがある）ものだけ表示
   const activeOptions = optionItems.filter((o) => o.active);
   const setOptionIds = Object.keys(optAdj);
@@ -85,6 +105,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
 
   // 編集あり（保存済みの値と差分があるか）
   const dirty =
+    form.name.trim() !== (dog.name ?? '') ||
     (form.breedId ?? null) !== (dog.breedId ?? null) ||
     (form.notes ?? '') !== (dog.notes ?? '') ||
     (form.allergies ?? '') !== (dog.allergies ?? '') ||
@@ -92,22 +113,56 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     !sameMap(optAdj, dog.optionAdjustments ?? {});
 
   function cancelEdit() {
-    setForm({ breedId: dog?.breedId ?? null, notes: dog?.notes ?? '', allergies: dog?.allergies ?? '' });
+    setForm({
+      name: dog?.name ?? '',
+      breedId: dog?.breedId ?? null,
+      notes: dog?.notes ?? '',
+      allergies: dog?.allergies ?? '',
+    });
     setServiceAdj(dog?.serviceAdjustments ?? {});
     setOptAdj(dog?.optionAdjustments ?? {});
+    setEditingName(false);
     setMsg(null);
   }
 
   async function saveDog() {
     setMsg(null);
     await updateDoc(doc(dogsCol(tenantId), dogId), {
+      // 名前が空になるのは事故なので、空欄なら元の名前を維持する
+      name: form.name.trim() || dog?.name || '',
       breedId: form.breedId ?? null,
       notes: form.notes ?? '',
       allergies: form.allergies ?? '',
       serviceAdjustments: nonZero(serviceAdj),
+      // ⚠ こちらは 0 も残す。キーの有無が「この子に設定した行」の一覧を兼ねているため、
+      //   0 を捨てると追加した行が保存のたびに消える
       optionAdjustments: optAdj,
     });
+    setEditingName(false);
     setMsg('保存しました');
+  }
+
+  // ---- カルテの削除 / アーカイブ ----
+  // 履歴（施術記録）は過去の売上・作業の記録なので消さない。履歴がある子はアーカイブに送る。
+  // 予約が残っている子も、予約側から名前が引けなくなるため削除させない。
+  const canDelete = records.length === 0 && dogBookings.length === 0;
+  const archived = !!dog.archivedAt;
+
+  async function onDelete() {
+    if (!canDelete) return;
+    if (!confirm(`「${dog?.name}」のカルテを削除します。元に戻せません。よろしいですか？`)) return;
+    await deleteDoc(doc(dogsCol(tenantId), dogId));
+    navigate('/karte');
+  }
+
+  async function onArchive() {
+    await updateDoc(doc(dogsCol(tenantId), dogId), { archivedAt: new Date().toISOString() });
+    setMsg('アーカイブしました');
+  }
+
+  async function onUnarchive() {
+    await updateDoc(doc(dogsCol(tenantId), dogId), { archivedAt: null });
+    setMsg('アーカイブから戻しました');
   }
 
   async function saveCustomer() {
@@ -128,7 +183,33 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
         <Link to="/karte" className="back-btn" aria-label="カルテ一覧へ戻る">
           <ChevronLeft size={22} strokeWidth={2.25} />
         </Link>
-        <h1>{dog.name}</h1>
+        {editingName ? (
+          <span className="name-edit">
+            <input
+              value={form.name}
+              autoFocus
+              aria-label="犬の名前"
+              placeholder="犬の名前"
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setEditingName(false);
+                } else if (e.key === 'Escape') {
+                  setForm((f) => ({ ...f, name: dog?.name ?? '' }));
+                  setEditingName(false);
+                }
+              }}
+            />
+          </span>
+        ) : (
+          <span className="name-edit">
+            <h1>{form.name || dog.name}</h1>
+            <button type="button" className="icon-btn" aria-label="名前を編集" onClick={() => setEditingName(true)}>
+              <Pencil size={15} />
+            </button>
+          </span>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           {!dirty && msg && <span className="muted">{msg}</span>}
           {dirty && (
@@ -141,6 +222,19 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
           </button>
         </div>
       </div>
+
+      {archived && (
+        <div className="archived-banner">
+          <Archive size={16} />
+          <span style={{ flex: '1 1 200px' }}>
+            このカルテはアーカイブ済みです。一覧の既定表示には出ません。
+          </span>
+          <button type="button" onClick={onUnarchive}>
+            <ArchiveRestore size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+            アーカイブから戻す
+          </button>
+        </div>
+      )}
 
       {dog.customerId ? (
         <div className="customer-card">
@@ -201,7 +295,11 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
         </label>
         <fieldset>
           <legend>作業時間・料金（料金表 犬種×サービス）</legend>
-          <p className="muted">個別加算時間は、この子だけ余計にかかる分をサービスごとに設定できます。</p>
+          <p className="muted">
+            この子だけ標準と違う分を、サービスごとに設定できます。<strong>早く仕上がる子はマイナス</strong>にしてください。
+            マイナスにすると予約枠はその分だけ短く取りますが、<strong>お客様には標準時間のままお伝えします</strong>
+            （早い仕上がりを約束しないため）。料金も下がりません。
+          </p>
           {form.breedId == null ? (
             <p className="muted">犬種を選ぶと、サービスごとの時間・料金が表示されます。</p>
           ) : pricedServices.length === 0 ? (
@@ -222,30 +320,29 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
                 <tbody>
                   {pricedServices.map((s) => {
                     const cell = cellFor(s.id)!;
+                    const adj = adjFor(s.id);
+                    const shown = customerMin(cell.durationMin, adj);
+                    const actual = actualMin(cell.durationMin, adj);
                     return (
                       <tr key={s.id}>
                         <td data-label="サービス" className="kt-name">{s.name}</td>
                         <td data-label="標準時間" className="muted">{cell.durationMin}分</td>
                         <td data-label="標準料金" className="muted">¥{cell.price.toLocaleString()}</td>
                         <td data-label="個別加算" className="kt-adj">
-                          ＋
-                          <input
-                            type="number"
-                            min={0}
-                            step={5}
-                            value={adjFor(s.id)}
-                            onChange={(e) => {
-                              const v = Math.max(0, Number(e.target.value));
-                              setServiceAdj((m) => ({ ...m, [s.id]: v }));
-                            }}
+                          <AdjStepper
+                            value={adj}
+                            stdMin={cell.durationMin}
+                            onChange={(v) => setServiceAdj((m) => ({ ...m, [s.id]: v }))}
                           />
-                          分
                         </td>
                         <td data-label="確定時間">
-                          <strong>{confirmTime(s.id, cell.durationMin)}分</strong>
+                          <strong>{actual}分</strong>
+                          {/* 確定時間とお客様への案内がずれるのはマイナスのときだけ。ずれる時だけ書く */}
+                          {shown !== actual && <span className="kt-sub">お客様には{shown}分</span>}
                         </td>
                         <td data-label="確定料金">
-                          <strong>¥{confirmPrice(s.id, cell.price, cell.durationMin).toLocaleString()}</strong>
+                          <strong>¥{adjustedPrice(cell.price, cell.durationMin, adj).toLocaleString()}</strong>
+                          {adj < 0 && <span className="kt-sub">短縮では下げません</span>}
                         </td>
                       </tr>
                     );
@@ -258,16 +355,17 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
 
         {activeOptions.length > 0 && (
           <fieldset>
-            <legend>オプション超過時間の設定</legend>
+            <legend>オプションの個別時間の設定</legend>
             <p className="muted">
-              この子だけ余計にかかるオプションを選んで時間を設定。設定したものだけ表示され、未設定は定価扱いです。
+              この子だけ標準と違うオプションを選んで時間を設定。設定したものだけ表示され、未設定は定価扱いです。
+              サービスと同じく<strong>マイナスも設定できます</strong>。
             </p>
             {shownOptions.length > 0 && (
               <div className="calc-grid">
                 {shownOptions.map((o) => {
                   const add = optAdj[o.id] ?? 0;
-                  const unit = o.durationMin > 0 ? o.price / o.durationMin : 0;
-                  const effPrice = o.price + ceil50(unit * add);
+                  const shown = customerMin(o.durationMin, add);
+                  const actual = actualMin(o.durationMin, add);
                   return (
                     <Fragment key={o.id}>
                       <span className="calc-label">
@@ -277,21 +375,14 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
                         </span>
                       </span>
                       <span className="calc-val">
-                        ＋
-                        <input
-                          type="number"
-                          min={0}
-                          step={5}
+                        <AdjStepper
                           value={add}
-                          onChange={(e) => {
-                            const v = Math.max(0, Number(e.target.value));
-                            setOptAdj((m) => ({ ...m, [o.id]: v }));
-                          }}
-                          style={{ width: 80 }}
+                          stdMin={o.durationMin}
+                          onChange={(v) => setOptAdj((m) => ({ ...m, [o.id]: v }))}
                         />
-                        分
                         <span className="muted" style={{ marginLeft: 8 }}>
-                          → 合計 {o.durationMin + add}分 / ¥{effPrice.toLocaleString()}
+                          → 合計 {actual}分 / ¥{adjustedPrice(o.price, o.durationMin, add).toLocaleString()}
+                          {shown !== actual && `（お客様には${shown}分）`}
                         </span>
                         <button
                           type="button"
@@ -388,6 +479,42 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
           )}
         </tbody>
       </table></div>
+
+      {/* 施術履歴の有無で出し分ける。履歴があるカルテは消さずアーカイブへ。 */}
+      <div className="karte-danger">
+        {canDelete ? (
+          <>
+            <p className="muted">
+              施術履歴も予約もないカルテです。誤って作った場合は削除できます。元に戻せません。
+            </p>
+            <button type="button" className="btn-danger" onClick={onDelete}>
+              <Trash2 size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+              このカルテを削除
+            </button>
+          </>
+        ) : archived ? (
+          <>
+            <p className="muted">アーカイブ済みです。一覧に戻したいときは上のバナーから戻せます。</p>
+            <button type="button" onClick={onUnarchive}>
+              <ArchiveRestore size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+              アーカイブから戻す
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="muted">
+              {records.length > 0
+                ? `施術履歴が${records.length}件あるため削除できません。`
+                : `この子の予約が${dogBookings.length}件あるため削除できません。`}
+              来店されなくなった場合はアーカイブすると、一覧から隠れます（データは残ります）。
+            </p>
+            <button type="button" onClick={onArchive}>
+              <Archive size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+              アーカイブする
+            </button>
+          </>
+        )}
+      </div>
     </section>
   );
 }

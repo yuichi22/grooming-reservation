@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { deleteDoc, doc, documentId, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import AdjStepper from '../components/AdjStepper';
+import { actualMin, adjustedPrice, customerMin } from '../lib/adjust';
 import {
   bookingsCol,
   breedsCol,
@@ -841,7 +843,6 @@ function ListView({
  * 確定時間・確定料金・施術メモを記録する。確定料金は料金表×個別加算からの自動合算（手修正可）。
  * booking は購読中のリストから渡されるため、完了後もモーダルを開いたまま done 表示に切り替わる。
  */
-const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
 
 function BookingDetailModal({
   tenantId,
@@ -938,13 +939,17 @@ function BookingDetailModal({
     }
   }
 
-  // 確定時間・確定料金の自動合算（料金表の標準＋個別加算・超過。加算分は分単価×時間を50円単位切上げ）
-  const svcDur = cell ? cell.durationMin + svcAdj : 0;
-  const svcPrice = cell ? cell.price + ceil50((cell.durationMin > 0 ? cell.price / cell.durationMin : 0) * svcAdj) : 0;
+  // 確定時間・確定料金の自動合算。計算規則（マイナス加算の扱い含む）は lib/adjust.ts に集約
+  const svcDur = cell ? actualMin(cell.durationMin, svcAdj) : 0;
+  const svcPrice = cell ? adjustedPrice(cell.price, cell.durationMin, svcAdj) : 0;
   const optCalc = bookedOptions.map((o) => {
     const add = optAdj[o.id] ?? 0;
-    const unit = o.durationMin > 0 ? o.price / o.durationMin : 0;
-    return { ...o, add, dur: o.durationMin + add, effPrice: o.price + ceil50(unit * add) };
+    return {
+      ...o,
+      add,
+      dur: actualMin(o.durationMin, add),
+      effPrice: adjustedPrice(o.price, o.durationMin, add),
+    };
   });
   const autoDur = svcDur + optCalc.reduce((s, o) => s + o.dur, 0);
   const autoPrice = svcPrice + optCalc.reduce((s, o) => s + o.effPrice, 0);
@@ -961,15 +966,16 @@ function BookingDetailModal({
     setErr(null);
     try {
       if (dog) {
+        // ⚠ 0 以外を残す（0 のみ未設定）。> 0 で判定するとマイナス加算が保存されず消える
         const nextSvcAdj = { ...(dog.serviceAdjustments ?? {}) };
         if (booking.serviceId) {
-          if (svcAdj > 0) nextSvcAdj[booking.serviceId] = svcAdj;
+          if (svcAdj !== 0) nextSvcAdj[booking.serviceId] = svcAdj;
           else delete nextSvcAdj[booking.serviceId];
         }
         const nextOptAdj = { ...(dog.optionAdjustments ?? {}) };
         for (const o of bookedOptions) {
           const v = optAdj[o.id] ?? 0;
-          if (v > 0) nextOptAdj[o.id] = v;
+          if (v !== 0) nextOptAdj[o.id] = v;
           else delete nextOptAdj[o.id];
         }
         await updateDoc(doc(dogsCol(tenantId), dog.id), {
@@ -1115,17 +1121,13 @@ function BookingDetailModal({
                 <div className="karte-line">
                   <span className="muted">標準 {cell.durationMin}分 / ¥{cell.price.toLocaleString()}</span>
                   <span className="karte-adj">
-                    個別加算 ＋
-                    <input
-                      type="number"
-                      min={0}
-                      step={5}
-                      value={svcAdj}
-                      onChange={(e) => setSvcAdj(Math.max(0, Number(e.target.value)))}
-                    />
-                    分
+                    個別加算
+                    <AdjStepper value={svcAdj} stdMin={cell.durationMin} onChange={setSvcAdj} />
                   </span>
                   <strong>→ {svcDur}分 / ¥{svcPrice.toLocaleString()}</strong>
+                  {customerMin(cell.durationMin, svcAdj) !== svcDur && (
+                    <span className="muted">お客様には{customerMin(cell.durationMin, svcAdj)}分</span>
+                  )}
                 </div>
               )}
             </fieldset>
@@ -1140,15 +1142,12 @@ function BookingDetailModal({
                       <span className="muted">（標準{o.durationMin}分 / ¥{o.price.toLocaleString()}）</span>
                     </span>
                     <span className="karte-adj">
-                      超過 ＋
-                      <input
-                        type="number"
-                        min={0}
-                        step={5}
+                      個別
+                      <AdjStepper
                         value={o.add}
-                        onChange={(e) => setOptAdj((m) => ({ ...m, [o.id]: Math.max(0, Number(e.target.value)) }))}
+                        stdMin={o.durationMin}
+                        onChange={(v) => setOptAdj((m) => ({ ...m, [o.id]: v }))}
                       />
-                      分
                     </span>
                     <strong>→ {o.dur}分 / ¥{o.effPrice.toLocaleString()}</strong>
                   </div>

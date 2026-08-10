@@ -164,6 +164,8 @@ const toMin = (t: string) => {
 };
 const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
+// 個別加算のマイナス（早く仕上がる子）はお客様には見せない。規則は src/lib/adjust.ts
+const chargeableAdj = (adj: number) => Math.max(0, adj);
 
 function BookingPage({ tenantId }: { tenantId: string }) {
   const [phase, setPhase] = useState<Phase>('init');
@@ -552,16 +554,18 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     dur: number | null;
     amt: number | null;
   } {
+    // ⚠ ここは「お客様に見せる」見積り。個別加算のマイナス（早く仕上がる子）は反映しない。
+    //   予約枠の確保はサーバが確定時間で行う（functions の effectiveItem を参照）。
     const dog = dogById(it.dogId);
     const standalone = !it.serviceId; // メニュー無し（単品オプション）予約
     const cell = priceCell(dog?.breedId ?? null, it.serviceId);
-    const addMin = dog?.serviceAdjustments?.[it.serviceId] ?? 0;
+    const addMin = chargeableAdj(dog?.serviceAdjustments?.[it.serviceId] ?? 0);
     const stdDur = cell?.durationMin ?? null;
     const stdAmt = cell?.price ?? null;
     const baseDur = standalone ? 0 : stdDur != null ? stdDur + addMin : null;
     const baseAmt = standalone ? 0 : stdAmt != null ? stdAmt + ceil50((stdDur ? stdAmt / stdDur : 0) * addMin) : null;
     const opts = (options?.options ?? []).filter((o) => it.optionIds.includes(o.id));
-    const optAdj = (id: string) => dog?.optionAdjustments?.[id] ?? 0;
+    const optAdj = (id: string) => chargeableAdj(dog?.optionAdjustments?.[id] ?? 0);
     const optDur = opts.reduce((s, o) => s + o.durationMin + optAdj(o.id), 0);
     const optAmt = opts.reduce((s, o) => s + o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * optAdj(o.id)), 0);
     const dur = baseDur != null ? baseDur + optDur : null;
@@ -1176,7 +1180,8 @@ function BookingPage({ tenantId }: { tenantId: string }) {
               const menuServices = services.map((s) => ({ s, c: priceCell(breedId, s.id) })).filter((x) => x.c);
               const standaloneOpts = allOptions.filter((o) => o.standalone);
               const optEff = (o: { id: string; price: number; durationMin: number }) => {
-                const adj = dogById(draft.dogId)?.optionAdjustments?.[o.id] ?? 0;
+                // 表示用なのでマイナス加算は伏せる（estimateItem と同じ規則）
+                const adj = chargeableAdj(dogById(draft.dogId)?.optionAdjustments?.[o.id] ?? 0);
                 return {
                   dur: o.durationMin + adj,
                   amt: o.price + ceil50((o.durationMin > 0 ? o.price / o.durationMin : 0) * adj),

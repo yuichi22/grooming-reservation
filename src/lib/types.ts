@@ -196,19 +196,32 @@ export interface Dog {
   notes?: string;
   allergies?: string;
   /**
-   * サービスごとの個別加算時間（分）。{ [serviceId]: 加算分 }。この子だけ標準より余計にかかる分。
+   * サービスごとの個別加算時間（分）。{ [serviceId]: 加算分 }。この子だけ標準と違う分。
    * 予約の所要時間 = 料金表(犬種×サービス)の標準時間 + これ（+ オプション）。
+   *
+   * ⚠ マイナス可（標準より早く仕上がる子）。0 は未設定として保存しない。
+   *   マイナス時の扱い（お客様表示は標準のまま／枠は短縮／料金は下げない）は
+   *   src/lib/adjust.ts に集約してある。直接 + するコードを増やさないこと。
    */
   serviceAdjustments?: Record<string, number>;
   /** 旧: 全サービス共通の個別加算（廃止・後方互換の任意残置） */
   additionalDurationMin?: number | null;
-  /** オプションごとの個別追加時間（分）。{ [optionId]: 追加分 }。この子だけ余計にかかる分 */
+  /** オプションごとの個別追加時間（分）。{ [optionId]: 追加分 }。⚠ こちらもマイナス可 */
   optionAdjustments?: Record<string, number>;
   /** 旧: 絶対値の確定作業時間/料金（廃止・後方互換のため任意で残置） */
   confirmedDurationMin?: number | null;
   basePrice?: number | null;
   confirmedPrice?: number | null;
   lastServiceAt?: IsoStr | null;
+  /**
+   * アーカイブ日時。設定済みならカルテ一覧の既定表示から外れる（データは消さない）。
+   * 施術履歴がある子は削除せずこちらに送る（履歴＝過去の売上・作業記録のため）。
+   * 新しい予約が入るとサーバ側(unarchiveDogs)で自動的に解除される。
+   *
+   * ⚠ hiddenByCustomer とは別物。あちらは顧客が自分の予約アプリの選択リストから
+   *   外す操作(hideDog)で、店の都合では戻さない。こちらは店側の一覧整理。
+   */
+  archivedAt?: IsoStr | null;
 }
 
 /** tenants/{tenantId}/dogs/{dogId}/records/{recordId} — カルテ履歴 (§5/§7) */

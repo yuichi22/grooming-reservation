@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore';
-import { ChevronRight, Plus } from 'lucide-react';
+import { Archive, ChevronRight, Plus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { breedsCol, customersCol, dogsCol } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
@@ -21,6 +21,11 @@ function KarteInner({ tenantId }: { tenantId: string }) {
   const { data: customers } = useCollection<Customer>(customersCol(tenantId), [tenantId]);
   const breedName = useMemo(() => new Map(breeds.map((b) => [b.id, b.name])), [breeds]);
   const customerName = useMemo(() => new Map(customers.map((c) => [c.id, c.ownerName])), [customers]);
+
+  // アーカイブは既定で隠す。件数が0なら切替ボタン自体を出さない（使わない店に余計な操作を見せない）
+  const [showArchived, setShowArchived] = useState(false);
+  const archivedCount = dogs.filter((d) => d.archivedAt).length;
+  const visibleDogs = showArchived ? dogs : dogs.filter((d) => !d.archivedAt);
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -79,6 +84,16 @@ function KarteInner({ tenantId }: { tenantId: string }) {
     <section>
       <div className="page-head">
         <h1>カルテ（犬）</h1>
+        {archivedCount > 0 && (
+          <button
+            type="button"
+            className={showArchived ? 'btn-primary' : ''}
+            onClick={() => setShowArchived((v) => !v)}
+          >
+            <Archive size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+            {showArchived ? `アーカイブを隠す` : `アーカイブも表示（${archivedCount}）`}
+          </button>
+        )}
         <button type="button" onClick={() => setOpen(true)}>
           <Plus size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
           カルテを追加
@@ -143,9 +158,16 @@ function KarteInner({ tenantId }: { tenantId: string }) {
             </tr>
           </thead>
           <tbody>
-            {dogs.map((d) => (
+            {visibleDogs.map((d) => (
               <tr key={d.id} className="row-link" onClick={() => navigate(`/karte/${d.id}`)}>
-                <td>{d.name}</td>
+                <td>
+                  {d.name}
+                  {d.archivedAt && (
+                    <span className="muted" style={{ marginLeft: 6, fontSize: 12 }}>
+                      （アーカイブ）
+                    </span>
+                  )}
+                </td>
                 <td>{(d.breedId && breedName.get(d.breedId)) || d.breed || '—'}</td>
                 <td>{customerName.get(d.customerId) || '—'}</td>
                 <td>{d.confirmedDurationMin != null ? `${d.confirmedDurationMin}分` : '未確定'}</td>
@@ -154,10 +176,10 @@ function KarteInner({ tenantId }: { tenantId: string }) {
                 </td>
               </tr>
             ))}
-            {dogs.length === 0 && (
+            {visibleDogs.length === 0 && (
               <tr>
                 <td colSpan={5} className="muted">
-                  カルテ未登録
+                  {dogs.length === 0 ? 'カルテ未登録' : 'アーカイブ以外のカルテはありません'}
                 </td>
               </tr>
             )}

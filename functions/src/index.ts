@@ -393,16 +393,26 @@ const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
  * 「標準（時間・料金）＋ 個別追加時間」の実効値。
  * 追加料金 = 単価(標準料金 ÷ 標準時間) × 個別追加時間 を 50円切上げ。
  */
+/**
+ * 標準値に犬ごとの個別加算を反映した実効値。加算は ± 両方向。
+ *
+ * ⚠ 返す時間は2種類ある。用途を取り違えないこと（クライアント側の規則は src/lib/adjust.ts）。
+ *   durationMin         確定時間。予約枠の占有はこちら。短縮ぶんだけ枠が空く
+ *   customerDurationMin お客様に伝える時間。短縮は伏せる（早い仕上がりを約束しない）
+ *
+ * ⚠ 料金は加算方向のみ反映。短縮しても値引きしない（メニュー料金が下限）。
+ */
 function effectiveItem(
   stdDurationMin: number,
   stdPrice: number | null,
   addMin: number,
-): { durationMin: number; price: number | null } {
+): { durationMin: number; customerDurationMin: number; price: number | null } {
+  const charge = Math.max(0, addMin);
   const unit = stdPrice != null && stdDurationMin > 0 ? stdPrice / stdDurationMin : 0;
-  const addCharge = ceil50(unit * addMin);
   return {
-    durationMin: stdDurationMin + addMin,
-    price: stdPrice == null ? null : stdPrice + addCharge,
+    durationMin: Math.max(0, stdDurationMin + addMin),
+    customerDurationMin: stdDurationMin + charge,
+    price: stdPrice == null ? null : stdPrice + ceil50(unit * charge),
   };
 }
 
@@ -421,21 +431,30 @@ async function loadSelectedOptions(
   tenantId: string,
   optionIds: string[] | undefined,
   adjustments: Record<string, number>,
-): Promise<{ options: OptionSnapshot[]; durationMin: number; price: number }> {
-  if (!optionIds || optionIds.length === 0) return { options: [], durationMin: 0, price: 0 };
+): Promise<{ options: OptionSnapshot[]; durationMin: number; customerDurationMin: number; price: number }> {
+  if (!optionIds || optionIds.length === 0)
+    return { options: [], durationMin: 0, customerDurationMin: 0, price: 0 };
   const snaps = await Promise.all(
     optionIds.map((id) => db.collection('tenants').doc(tenantId).collection('options').doc(id).get()),
   );
-  const picked: OptionSnapshot[] = snaps
+  const picked = snaps
     .filter((s) => s.exists)
     .map((s) => {
       const o = s.data() ?? {};
       const eff = effectiveItem((o.durationMin ?? 0) as number, (o.price ?? 0) as number, adjustments[s.id] ?? 0);
-      return { id: s.id, name: (o.name ?? '') as string, price: eff.price ?? 0, durationMin: eff.durationMin };
+      return {
+        id: s.id,
+        name: (o.name ?? '') as string,
+        price: eff.price ?? 0,
+        durationMin: eff.durationMin,
+        customerDurationMin: eff.customerDurationMin,
+      };
     });
   return {
-    options: picked,
+    // スナップショットに残すのは確定時間（会計・履歴の実績値）
+    options: picked.map(({ id, name, price, durationMin }) => ({ id, name, price, durationMin })),
     durationMin: picked.reduce((s, o) => s + o.durationMin, 0),
+    customerDurationMin: picked.reduce((s, o) => s + o.customerDurationMin, 0),
     price: picked.reduce((s, o) => s + o.price, 0),
   };
 }
@@ -467,11 +486,28 @@ function effectiveBase(
   dog: DogInfo | null,
   cell: PriceCell | null,
   serviceId: string,
-): { durationMin: number; price: number | null } {
+): { durationMin: number; customerDurationMin: number; price: number | null } {
   const stdDuration = cell?.durationMin ?? DEFAULT_DURATION_MIN;
   const stdPrice = cell?.price ?? null;
   const addMin = dog?.serviceAdjustments?.[serviceId] ?? 0;
   return effectiveItem(stdDuration, stdPrice, addMin);
+}
+
+/**
+ * 予約が入った犬のアーカイブを解除する。
+ *
+ * ⚠ 犬を隠すフラグは2つあり、別物なので取り違えないこと。
+ *   archivedAt       スタッフがカルテ一覧から隠す（来店されなくなった子の整理）。ここで解除する
+ *   hiddenByCustomer 顧客が自分の予約アプリの選択リストから外す（hideDog）。店の都合で戻さない
+ */
+async function unarchiveDogs(tenantId: string, dogIds: string[]): Promise<void> {
+  const base = db.collection('tenants').doc(tenantId).collection('dogs');
+  await Promise.all(
+    [...new Set(dogIds.filter(Boolean))].map(async (id) => {
+      const snap = await base.doc(id).get();
+      if (snap.exists && snap.data()?.archivedAt) await base.doc(id).set({ archivedAt: null }, { merge: true });
+    }),
+  );
 }
 
 interface BookingRow {
@@ -842,7 +878,10 @@ interface ComputedGroupItem {
   newDog?: { name: string; breedId: string | null };
   serviceId: string;
   optionIds: string[];
+  /** 確定時間（予約枠の占有・保存される booking.durationMin） */
   durationMin: number;
+  /** お客様に伝える時間（仕上がり予定の表示だけに使う） */
+  customerDurationMin: number;
   price: number | null;
   options: OptionSnapshot[];
 }
@@ -859,13 +898,14 @@ async function computeGroupItems(tenantId: string, items: GroupItemInput[]): Pro
       // serviceId 空 = メニュー無し（単体オプション）予約。基準は 0、合計はオプションのみ。
       const base = it.serviceId
         ? effectiveBase(dog, await loadPriceCell(tenantId, breedId, it.serviceId), it.serviceId)
-        : { durationMin: 0, price: 0 };
+        : { durationMin: 0, customerDurationMin: 0, price: 0 };
       return {
         dogId: it.dogId ?? '',
         ...(it.newDog?.name?.trim() ? { newDog: { name: it.newDog.name.trim(), breedId: it.newDog.breedId || null } } : {}),
         serviceId: it.serviceId,
         optionIds: it.optionIds ?? [],
         durationMin: base.durationMin + opts.durationMin,
+        customerDurationMin: base.customerDurationMin + opts.customerDurationMin,
         price: base.price == null ? null : base.price + opts.price,
         options: opts.options,
       };
@@ -891,7 +931,9 @@ export const getGroupAvailability = onCall<{
   const settings = await loadSettings(tenantId);
   const computed = await computeGroupItems(tenantId, items);
   const durations = computed.map((c) => c.durationMin);
-  const durationMin = durations.reduce((s, d) => s + d, 0);
+  // 枠取りは確定時間、お客様に見せる所要時間・仕上がり時刻は customerDurationMin で出す
+  const durationMin = computed.reduce((s, c) => s + c.customerDurationMin, 0);
+  const customerTotalMin = durationMin;
   const price = computed.some((c) => c.price == null) ? null : computed.reduce((s, c) => s + (c.price ?? 0), 0);
   // バッファはメニュー（サービス）にのみ適用。単品オプションのみの予約はバッファ0。
   const effBuffer = computed.some((c) => c.serviceId) ? settings.bufferMin : 0;
@@ -962,7 +1004,9 @@ export const getGroupAvailability = onCall<{
     const ts = toTimeStr(t);
     if (!afterCutoff(date, ts, settings)) continue;
     slots.push(ts);
-    finishByStart[ts] = toTimeStr(plan.get(t)!);
+    // ⚠ 実際の終了(plan)より早い時刻は出さない。マイナス加算で早く終わる場合も
+    //   お客様には標準時間ぶんの仕上がり時刻を伝える（早い仕上がりを約束しない）
+    finishByStart[ts] = toTimeStr(Math.max(plan.get(t)!, t + customerTotalMin));
   }
 
   return { slots, finishByStart, durationMin, bufferMin: effBuffer, price, businessHours: settings.businessHours };
@@ -1174,6 +1218,11 @@ export const createGroupBooking = onCall<{
     bookingIds.push(ref.id);
   }
 
+  // 予約が入った子はアーカイブから戻す。
+  // アーカイブは「来店されなくなった子を一覧から隠す」だけの整理なので、また予約が入ったら
+  // 隠れたままにしない（スタッフがカルテを探せなくなる）。
+  await unarchiveDogs(tenantId, resolvedDogIds);
+
   // 表示用の終了時刻＝最後の頭の施術終了（バッファ除く）
   return { bookingIds, groupId, staffId: assigned, slotEnd: toTimeStr(packed.finishMin), startTime, durationMin: totalDuration };
 });
@@ -1265,6 +1314,8 @@ export const createBookingByStaff = onCall<{
       status: 'reserved',
       createdAt: FieldValue.serverTimestamp(),
     });
+
+  await unarchiveDogs(tenantId, [dogId]);
 
   return { bookingId: ref.id, staffId: assigned, slotEnd, durationMin };
 });
