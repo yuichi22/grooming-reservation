@@ -556,6 +556,35 @@ td code {
 }
 
 /* ---------- forms ---------- */
+/* 五十音インデックス（カルテ一覧のジャンプバー） */
+.kana-index {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 12px;
+}
+.kana-index button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--brand-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
+.kana-index button:hover {
+  border-color: var(--brand);
+}
+tr.kana-group {
+  scroll-margin-top: 72px;
+}
+tr.kana-group td {
+  background: var(--brand-50);
+  color: var(--brand-dark);
+  font-weight: 700;
+}
 /* テーブル行の操作ボタン群（編集/停止 など） */
 .row-actions {
   display: flex;

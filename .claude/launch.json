@@ -56,6 +56,12 @@
       "port": 3600
     },
     {
+      "name": "haus-site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/haus-site", "run", "dev"],
+      "port": 3700
+    },
+    {
       "name": "suomi-admin",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/suomi-admin", "run", "start:dev"],

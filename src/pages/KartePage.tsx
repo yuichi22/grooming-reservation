@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore';
 import { Archive, ChevronRight, Plus } from 'lucide-react';
@@ -6,6 +6,29 @@ import { useAuth } from '../auth/AuthContext';
 import { breedsCol, customersCol, dogsCol } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import type { Breed, Customer, Dog } from '../lib/types';
+
+// 五十音インデックス（名前の先頭文字→行）。カタカナはひらがなに正規化して判定。
+const KANA_ROWS: [string, string][] = [
+  ['あ', 'あいうえおぁぃぅぇぉ'],
+  ['か', 'かきくけこがぎぐげご'],
+  ['さ', 'さしすせそざじずぜぞ'],
+  ['た', 'たちつてとだぢづでどっ'],
+  ['な', 'なにぬねの'],
+  ['は', 'はひふへほばびぶべぼぱぴぷぺぽ'],
+  ['ま', 'まみむめも'],
+  ['や', 'やゆよゃゅょ'],
+  ['ら', 'らりるれろ'],
+  ['わ', 'わをんゎ'],
+];
+const ROW_ORDER = [...KANA_ROWS.map(([label]) => label), '他'];
+function kanaRow(name: string): string {
+  let c = (name ?? '').trim().charAt(0);
+  if (!c) return '他';
+  const code = c.codePointAt(0)!;
+  if (code >= 0x30a1 && code <= 0x30f6) c = String.fromCodePoint(code - 0x60); // カタカナ→ひらがな
+  for (const [label, set] of KANA_ROWS) if (set.includes(c)) return label;
+  return '他'; // 漢字・英数字・記号など
+}
 
 export default function KartePage() {
   const { claims } = useAuth();
@@ -26,6 +49,18 @@ function KarteInner({ tenantId }: { tenantId: string }) {
   const [showArchived, setShowArchived] = useState(false);
   const archivedCount = dogs.filter((d) => d.archivedAt).length;
   const visibleDogs = showArchived ? dogs : dogs.filter((d) => !d.archivedAt);
+
+  // 五十音でグループ化（行内は名前の五十音順）。索引バー＋見出し区切りに使う。
+  const groups = useMemo(() => {
+    const byRow = new Map<string, Dog[]>();
+    for (const d of visibleDogs) {
+      const r = kanaRow(d.name);
+      if (!byRow.has(r)) byRow.set(r, []);
+      byRow.get(r)!.push(d);
+    }
+    for (const arr of byRow.values()) arr.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    return ROW_ORDER.filter((r) => byRow.has(r)).map((r) => ({ row: r, dogs: byRow.get(r)! }));
+  }, [visibleDogs]);
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -147,7 +182,23 @@ function KarteInner({ tenantId }: { tenantId: string }) {
       {loading ? (
         <p>読み込み中…</p>
       ) : (
-        <div className="table-wrap"><table>
+        <>
+          {groups.length > 1 && (
+            <div className="kana-index">
+              {groups.map((g) => (
+                <button
+                  key={g.row}
+                  type="button"
+                  onClick={() =>
+                    document.getElementById(`karte-row-${g.row}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                >
+                  {g.row === '他' ? '他' : g.row}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="table-wrap"><table>
           <thead>
             <tr>
               <th>名前</th>
@@ -158,25 +209,32 @@ function KarteInner({ tenantId }: { tenantId: string }) {
             </tr>
           </thead>
           <tbody>
-            {visibleDogs.map((d) => (
-              <tr key={d.id} className="row-link" onClick={() => navigate(`/karte/${d.id}`)}>
-                <td>
-                  {d.name}
-                  {d.archivedAt && (
-                    <span className="muted" style={{ marginLeft: 6, fontSize: 12 }}>
-                      （アーカイブ）
-                    </span>
-                  )}
-                </td>
-                <td>{(d.breedId && breedName.get(d.breedId)) || d.breed || '—'}</td>
-                <td>{customerName.get(d.customerId) || '—'}</td>
-                <td>{d.confirmedDurationMin != null ? `${d.confirmedDurationMin}分` : '未確定'}</td>
-                <td className="chevron-cell">
-                  <ChevronRight size={18} />
-                </td>
-              </tr>
+            {groups.map((g) => (
+              <Fragment key={g.row}>
+                <tr className="kana-group" id={`karte-row-${g.row}`}>
+                  <td colSpan={5}>{g.row === '他' ? 'その他' : `${g.row}行`}</td>
+                </tr>
+                {g.dogs.map((d) => (
+                  <tr key={d.id} className="row-link" onClick={() => navigate(`/karte/${d.id}`)}>
+                    <td>
+                      {d.name}
+                      {d.archivedAt && (
+                        <span className="muted" style={{ marginLeft: 6, fontSize: 12 }}>
+                          （アーカイブ）
+                        </span>
+                      )}
+                    </td>
+                    <td>{(d.breedId && breedName.get(d.breedId)) || d.breed || '—'}</td>
+                    <td>{customerName.get(d.customerId) || '—'}</td>
+                    <td>{d.confirmedDurationMin != null ? `${d.confirmedDurationMin}分` : '未確定'}</td>
+                    <td className="chevron-cell">
+                      <ChevronRight size={18} />
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
             ))}
-            {visibleDogs.length === 0 && (
+            {groups.length === 0 && (
               <tr>
                 <td colSpan={5} className="muted">
                   {dogs.length === 0 ? 'カルテ未登録' : 'アーカイブ以外のカルテはありません'}
@@ -185,6 +243,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
             )}
           </tbody>
         </table></div>
+        </>
       )}
     </section>
   );
