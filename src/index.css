@@ -2249,6 +2249,13 @@ button.tg-block.done:hover {
   border-radius: var(--radius-sm);
   font-weight: 700;
 }
+/* 合計に添える注釈（追加料金の可能性） */
+.price-note {
+  margin: 6px 2px 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
 /* 予約する子を追加（主ボタン） */
 .book-quick button {
   width: 100%;

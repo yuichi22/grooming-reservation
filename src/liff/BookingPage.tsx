@@ -42,6 +42,9 @@ interface Draft {
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const rid = () => Math.random().toString(36).slice(2, 10);
+/** 合計金額に添える注釈。個別の単価ではなく「合計」の横に一度だけ出す。 */
+const PRICE_NOTE =
+  '表示料金は目安です。毛のもつれや噛み癖などで標準のお時間を超える場合、追加料金をいただくことがございます。';
 
 // スマホ判定（案内文の出し分け用）。スマホはLINEアプリへの自動ジャンプ、PCはWebログインになる
 const isMobileUA = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -576,7 +579,6 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   const cartEstimates = cart.map((it) => ({ it, ...estimateItem(it) }));
   const totalDur = cartEstimates.reduce((s, e) => s + (e.dur ?? 0), 0);
   const totalAmt = cartEstimates.reduce((s, e) => s + (e.amt ?? 0), 0);
-  const hasUnpriced = cartEstimates.some((e) => e.amt == null);
 
   // ---- カート操作 ----
   function openNewItem() {
@@ -952,7 +954,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             <PawPrint size={18} />
             <span>ご予約内容（{cart.length}頭）</span>
             <span className="book-cart-sum">
-              {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
+              {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}〜` : ''}
             </span>
           </div>
           <div className="cart-list" style={{ marginTop: 8 }}>
@@ -1336,10 +1338,13 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           )}
 
           {draftEst && (
-            <div className="book-summary" style={{ marginTop: 12 }}>
-              この子：{draftEst.dur}分{draftEst.amt != null ? ` / ¥${draftEst.amt.toLocaleString()}` : ''}
-              {staffId ? ` ・ 指名: ${staffName(staffId)}` : ''}
-            </div>
+            <>
+              <div className="book-summary" style={{ marginTop: 12 }}>
+                この子：{draftEst.dur}分{draftEst.amt != null ? ` / ¥${draftEst.amt.toLocaleString()}〜` : ''}
+                {staffId ? ` ・ 指名: ${staffName(staffId)}` : ''}
+              </div>
+              <p className="price-note">{PRICE_NOTE}</p>
+            </>
           )}
           <div className="modal-actions">
             <button type="button" onClick={() => setDraft(null)}>
@@ -1406,8 +1411,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
             {staffId ? `指名: ${staffName(staffId)}` : '指名なし（空いているスタッフ）'}
           </p>
           <div className="book-summary">
-            合計 {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}${hasUnpriced ? '〜' : ''}` : ''}
+            合計 {totalDur}分{totalAmt > 0 ? ` / ¥${totalAmt.toLocaleString()}〜` : ''}
           </div>
+          <p className="price-note">{PRICE_NOTE}</p>
           {guest && (
             <p className="muted" style={{ marginTop: 8 }}>
               予約の確定にはLINEログインと公式アカウントの友だち追加が必要です。ログイン後、この内容のまま確定できます。
