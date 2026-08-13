@@ -556,12 +556,18 @@ td code {
 }
 
 /* ---------- forms ---------- */
-/* 五十音インデックス（カルテ一覧のジャンプバー） */
+/* 五十音インデックス（カルテ一覧のジャンプバー・スクロール追従） */
 .kana-index {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin: 8px 0 12px;
+  margin: 0 0 12px;
+  padding: 8px 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 .kana-index button {
   min-width: 34px;
