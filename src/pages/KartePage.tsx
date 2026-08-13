@@ -29,6 +29,10 @@ function kanaRow(name: string): string {
   for (const [label, set] of KANA_ROWS) if (set.includes(c)) return label;
   return '他'; // 漢字・英数字・記号など
 }
+/** 漢字（CJK統合漢字・拡張A・繰返し記号）を含むか。含む場合はふりがな必須にする。 */
+export function hasKanji(s: string): boolean {
+  return /[㐀-䶿一-鿿豈-﫿々〆]/.test(s ?? '');
+}
 
 export default function KartePage() {
   const { claims } = useAuth();
@@ -53,17 +57,19 @@ function KarteInner({ tenantId }: { tenantId: string }) {
   // 五十音でグループ化（行内は名前の五十音順）。索引バー＋見出し区切りに使う。
   const groups = useMemo(() => {
     const byRow = new Map<string, Dog[]>();
+    const key = (d: Dog) => (d.nameKana?.trim() || d.name); // 漢字名はふりがなで索引
     for (const d of visibleDogs) {
-      const r = kanaRow(d.name);
+      const r = kanaRow(key(d));
       if (!byRow.has(r)) byRow.set(r, []);
       byRow.get(r)!.push(d);
     }
-    for (const arr of byRow.values()) arr.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    for (const arr of byRow.values()) arr.sort((a, b) => key(a).localeCompare(key(b), 'ja'));
     return ROW_ORDER.filter((r) => byRow.has(r)).map((r) => ({ row: r, dogs: byRow.get(r)! }));
   }, [visibleDogs]);
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
+  const [nameKana, setNameKana] = useState('');
   const [breedId, setBreedId] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [phone, setPhone] = useState('');
@@ -73,6 +79,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
     if (busy) return;
     setOpen(false);
     setName('');
+    setNameKana('');
     setBreedId('');
     setOwnerName('');
     setPhone('');
@@ -83,6 +90,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
   async function onAdd(e: FormEvent) {
     e.preventDefault();
     if (!name.trim() || busy) return;
+    if (hasKanji(name) && !nameKana.trim()) return; // 漢字名はふりがな必須
     setBusy(true);
     try {
       const trimmedPhone = phone.trim();
@@ -104,6 +112,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
       const dref = await addDoc(dogsCol(tenantId), {
         customerId,
         name: name.trim(),
+        nameKana: nameKana.trim() || null,
         breedId: breedId || null,
         confirmedDurationMin: null, // 初回は未確定 (§7)
       } as Omit<Dog, 'id'> as Dog);
@@ -144,6 +153,16 @@ function KarteInner({ tenantId }: { tenantId: string }) {
                 犬の名前
                 <input placeholder="犬の名前" value={name} onChange={(e) => setName(e.target.value)} />
               </label>
+              {hasKanji(name) && (
+                <label>
+                  ふりがな（漢字名は必須）
+                  <input
+                    placeholder="例: そら"
+                    value={nameKana}
+                    onChange={(e) => setNameKana(e.target.value)}
+                  />
+                </label>
+              )}
               <label>
                 犬種
                 <select value={breedId} onChange={(e) => setBreedId(e.target.value)}>
@@ -170,7 +189,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
                 <button type="button" onClick={closeModal} disabled={busy}>
                   キャンセル
                 </button>
-                <button type="submit" disabled={busy || !name.trim()}>
+                <button type="submit" disabled={busy || !name.trim() || (hasKanji(name) && !nameKana.trim())}>
                   {busy ? '作成中…' : 'カルテを追加'}
                 </button>
               </div>

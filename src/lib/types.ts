@@ -188,6 +188,8 @@ export interface Dog {
   id: string;
   customerId: string;
   name: string;
+  /** ふりがな。漢字名の五十音索引に使う（漢字名は登録時に必須） */
+  nameKana?: string | null;
   /** 犬種マスタ(breeds)への参照。料金表の引当に使う */
   breedId?: string | null;
   /** 旧: 自由入力の犬種名（表示フォールバック） */

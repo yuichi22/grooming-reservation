@@ -17,6 +17,7 @@ import {
 } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
+import { hasKanji } from './KartePage';
 import type { Booking, Breed, Customer, Dog, Option, PriceEntry, Service, ServiceRecord } from '../lib/types';
 
 /** 順序非依存で number マップを比較。 */
@@ -57,8 +58,9 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const { data: customer } = useDocument<Customer>(doc(customersCol(tenantId), customerId), [tenantId, customerId]);
   const { data: customers } = useCollection<Customer>(customersCol(tenantId), [tenantId]);
 
-  const [form, setForm] = useState<{ name: string; breedId: string | null; notes: string; allergies: string }>({
+  const [form, setForm] = useState<{ name: string; nameKana: string; breedId: string | null; notes: string; allergies: string }>({
     name: '',
+    nameKana: '',
     breedId: null,
     notes: '',
     allergies: '',
@@ -75,6 +77,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     if (!dog) return;
     setForm({
       name: dog.name ?? '',
+      nameKana: dog.nameKana ?? '',
       breedId: dog.breedId ?? null,
       notes: dog.notes ?? '',
       allergies: dog.allergies ?? '',
@@ -103,9 +106,14 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const shownOptions = activeOptions.filter((o) => setOptionIds.includes(o.id));
   const addableOptions = activeOptions.filter((o) => !setOptionIds.includes(o.id));
 
+  // 漢字名はふりがな必須（五十音索引のため）
+  const displayName = form.name.trim() || dog.name;
+  const needsKana = hasKanji(displayName) && !form.nameKana.trim();
+
   // 編集あり（保存済みの値と差分があるか）
   const dirty =
     form.name.trim() !== (dog.name ?? '') ||
+    form.nameKana.trim() !== (dog.nameKana ?? '') ||
     (form.breedId ?? null) !== (dog.breedId ?? null) ||
     (form.notes ?? '') !== (dog.notes ?? '') ||
     (form.allergies ?? '') !== (dog.allergies ?? '') ||
@@ -115,6 +123,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   function cancelEdit() {
     setForm({
       name: dog?.name ?? '',
+      nameKana: dog?.nameKana ?? '',
       breedId: dog?.breedId ?? null,
       notes: dog?.notes ?? '',
       allergies: dog?.allergies ?? '',
@@ -127,9 +136,15 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
 
   async function saveDog() {
     setMsg(null);
+    const finalName = form.name.trim() || dog?.name || '';
+    if (hasKanji(finalName) && !form.nameKana.trim()) {
+      setMsg('漢字名はふりがなを入力してください');
+      return;
+    }
     await updateDoc(doc(dogsCol(tenantId), dogId), {
       // 名前が空になるのは事故なので、空欄なら元の名前を維持する
-      name: form.name.trim() || dog?.name || '',
+      name: finalName,
+      nameKana: form.nameKana.trim() || null,
       breedId: form.breedId ?? null,
       notes: form.notes ?? '',
       allergies: form.allergies ?? '',
@@ -217,11 +232,23 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
               キャンセル
             </button>
           )}
-          <button type="button" className={dirty ? 'btn-primary' : ''} disabled={!dirty} onClick={saveDog}>
+          <button type="button" className={dirty ? 'btn-primary' : ''} disabled={!dirty || needsKana} onClick={saveDog}>
             保存
           </button>
         </div>
       </div>
+
+      {hasKanji(displayName) && (
+        <label className="kana-field">
+          ふりがな（漢字名は必須）
+          <input
+            value={form.nameKana}
+            placeholder="例: そら"
+            onChange={(e) => setForm((f) => ({ ...f, nameKana: e.target.value }))}
+          />
+          {needsKana && <span className="error"> ふりがなを入力してください</span>}
+        </label>
+      )}
 
       {archived && (
         <div className="archived-banner">
