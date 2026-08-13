@@ -124,24 +124,60 @@ function KarteInner({ tenantId }: { tenantId: string }) {
     }
   }
 
+  // 索引タップでその行へ。固定ヘッダーの高さぶん差し引いて見出しが隠れないようにする。
+  function jumpTo(row: string) {
+    const el = document.getElementById(`karte-row-${row}`);
+    if (!el) return;
+    const container = el.closest('.content') as HTMLElement | null;
+    const bar = document.querySelector('.karte-sticky') as HTMLElement | null;
+    if (!container) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    const offset = (bar?.getBoundingClientRect().height ?? 0) + 8;
+    const top = Math.max(
+      0,
+      el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - offset,
+    );
+    const start = container.scrollTop;
+    container.scrollTo({ top, behavior: 'smooth' });
+    // スムーススクロール非対応(古いSafari)や無効の環境では上が無反応になるため、
+    // 動いていなければ直接移動させる
+    window.setTimeout(() => {
+      if (container.scrollTop === start && Math.abs(top - start) > 2) container.scrollTop = top;
+    }, 120);
+  }
+
   return (
     <section>
-      <div className="page-head">
-        <h1>カルテ（犬）</h1>
-        {archivedCount > 0 && (
-          <button
-            type="button"
-            className={showArchived ? 'btn-primary' : ''}
-            onClick={() => setShowArchived((v) => !v)}
-          >
-            <Archive size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />
-            {showArchived ? `アーカイブを隠す` : `アーカイブも表示（${archivedCount}）`}
+      {/* ヘッダー＋五十音インデックスをまとめてスクロール追従 */}
+      <div className="karte-sticky">
+        <div className="page-head">
+          <h1>カルテ（犬）</h1>
+          {archivedCount > 0 && (
+            <button
+              type="button"
+              className={showArchived ? 'btn-primary' : ''}
+              onClick={() => setShowArchived((v) => !v)}
+            >
+              <Archive size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+              {showArchived ? `アーカイブを隠す` : `アーカイブも表示（${archivedCount}）`}
+            </button>
+          )}
+          <button type="button" onClick={() => setOpen(true)}>
+            <Plus size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+            カルテを追加
           </button>
+        </div>
+        {!loading && groups.length > 1 && (
+          <div className="kana-index">
+            {groups.map((g) => (
+              <button key={g.row} type="button" onClick={() => jumpTo(g.row)}>
+                {g.row === '他' ? '他' : g.row}
+              </button>
+            ))}
+          </div>
         )}
-        <button type="button" onClick={() => setOpen(true)}>
-          <Plus size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
-          カルテを追加
-        </button>
       </div>
 
       {open && (
@@ -201,23 +237,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
       {loading ? (
         <p>読み込み中…</p>
       ) : (
-        <>
-          {groups.length > 1 && (
-            <div className="kana-index">
-              {groups.map((g) => (
-                <button
-                  key={g.row}
-                  type="button"
-                  onClick={() =>
-                    document.getElementById(`karte-row-${g.row}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }
-                >
-                  {g.row === '他' ? '他' : g.row}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="table-wrap"><table>
+        <div className="table-wrap"><table>
           <thead>
             <tr>
               <th>名前</th>
@@ -262,7 +282,6 @@ function KarteInner({ tenantId }: { tenantId: string }) {
             )}
           </tbody>
         </table></div>
-        </>
       )}
     </section>
   );

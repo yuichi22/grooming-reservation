@@ -556,18 +556,32 @@ td code {
 }
 
 /* ---------- forms ---------- */
-/* 五十音インデックス（カルテ一覧のジャンプバー・スクロール追従） */
-.kana-index {
+/* カルテ一覧: ヘッダー（タイトル＋追加ボタン）＋五十音インデックスをまとめて固定 */
+.karte-sticky {
   position: sticky;
-  top: 0;
-  z-index: 5;
+  /* .content の padding-top(18px) ぶん食い込ませ、ヘッダーの上に行が覗く隙間を作らない */
+  top: -18px;
+  z-index: 6;
+  background: var(--surface);
+  /* カード(section)の padding ぶん外へ広げ、下の行が左右から透けないようにする */
+  margin: -20px -18px 12px;
+  padding: 20px 18px 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+/* デスクトップは .content の padding-top が 28px */
+@media (min-width: 820px) {
+  .karte-sticky {
+    top: -28px;
+  }
+}
+/* 五十音インデックス（カルテ一覧のジャンプバー） */
+.kana-index {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin: 0 0 12px;
-  padding: 8px 0;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  margin: 0;
+  padding-bottom: 8px;
 }
 .kana-index button {
   min-width: 34px;
@@ -584,7 +598,8 @@ td code {
   border-color: var(--brand);
 }
 tr.kana-group {
-  scroll-margin-top: 72px;
+  /* JS 側で固定ヘッダー分オフセットするが、フォールバック用に確保 */
+  scroll-margin-top: 120px;
 }
 tr.kana-group td {
   background: var(--brand-50);
