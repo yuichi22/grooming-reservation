@@ -972,7 +972,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                       {menuLabel(it)}
                       {it.serviceId && opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
                       {' ・ '}
-                      {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ' / 料金未設定'}
+                      {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}〜` : ' / 料金未設定'}
                     </div>
                   </div>
                   <div className="cart-item-actions">
@@ -1400,7 +1400,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
                       {menuLabel(it)}
                       {it.serviceId && opts.length ? `＋ ${opts.map((o) => o.name).join('・')}` : ''}
                       {' ・ '}
-                      {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}` : ''}
+                      {dur}分{amt != null ? ` / ¥${amt.toLocaleString()}〜` : ''}
                     </div>
                   </div>
                 </div>
