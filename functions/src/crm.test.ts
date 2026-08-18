@@ -12,11 +12,13 @@ describe('buildPointEvent (§10)', () => {
         at: '2026-06-20T11:50:00+09:00',
         memberId: 'MBR_xxx',
         lineUserId: 'U_line1',
+        phone: '09012345678',
       }),
     ).toEqual({
       bookingId: 'bk_1',
       memberId: 'MBR_xxx',
       lineUserId: 'U_line1',
+      phone: '09012345678',
       tenantId: 'groomhaus',
       brand: 'GROOM HAUS',
       type: 'trimming',
@@ -36,5 +38,7 @@ describe('buildPointEvent (§10)', () => {
     });
     expect(ev.memberId).toBeNull();
     expect(ev.lineUserId).toBe('U_line2');
+    // phone 未指定は null（中央CRM側は lineUserId で解決する）
+    expect(ev.phone).toBeNull();
   });
 });

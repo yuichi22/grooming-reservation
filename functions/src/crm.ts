@@ -5,11 +5,15 @@
 
 export type PointEventStatus = 'pending' | 'sent' | 'failed';
 
-/** §10 のペイロード。memberId 未確定(識別子未連携)時の解決用に lineUserId も載せる。 */
+/**
+ * §10 のペイロード。memberId 未確定(識別子未連携)時の解決用に lineUserId も載せる。
+ * phone は中央 CRM 側の名寄せキー（決済・POS など LINE 以外の経路と同一人物に統合するため）。
+ */
 export interface PointEventPayload {
   bookingId: string;
   memberId: string | null;
   lineUserId: string | null;
+  phone: string | null;
   tenantId: string;
   brand: string;
   type: 'trimming';
@@ -25,6 +29,7 @@ export interface BuildPointEventInput {
   at: string;
   memberId?: string | null;
   lineUserId?: string | null;
+  phone?: string | null;
 }
 
 /** §10 ペイロードを組み立てる（純粋関数）。 */
@@ -33,6 +38,7 @@ export function buildPointEvent(input: BuildPointEventInput): PointEventPayload 
     bookingId: input.bookingId,
     memberId: input.memberId ?? null,
     lineUserId: input.lineUserId ?? null,
+    phone: input.phone ?? null,
     tenantId: input.tenantId,
     brand: input.brand,
     type: 'trimming',

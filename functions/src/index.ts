@@ -1913,6 +1913,8 @@ export const onBookingDone = onDocumentUpdated('tenants/{tenantId}/bookings/{boo
     at: new Date().toISOString(),
     memberId: (cust.memberId ?? null) as string | null,
     lineUserId: (cust.lineUserId ?? null) as string | null,
+    // 中央 CRM の名寄せキー。決済/POS など LINE 以外の経路と同一人物に統合するため。
+    phone: (cust.phone ?? null) as string | null,
   });
 
   await persistAndDeliver(base.collection('pointEvents').doc(bookingId), payload);
