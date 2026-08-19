@@ -14,6 +14,7 @@ import { availability, freeIntervals, packDogs, toMinutes, toTimeStr, unionStart
 import { staffHoursFor, type ShiftDay } from './shifts.js';
 import { buildPointEvent, deliverPointEvent, crmWebhookSecret, type PointEventStatus } from './crm.js';
 import { buildCheckoutRequest, checkoutRequestId, deliverCheckoutRequest } from './posCheckout.js';
+import { lookupMemberPoints, redeemMemberPoints, maxUsablePoints } from './crmPoints.js';
 import { buildConfirmationMessage, buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
 import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
 
@@ -1675,9 +1676,11 @@ export const completeBooking = onCall<{
   finalDurationMin: number;
   finalPrice: number;
   notes?: string;
+  /** この会計で使うポイント(pt)。レジ無しの店舗向け。省略/0 なら従来どおり。 */
+  pointsToUse?: number;
 }>(async (request) => {
   const caller = request.auth?.token;
-  const { tenantId, bookingId, finalDurationMin, finalPrice, notes } = request.data;
+  const { tenantId, bookingId, finalDurationMin, finalPrice, notes, pointsToUse } = request.data;
   if (!tenantId || !bookingId || !(finalDurationMin > 0) || !(finalPrice >= 0)) {
     throw new HttpsError('invalid-argument', 'tenantId, bookingId, finalDurationMin, finalPrice required');
   }
@@ -1687,6 +1690,68 @@ export const completeBooking = onCall<{
 
   const base = db.collection('tenants').doc(tenantId);
   const bookingRef = base.collection('bookings').doc(bookingId);
+
+  // ポイント利用。⚠必ずトランザクションの前に確定させる。
+  // ここで失敗したら完了させない（完了だけ通ってポイントが引かれない状態を作らない）。
+  // personId はクライアントの申告を信用せず、予約→顧客から必ずサーバで引く。
+  const usePoints = Math.floor(Number(pointsToUse) || 0);
+  let redeemedPoints = 0;
+  if (usePoints > 0) {
+    const bookingSnap = await bookingRef.get();
+    if (!bookingSnap.exists) throw new HttpsError('not-found', 'booking not found');
+    const b = bookingSnap.data() as { customerId?: string; status?: string; pointsRedeemed?: number };
+    if (b.status === 'done' && (b.pointsRedeemed ?? 0) > 0) {
+      // 再実行(冪等)。Core も同じ冪等キーで弾くが、二重に数えないようここで止める。
+      redeemedPoints = b.pointsRedeemed ?? 0;
+    } else {
+      const [tenantSnap, custSnap] = await Promise.all([
+        base.get(),
+        base.collection('customers').doc(String(b.customerId ?? '')).get(),
+      ]);
+      const t = tenantSnap.data() ?? {};
+      const coreTenantId = String(t.coreTenantId ?? '');
+      if (!coreTenantId) throw new HttpsError('failed-precondition', 'この店舗は Akuto と連携されていません。');
+      const cust = custSnap.data() ?? {};
+      const member = await lookupMemberPoints(coreTenantId, {
+        personId: (cust.memberId ?? null) as string | null,
+        lineUserId: (cust.lineUserId ?? null) as string | null,
+        phone: (cust.phone ?? null) as string | null,
+      }).catch((e: unknown) => {
+        const msg = String(e instanceof Error ? e.message : e);
+        if (msg === 'unknown_member_code') throw new HttpsError('failed-precondition', 'この顧客は会員に紐づいていません。');
+        throw new HttpsError('unavailable', `ポイント残高を確認できませんでした: ${msg}`);
+      });
+      if (!member) throw new HttpsError('failed-precondition', 'この顧客は会員に紐づいていません。');
+      const personId = member.personId;
+
+      // 解決した personId は顧客に残す（POSへの会計依頼が運ぶ personId もこれを使う）。
+      if (!cust.memberId && custSnap.exists) {
+        await custSnap.ref.update({ memberId: personId }).catch(() => {
+          /* 紐付けの保存に失敗しても会計は続行する */
+        });
+      }
+
+      const cap = maxUsablePoints(member.pointBalance, finalPrice, member.redeem);
+      if (usePoints > cap) {
+        throw new HttpsError('failed-precondition', `使えるポイントは最大 ${cap}pt です（残高 ${member.pointBalance}pt）。`);
+      }
+      try {
+        await redeemMemberPoints({
+          coreTenantId,
+          coreSpaceId: (t.coreSpaceId as string | null) ?? null,
+          personId,
+          points: usePoints,
+          bookingId,
+        });
+      } catch (e) {
+        const msg = String(e instanceof Error ? e.message : e);
+        if (msg === 'insufficient_balance') throw new HttpsError('failed-precondition', 'ポイントが不足しています。');
+        if (msg === 'invalid_unit') throw new HttpsError('invalid-argument', '利用単位が正しくありません。');
+        throw new HttpsError('unavailable', `ポイントを利用できませんでした: ${msg}`);
+      }
+      redeemedPoints = usePoints;
+    }
+  }
 
   await db.runTransaction(async (tx) => {
     const bookingSnap = await tx.get(bookingRef);
@@ -1704,7 +1769,7 @@ export const completeBooking = onCall<{
     const recordRef = dogRef.collection('records').doc(bookingId);
     const nowIso = new Date().toISOString();
 
-    tx.update(bookingRef, { status: 'done', finalDurationMin, finalPrice });
+    tx.update(bookingRef, { status: 'done', finalDurationMin, finalPrice, ...(redeemedPoints > 0 ? { pointsRedeemed: redeemedPoints } : {}) });
     tx.set(recordRef, {
       bookingId,
       date: booking.date,
@@ -1722,7 +1787,61 @@ export const completeBooking = onCall<{
     });
   });
 
-  return { bookingId, status: 'done' };
+  return { bookingId, status: 'done', pointsRedeemed: redeemedPoints };
+});
+
+/**
+ * 予約の顧客の中央CRMポイント残高を引く（完了画面の「ポイント利用」欄の表示用）。
+ * personId はクライアントの申告を信用せず、予約→顧客(memberId) からサーバで引く。
+ * 未連携・未設定は例外にせず linked:false を返す（欄を出さないだけ）。
+ */
+export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(async (request) => {
+  const caller = request.auth?.token;
+  const { tenantId, bookingId } = request.data;
+  if (!tenantId || !bookingId) throw new HttpsError('invalid-argument', 'tenantId, bookingId required');
+  const isSuper = caller?.superAdmin === true;
+  const isStaff = caller?.tenantId === tenantId && isStaffRole(caller?.role);
+  if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
+
+  const base = db.collection('tenants').doc(tenantId);
+  const bookingSnap = await base.collection('bookings').doc(bookingId).get();
+  if (!bookingSnap.exists) throw new HttpsError('not-found', 'booking not found');
+  const booking = bookingSnap.data() as { customerId?: string; pointsRedeemed?: number };
+
+  const [tenantSnap, custSnap] = await Promise.all([
+    base.get(),
+    base.collection('customers').doc(String(booking.customerId ?? '')).get(),
+  ]);
+  const coreTenantId = String(tenantSnap.data()?.coreTenantId ?? '');
+  const cust = custSnap.data() ?? {};
+  if (!coreTenantId) {
+    return { linked: false, pointsRedeemed: booking.pointsRedeemed ?? 0 };
+  }
+
+  try {
+    const member = await lookupMemberPoints(coreTenantId, {
+      personId: (cust.memberId ?? null) as string | null,
+      lineUserId: (cust.lineUserId ?? null) as string | null,
+      phone: (cust.phone ?? null) as string | null,
+    });
+    if (!member) return { linked: false, pointsRedeemed: booking.pointsRedeemed ?? 0 };
+    // 解決できたら顧客に残す（POSへの会計依頼が運ぶ personId もこれを使う）。
+    if (!cust.memberId && custSnap.exists) {
+      await custSnap.ref.update({ memberId: member.personId }).catch(() => {});
+    }
+    return {
+      linked: true,
+      personId: member.personId,
+      displayName: member.displayName,
+      pointBalance: member.pointBalance,
+      redeem: member.redeem,
+      pointsRedeemed: booking.pointsRedeemed ?? 0,
+    };
+  } catch (e) {
+    // CRM 側が落ちていても完了操作そのものは止めない（欄を出さないだけ）。
+    logger.warn('[getBookingPoints] CRM 照会に失敗', { tenantId, bookingId, error: String(e) });
+    return { linked: false, pointsRedeemed: booking.pointsRedeemed ?? 0 };
+  }
 });
 
 /**

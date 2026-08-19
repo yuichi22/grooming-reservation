@@ -38,9 +38,30 @@ export const rescheduleBooking = httpsCallable<
 >(functions, 'rescheduleBooking');
 
 export const completeBooking = httpsCallable<
-  { tenantId: string; bookingId: string; finalDurationMin: number; finalPrice: number; notes?: string },
-  { bookingId: string; status: 'done' }
+  {
+    tenantId: string;
+    bookingId: string;
+    finalDurationMin: number;
+    finalPrice: number;
+    notes?: string;
+    /** この会計で使うポイント(pt)。レジ無しの店舗向け。 */
+    pointsToUse?: number;
+  },
+  { bookingId: string; status: 'done'; pointsRedeemed: number }
 >(functions, 'completeBooking');
+
+/** 予約の顧客の中央CRMポイント残高（完了画面の「ポイント利用」欄の表示用）。未連携は linked:false。 */
+export const getBookingPoints = httpsCallable<
+  { tenantId: string; bookingId: string },
+  {
+    linked: boolean;
+    personId?: string;
+    displayName?: string | null;
+    pointBalance?: number;
+    redeem?: { yenPerPoint: number; unit: number };
+    pointsRedeemed: number;
+  }
+>(functions, 'getBookingPoints');
 
 /** 完了済み予約の会計依頼伝票をPOS(mobile_order)へ送信（①会計連携）。再送は冪等。 */
 export const sendCheckoutToPos = httpsCallable<

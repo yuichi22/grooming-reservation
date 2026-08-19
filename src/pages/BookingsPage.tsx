@@ -20,7 +20,8 @@ import {
   staffCol,
   tenantDoc,
 } from '../lib/firestore';
-import { completeBooking, createBookingByStaff, rescheduleBooking, sendCheckoutToPos } from '../lib/functions';
+import { completeBooking,
+  getBookingPoints, createBookingByStaff, rescheduleBooking, sendCheckoutToPos } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import { isWithinHours, staffHoursFor, subtractIntervals } from '../lib/shifts';
@@ -891,6 +892,12 @@ function BookingDetailModal({
   const [priceTouched, setPriceTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // ポイント利用（レジ無しの店舗向け）。中央CRMに紐づいた顧客のときだけ欄を出す。
+  const [pointInfo, setPointInfo] = useState<{
+    pointBalance: number;
+    redeem: { yenPerPoint: number; unit: number };
+  } | null>(null);
+  const [pointsToUse, setPointsToUse] = useState(0);
   useEffect(() => {
     setSvcAdj(booking.serviceId ? dog?.serviceAdjustments?.[booking.serviceId] ?? 0 : 0);
     const oa: Record<string, number> = {};
@@ -902,8 +909,30 @@ function BookingDetailModal({
     setPriceTouched(false);
     setErr(null);
     setReschedDays(null);
+    setPointInfo(null);
+    setPointsToUse(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id]);
+
+  // ポイント残高の取得。未連携・CRM停止時は linked:false が返るので欄を出さないだけ。
+  useEffect(() => {
+    if (booking.status !== 'reserved') return;
+    let alive = true;
+    getBookingPoints({ tenantId, bookingId: booking.id })
+      .then((res) => {
+        if (!alive) return;
+        const d = res.data;
+        if (d.linked && d.redeem) {
+          setPointInfo({ pointBalance: Number(d.pointBalance ?? 0), redeem: d.redeem });
+        }
+      })
+      .catch(() => {
+        /* 残高が引けなくても完了操作は止めない */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [tenantId, booking.id, booking.status]);
 
   // 予約変更: 今日〜受付範囲の日別空き候補（サーバ算出・シフト/休業/他予約考慮）をスクロールリストで提示
   const [reschedDays, setReschedDays] = useState<{ date: string; slots: string[] }[] | null>(null);
@@ -959,6 +988,20 @@ function BookingDetailModal({
 
   const finalDur = autoDur > 0 ? autoDur : booking.durationMin;
 
+  // 使えるポイントの上限。残高・確定料金・利用単位の3つで決まる（サーバ側でも同じ検証をする）。
+  const pointYenPerPoint = Math.max(pointInfo?.redeem.yenPerPoint ?? 1, 1);
+  const pointUnit = Math.max(Math.floor(pointInfo?.redeem.unit ?? 1), 1);
+  const maxPoints = pointInfo
+    ? Math.max(
+        0,
+        Math.floor(Math.min(pointInfo.pointBalance, Math.floor(price / pointYenPerPoint)) / pointUnit) * pointUnit,
+      )
+    : 0;
+  // 確定料金を下げたら使用ポイントもはみ出さないように丸める。
+  const effectivePoints = Math.min(pointsToUse, maxPoints);
+  const pointYen = effectivePoints * pointYenPerPoint;
+  const payableYen = Math.max(0, price - pointYen);
+
   // 完了して履歴を保存: カルテ（犬doc）更新 → completeBooking（確定値＋施術メモ→records）
   async function onCompleteAndSave() {
     if (busy) return;
@@ -991,6 +1034,7 @@ function BookingDetailModal({
         finalDurationMin: finalDur,
         finalPrice: price,
         ...(recNotes.trim() ? { notes: recNotes.trim() } : {}),
+        ...(effectivePoints > 0 ? { pointsToUse: effectivePoints } : {}),
       });
     } catch (e) {
       setErr(e instanceof Error ? e.message : '保存に失敗しました');
@@ -1189,6 +1233,38 @@ function BookingDetailModal({
                 </button>
               )}
             </div>
+
+            {/* 9. ポイント利用（レジ無しの店舗向け）。中央CRMに紐づいた顧客のときだけ出す。
+                ⚠ポイントは「支払方法」なので確定料金そのものは下げない（ポイントは確定料金に対して付く）。 */}
+            {pointInfo && (
+              <div className="book-summary" style={{ marginTop: 8 }}>
+                ポイント利用
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="bdm-price"
+                  value={`${effectivePoints.toLocaleString()}pt`}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/[^0-9]/g, '');
+                    setPointsToUse(digits ? Math.min(maxPoints, Number(digits)) : 0);
+                  }}
+                />
+                <span className="muted" style={{ marginLeft: 8 }}>
+                  残高 {pointInfo.pointBalance.toLocaleString()}pt
+                  {pointUnit > 1 ? ` / ${pointUnit}pt単位` : ''}
+                </span>
+                {maxPoints > 0 && effectivePoints !== maxPoints && (
+                  <button type="button" className="link-btn" style={{ marginLeft: 8 }} onClick={() => setPointsToUse(maxPoints)}>
+                    全部使う（{maxPoints.toLocaleString()}pt）
+                  </button>
+                )}
+                {effectivePoints > 0 && (
+                  <div className="muted" style={{ marginTop: 4 }}>
+                    ポイント ¥{pointYen.toLocaleString()} ／ お支払い ¥{payableYen.toLocaleString()}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         ) : booking.status === 'done' ? (
           <div style={{ marginTop: 10 }}>
