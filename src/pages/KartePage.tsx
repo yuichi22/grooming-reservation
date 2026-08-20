@@ -94,6 +94,14 @@ function KarteInner({ tenantId }: { tenantId: string }) {
     setBusy(true);
     try {
       const trimmedPhone = phone.trim();
+      // ⚠電話番号は必須。中央CRMは電話/LINEを索引に person を名寄せするため、
+      //   どちらも無い顧客は「二度と辿り着けない person」を来店のたびに増やしてしまう。
+      const phoneDigits = trimmedPhone.replace(/\D/g, '');
+      if (phoneDigits.length < 10) {
+        setBusy(false);
+        alert('電話番号を入力してください（お客様の名寄せに必要です）。');
+        return;
+      }
       let customerId = '';
       if (trimmedPhone) {
         const existing = customers.find((c) => !c.mergedInto && c.phone === trimmedPhone);
@@ -103,7 +111,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
         const cref = await addDoc(customersCol(tenantId), {
           memberId: null,
           ownerName: ownerName.trim(),
-          phone: trimmedPhone || null,
+          phone: trimmedPhone,
           lineUserId: null,
           createdAt: new Date().toISOString(),
         } as Omit<Customer, 'id'> as Customer);
@@ -216,7 +224,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
               </label>
               <label>
                 電話番号（任意）
-                <input placeholder="電話番号（任意）" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <input placeholder="電話番号（必須）" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </label>
               <p className="muted">
                 電話番号を入れておくと、その方が同じ番号で LINE 登録したときに自動でこの犬が紐づきます。
