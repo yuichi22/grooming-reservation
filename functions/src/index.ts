@@ -2098,6 +2098,8 @@ export const onBookingDone = onDocumentUpdated('tenants/{tenantId}/bookings/{boo
     lineUserId: (cust.lineUserId ?? null) as string | null,
     // 中央 CRM の名寄せキー。決済/POS など LINE 以外の経路と同一人物に統合するため。
     phone: (cust.phone ?? null) as string | null,
+    // 飼い主名。Core の person.displayName になり、レジの会員バーや /card に出る。
+    displayName: (cust.ownerName ?? null) as string | null,
     // レジ会計の予約は加算しない（POS の会計伝票が付ける）。顧客の紐付けのため送信自体は続ける。
     linkOnly: after.paidAtPos === true,
   });

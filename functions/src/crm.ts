@@ -14,6 +14,8 @@ export interface PointEventPayload {
   memberId: string | null;
   lineUserId: string | null;
   phone: string | null;
+  /** 飼い主名。中央CRMの person.displayName になる（無いとレジで「会員さま」になる）。 */
+  displayName: string | null;
   tenantId: string;
   brand: string;
   type: 'trimming';
@@ -32,6 +34,7 @@ export interface BuildPointEventInput {
   memberId?: string | null;
   lineUserId?: string | null;
   phone?: string | null;
+  displayName?: string | null;
   linkOnly?: boolean;
 }
 
@@ -42,6 +45,7 @@ export function buildPointEvent(input: BuildPointEventInput): PointEventPayload 
     memberId: input.memberId ?? null,
     lineUserId: input.lineUserId ?? null,
     phone: input.phone ?? null,
+    displayName: String(input.displayName ?? '').trim() || null,
     tenantId: input.tenantId,
     brand: input.brand,
     type: 'trimming',
