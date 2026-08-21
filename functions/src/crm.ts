@@ -62,14 +62,22 @@ export function crmWebhookSecret(): string | null {
   return process.env.CRM_WEBHOOK_SECRET || null;
 }
 
+export interface DeliverResult {
+  delivered: boolean;
+  /** Core が名寄せした person。groom 側の customers.memberId に書き戻して再利用する。 */
+  personId: string | null;
+}
+
 /**
  * Webhook へ POST 配信。冪等性のため Idempotency-Key に bookingId を入れる。
  * 共有シークレットが設定されていれば Authorization: Bearer を付ける（CRM 側で認証）。
- * URL 未設定なら未配信(false)。
+ * URL 未設定なら未配信。
+ * ⚠応答の personId を必ず拾うこと。これが唯一「groom が中央の顧客IDを知る」機会で、
+ *   捨てると POS への会計依頼が personId=null のままになりレジでポイントが付かない。
  */
-export async function deliverPointEvent(payload: PointEventPayload): Promise<boolean> {
+export async function deliverPointEvent(payload: PointEventPayload): Promise<DeliverResult> {
   const url = crmWebhookUrl();
-  if (!url) return false;
+  if (!url) return { delivered: false, personId: null };
 
   const secret = crmWebhookSecret();
   const res = await fetch(url, {
@@ -84,5 +92,6 @@ export async function deliverPointEvent(payload: PointEventPayload): Promise<boo
   if (!res.ok) {
     throw new Error(`CRM webhook responded ${res.status}`);
   }
-  return true;
+  const body = (await res.json().catch(() => null)) as { personId?: string } | null;
+  return { delivered: true, personId: body?.personId ?? null };
 }

@@ -1941,6 +1941,25 @@ export const sendCheckoutToPos = onCall<{ tenantId: string; bookingId: string }>
     (serviceSnap?.data()?.name as string | undefined) ??
     (optionNames.length > 0 ? optionNames.join('・') : 'トリミング');
 
+  // ⚠会計依頼に personId が載らないとレジでポイントが付かない。
+  //   customers.memberId は「一度も中央CRMに紐づいていない顧客」では空なので、
+  //   ここで電話/LINEから引き直す（レジ会計は完了と同時に送るため、
+  //   onBookingDone 側の書き戻しでは間に合わない）。
+  let resolvedMemberId = (cust.memberId ?? null) as string | null;
+  if (!resolvedMemberId) {
+    const coreTenantId = String(tenantSnap.data()?.coreTenantId ?? '');
+    const member = await lookupMemberPoints(coreTenantId, {
+      lineUserId: (cust.lineUserId ?? null) as string | null,
+      phone: (cust.phone ?? null) as string | null,
+    }).catch(() => null);
+    if (member?.personId) {
+      resolvedMemberId = member.personId;
+      await custSnap.ref.set({ memberId: member.personId }, { merge: true }).catch(() => {
+        /* 保存に失敗しても今回の送信には使える */
+      });
+    }
+  }
+
   const payload = buildCheckoutRequest({
     coreTenantId,
     coreSpaceId,
@@ -1951,7 +1970,7 @@ export const sendCheckoutToPos = onCall<{ tenantId: string; bookingId: string }>
     finalPrice: booking.finalPrice as number,
     ownerName: (cust.ownerName as string | undefined) ?? 'お客',
     dogName: (dogSnap.data()?.name as string | undefined) ?? '',
-    memberId: (cust.memberId ?? null) as string | null,
+    memberId: resolvedMemberId,
     lineUserId: (cust.lineUserId ?? null) as string | null,
   });
 
@@ -1990,6 +2009,8 @@ export const sendCheckoutToPos = onCall<{ tenantId: string; bookingId: string }>
 async function persistAndDeliver(
   eventRef: DocumentReference,
   payload: ReturnType<typeof buildPointEvent>,
+  /** Core が名寄せした personId を書き戻す先（customers/{id}）。未指定なら書き戻さない。 */
+  customerRef?: DocumentReference,
 ): Promise<void> {
   // bookingId をドキュメント ID にしているため、create で重複生成を防ぐ（冪等 §11）
   try {
@@ -1997,17 +2018,25 @@ async function persistAndDeliver(
   } catch {
     return; // 既に生成済み（トリガの at-least-once 再発火）
   }
-  await tryDeliver(eventRef, payload);
+  await tryDeliver(eventRef, payload, customerRef);
 }
 
 async function tryDeliver(
   eventRef: DocumentReference,
   payload: ReturnType<typeof buildPointEvent>,
+  customerRef?: DocumentReference,
 ): Promise<void> {
   try {
-    const sent = await deliverPointEvent(payload);
-    if (sent) {
+    const { delivered, personId } = await deliverPointEvent(payload);
+    if (delivered) {
       await eventRef.update({ status: 'sent', deliveredAt: FieldValue.serverTimestamp(), attempts: FieldValue.increment(1) });
+      // ⚠ここが groom が中央の顧客ID(personId)を知る唯一の機会。書き戻さないと
+      //   POS への会計依頼が personId=null のままになり、レジでポイントが付かない。
+      if (personId && customerRef) {
+        await customerRef.set({ memberId: personId }, { merge: true }).catch((e) => {
+          logger.warn('memberId 書き戻しに失敗', { personId, error: String(e) });
+        });
+      }
     } else {
       // Webhook 未設定: pending のまま貯める（CRM 完成後にリトライで配信）
       await eventRef.update({ attempts: FieldValue.increment(1) });
@@ -2053,7 +2082,12 @@ export const onBookingDone = onDocumentUpdated('tenants/{tenantId}/bookings/{boo
     linkOnly: after.paidAtPos === true,
   });
 
-  await persistAndDeliver(base.collection('pointEvents').doc(bookingId), payload);
+  // 顧客ref を渡して、Core が返す personId を customers.memberId に残す。
+  await persistAndDeliver(
+    base.collection('pointEvents').doc(bookingId),
+    payload,
+    after.customerId ? base.collection('customers').doc(String(after.customerId)) : undefined,
+  );
 });
 
 /** pending/failed のイベントを定期再送（§11 リトライ）。CRM 完成後の取りこぼし回収にも使う。 */

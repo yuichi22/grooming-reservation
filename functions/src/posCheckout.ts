@@ -49,6 +49,16 @@ export interface BuildCheckoutRequestInput {
   lineUserId?: string | null;
 }
 
+/** レジに出す顧客名。飼い主名が空でも「様（犬名）」にならないようにする。 */
+export function buildCustomerLabel(ownerName?: string | null, dogName?: string | null): string {
+  const owner = String(ownerName ?? '').trim();
+  const dog = String(dogName ?? '').trim();
+  if (owner && dog) return `${owner}様（${dog}）`;
+  if (owner) return `${owner}様`;
+  if (dog) return `${dog}のお客様`;
+  return 'お客様';
+}
+
 /** 伝票の冪等キー。POS側 checkoutRequests の doc ID になる。 */
 export function checkoutRequestId(groomTenantId: string, bookingId: string): string {
   return `groom_${groomTenantId}_${bookingId}`;
@@ -71,7 +81,9 @@ export function buildCheckoutRequest(input: BuildCheckoutRequestInput): Checkout
       bookingId: input.bookingId,
       personId: input.memberId ?? null,
       lineUserId: input.lineUserId ?? null,
-      customerName: `${input.ownerName}様（${input.dogName}）`,
+      // ⚠飼い主名は空のことがある（LIFF登録で氏名未入力など）。
+      //   `??` は空文字を拾えず「様（ポロ）」になってレジで名前が消えるので trim で判定する。
+      customerName: buildCustomerLabel(input.ownerName, input.dogName),
       totalAmount: input.finalPrice,
       lines: [
         {

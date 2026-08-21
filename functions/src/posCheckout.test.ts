@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCheckoutRequest, checkoutRequestId } from './posCheckout';
+import { buildCheckoutRequest, buildCustomerLabel, checkoutRequestId } from './posCheckout';
 
 describe('buildCheckoutRequest (①会計連携)', () => {
   it('会計依頼伝票のペイロードを組み立てる（明細1行＋オプションはnote）', () => {
@@ -56,5 +56,25 @@ describe('buildCheckoutRequest (①会計連携)', () => {
 
   it('requestId は groom_{tenantId}_{bookingId} の決定的な冪等キー', () => {
     expect(checkoutRequestId('groomhaus', 'bk_9')).toBe('groom_groomhaus_bk_9');
+  });
+});
+
+describe('buildCustomerLabel（レジに出す顧客名）', () => {
+  it('飼い主名と犬名が揃えば従来どおり', () => {
+    expect(buildCustomerLabel('山田', 'ポロ')).toBe('山田様（ポロ）');
+  });
+
+  it('⚠飼い主名が空でも「様（ポロ）」にしない（実データで発生した）', () => {
+    expect(buildCustomerLabel('', 'ポロ')).toBe('ポロのお客様');
+    expect(buildCustomerLabel('   ', 'ポロ')).toBe('ポロのお客様');
+    expect(buildCustomerLabel(null, 'ポロ')).toBe('ポロのお客様');
+  });
+
+  it('犬名だけ空なら飼い主名のみ', () => {
+    expect(buildCustomerLabel('山田', '')).toBe('山田様');
+  });
+
+  it('どちらも空でも読める文字列にする', () => {
+    expect(buildCustomerLabel('', '')).toBe('お客様');
   });
 });
