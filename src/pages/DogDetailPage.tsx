@@ -71,7 +71,6 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const [optPick, setOptPick] = useState(''); // 追加するオプションの選択
   const [msg, setMsg] = useState<string | null>(null);
   const [cust, setCust] = useState({ ownerName: '', phone: '' });
-  const [custMsg, setCustMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!dog) return;
@@ -111,7 +110,14 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const needsKana = hasKanji(displayName) && !form.nameKana.trim();
 
   // 編集あり（保存済みの値と差分があるか）
+  // 顧客(飼い主名・電話)の変更。右上の「保存」に統合するため dirty に含める。
+  const custDirty =
+    !!dog.customerId &&
+    (cust.ownerName.trim() !== (customer?.ownerName ?? '') ||
+      cust.phone.trim() !== (customer?.phone ?? ''));
+
   const dirty =
+    custDirty ||
     form.name.trim() !== (dog.name ?? '') ||
     form.nameKana.trim() !== (dog.nameKana ?? '') ||
     (form.breedId ?? null) !== (dog.breedId ?? null) ||
@@ -140,6 +146,25 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     if (hasKanji(finalName) && !form.nameKana.trim()) {
       setMsg('漢字名はふりがなを入力してください');
       return;
+    }
+    // 顧客(飼い主名・電話)も一緒に保存する。⚠飼い主名と電話は中央CRMの名寄せと
+    //   レジの会計依頼に効くので、空で上書きさせない。
+    const custId = dog?.customerId;
+    if (custDirty && custId) {
+      const nextOwner = cust.ownerName.trim();
+      const nextPhone = cust.phone.trim();
+      if (!nextOwner) {
+        setMsg('飼い主名を入力してください');
+        return;
+      }
+      if (nextPhone.replace(/\D/g, '').length < 10) {
+        setMsg('電話番号を入力してください');
+        return;
+      }
+      await updateDoc(doc(customersCol(tenantId), custId), {
+        ownerName: nextOwner,
+        phone: nextPhone,
+      });
     }
     await updateDoc(doc(dogsCol(tenantId), dogId), {
       // 名前が空になるのは事故なので、空欄なら元の名前を維持する
@@ -180,15 +205,6 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     setMsg('アーカイブから戻しました');
   }
 
-  async function saveCustomer() {
-    if (!dog?.customerId) return;
-    setCustMsg(null);
-    await updateDoc(doc(customersCol(tenantId), dog.customerId), {
-      ownerName: cust.ownerName.trim(),
-      phone: cust.phone.trim() || null,
-    });
-    setCustMsg('保存しました');
-  }
 
   const lineLinked = !!customer?.lineUserId;
 
@@ -267,14 +283,14 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
         <div className="customer-card">
           <input
             value={cust.ownerName}
-            placeholder="飼い主名"
+            placeholder="飼い主名（必須）"
             onChange={(e) => setCust((c) => ({ ...c, ownerName: e.target.value }))}
             style={{ flex: '1 1 140px', fontWeight: 700 }}
           />
           <input
             value={cust.phone}
             type="tel"
-            placeholder="電話番号"
+            placeholder="電話番号（必須）"
             onChange={(e) => setCust((c) => ({ ...c, phone: e.target.value }))}
             style={{ flex: '1 1 140px' }}
           />
@@ -282,9 +298,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
             {lineLinked ? 'LINE連携済み' : 'LINE未連携'}
           </span>
           <div className="customer-actions">
-            <button type="button" onClick={saveCustomer}>
-              顧客情報を保存
-            </button>
+            {/* 「顧客情報を保存」は右上の「保存」に統合した（保存箇所を1つにする） */}
             {cust.phone.trim() && (
               <a className="tel-btn" href={`tel:${cust.phone.trim()}`}>
                 <Phone size={16} /> 電話
@@ -294,7 +308,6 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
               <MessageCircle size={16} /> LINEで連絡
             </a>
           </div>
-          {custMsg && <span className="muted" style={{ flexBasis: '100%' }}>{custMsg}</span>}
           {!lineLinked && (
             <span className="muted" style={{ flexBasis: '100%' }}>
               この電話番号で LINE 登録されると、自動でこの犬が紐づきます。
