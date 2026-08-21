@@ -898,6 +898,9 @@ function BookingDetailModal({
     redeem: { yenPerPoint: number; unit: number };
   } | null>(null);
   const [pointsToUse, setPointsToUse] = useState(0);
+  // 会計方法。'here'=この場で会計（groomがポイントを付ける） / 'pos'=レジで会計（POSが付ける）
+  // ⚠ここで分岐しないと、groomとPOSの両方が同じ来店を送って二重付与になる。
+  const [payAt, setPayAt] = useState<'here' | 'pos'>('here');
   useEffect(() => {
     setSvcAdj(booking.serviceId ? dog?.serviceAdjustments?.[booking.serviceId] ?? 0 : 0);
     const oa: Record<string, number> = {};
@@ -911,6 +914,7 @@ function BookingDetailModal({
     setReschedDays(null);
     setPointInfo(null);
     setPointsToUse(0);
+    setPayAt('here');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id]);
 
@@ -1034,8 +1038,16 @@ function BookingDetailModal({
         finalDurationMin: finalDur,
         finalPrice: price,
         ...(recNotes.trim() ? { notes: recNotes.trim() } : {}),
-        ...(effectivePoints > 0 ? { pointsToUse: effectivePoints } : {}),
+        ...(effectivePoints > 0 && payAt === 'here' ? { pointsToUse: effectivePoints } : {}),
+        ...(payAt === 'pos' ? { paidAtPos: true } : {}),
       });
+      // レジ会計なら、そのまま会計依頼伝票をPOSへ送る（操作を1手にまとめる）。
+      if (payAt === 'pos') {
+        await sendCheckoutToPos({ tenantId, bookingId: booking.id }).catch((e) => {
+          // 送信に失敗しても完了は済んでいる。履歴の「POSへ会計送信」から再送できる。
+          setErr(`完了しましたが、レジへの送信に失敗しました: ${e instanceof Error ? e.message : ''}`);
+        });
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : '保存に失敗しました');
     } finally {
@@ -1234,9 +1246,28 @@ function BookingDetailModal({
               )}
             </div>
 
-            {/* 9. ポイント利用（レジ無しの店舗向け）。中央CRMに紐づいた顧客のときだけ出す。
+            {/* 9. 会計方法。レジ(POS)連携がある拠点では、どちらで会計するかで
+                ポイントを付ける側が変わる（両方が付けると二重になる）。 */}
+            <div className="book-summary" style={{ marginTop: 8 }}>
+              会計
+              <label className="inline" style={{ marginLeft: 8 }}>
+                <input type="radio" name="payAt" checked={payAt === 'here'} onChange={() => setPayAt('here')} />
+                この場で会計
+              </label>
+              <label className="inline" style={{ marginLeft: 8 }}>
+                <input type="radio" name="payAt" checked={payAt === 'pos'} onChange={() => setPayAt('pos')} />
+                レジで会計
+              </label>
+              {payAt === 'pos' && (
+                <div className="muted" style={{ marginTop: 4 }}>
+                  完了と同時にレジへ会計伝票を送ります。ポイントはレジの会計時に付きます。
+                </div>
+              )}
+            </div>
+
+            {/* 10. ポイント利用（レジ無しの店舗向け）。中央CRMに紐づいた顧客のときだけ出す。
                 ⚠ポイントは「支払方法」なので確定料金そのものは下げない（ポイントは確定料金に対して付く）。 */}
-            {pointInfo && (
+            {pointInfo && payAt === 'here' && (
               <div className="book-summary" style={{ marginTop: 8 }}>
                 ポイント利用
                 <input

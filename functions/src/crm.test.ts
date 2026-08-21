@@ -42,3 +42,32 @@ describe('buildPointEvent (§10)', () => {
     expect(ev.phone).toBeNull();
   });
 });
+
+describe('buildPointEvent の linkOnly（レジ会計の二重付与防止）', () => {
+  const base = {
+    bookingId: 'bk1',
+    tenantId: 'groomhaus',
+    brand: 'GROOM HAUS',
+    amount: 5000,
+    at: '2026-08-21T00:00:00Z',
+    lineUserId: 'U1',
+    phone: '09012345678',
+  };
+
+  it('通常（この場で会計）は linkOnly を載せない＝Core が加算する', () => {
+    const ev = buildPointEvent(base);
+    expect(ev.linkOnly).toBeUndefined();
+    expect(ev.amount).toBe(5000);
+  });
+
+  it('レジ会計なら linkOnly=true。⚠金額と識別子はそのまま送る（顧客の紐付けは続ける）', () => {
+    const ev = buildPointEvent({ ...base, linkOnly: true });
+    expect(ev.linkOnly).toBe(true);
+    expect(ev.lineUserId).toBe('U1');
+    expect(ev.phone).toBe('09012345678');
+  });
+
+  it('linkOnly=false は載せない（既定と同じ扱い）', () => {
+    expect(buildPointEvent({ ...base, linkOnly: false }).linkOnly).toBeUndefined();
+  });
+});

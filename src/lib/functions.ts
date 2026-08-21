@@ -46,6 +46,8 @@ export const completeBooking = httpsCallable<
     notes?: string;
     /** この会計で使うポイント(pt)。レジ無しの店舗向け。 */
     pointsToUse?: number;
+    /** true = 会計はレジ(POS)でやる。ポイントはレジ側で付ける（二重付与の防止）。 */
+    paidAtPos?: boolean;
   },
   { bookingId: string; status: 'done'; pointsRedeemed: number }
 >(functions, 'completeBooking');

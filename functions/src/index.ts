@@ -1678,9 +1678,11 @@ export const completeBooking = onCall<{
   notes?: string;
   /** この会計で使うポイント(pt)。レジ無しの店舗向け。省略/0 なら従来どおり。 */
   pointsToUse?: number;
+  /** true = 会計はレジ(POS)でやる。ポイントは Core 側で加算せず紐付けだけにする。 */
+  paidAtPos?: boolean;
 }>(async (request) => {
   const caller = request.auth?.token;
-  const { tenantId, bookingId, finalDurationMin, finalPrice, notes, pointsToUse } = request.data;
+  const { tenantId, bookingId, finalDurationMin, finalPrice, notes, pointsToUse, paidAtPos } = request.data;
   if (!tenantId || !bookingId || !(finalDurationMin > 0) || !(finalPrice >= 0)) {
     throw new HttpsError('invalid-argument', 'tenantId, bookingId, finalDurationMin, finalPrice required');
   }
@@ -1769,7 +1771,14 @@ export const completeBooking = onCall<{
     const recordRef = dogRef.collection('records').doc(bookingId);
     const nowIso = new Date().toISOString();
 
-    tx.update(bookingRef, { status: 'done', finalDurationMin, finalPrice, ...(redeemedPoints > 0 ? { pointsRedeemed: redeemedPoints } : {}) });
+    tx.update(bookingRef, {
+      status: 'done',
+      finalDurationMin,
+      finalPrice,
+      ...(redeemedPoints > 0 ? { pointsRedeemed: redeemedPoints } : {}),
+      // レジ会計なら onBookingDone が linkOnly で送る（Core側で加算しない）。
+      ...(paidAtPos === true ? { paidAtPos: true } : {}),
+    });
     tx.set(recordRef, {
       bookingId,
       date: booking.date,
@@ -2034,6 +2043,8 @@ export const onBookingDone = onDocumentUpdated('tenants/{tenantId}/bookings/{boo
     lineUserId: (cust.lineUserId ?? null) as string | null,
     // 中央 CRM の名寄せキー。決済/POS など LINE 以外の経路と同一人物に統合するため。
     phone: (cust.phone ?? null) as string | null,
+    // レジ会計の予約は加算しない（POS の会計伝票が付ける）。顧客の紐付けのため送信自体は続ける。
+    linkOnly: after.paidAtPos === true,
   });
 
   await persistAndDeliver(base.collection('pointEvents').doc(bookingId), payload);

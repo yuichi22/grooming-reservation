@@ -69,8 +69,17 @@ const main = async () => {
   }
 
   // --- 2) 配信中のものが、そのローカル build かどうか ---
-  const res = await fetch(`${target.url}/?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache' } });
-  const liveEntry = entryOf(await res.text());
+  // ⚠デプロイ直後は配信の反映に十数秒かかることがあるので、少し待って再確認する
+  //   （即断すると「取り残し」と誤検出する）。
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let liveEntry = null;
+  for (let i = 0; i < 10; i += 1) {
+    const res = await fetch(`${target.url}/?_=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache' } });
+    liveEntry = entryOf(await res.text());
+    if (liveEntry === localEntry) break;
+    if (i === 0) console.log(`live  : ${liveEntry}（反映待ち…）`);
+    await sleep(5000);
+  }
   console.log(`live  : ${liveEntry}`);
   if (localEntry !== liveEntry) {
     fail('配信中の entry がローカルと一致しません（デプロイされていない / 取り残し）。');

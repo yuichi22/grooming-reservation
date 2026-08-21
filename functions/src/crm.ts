@@ -19,6 +19,8 @@ export interface PointEventPayload {
   type: 'trimming';
   amount: number;
   at: string; // ISO8601
+  /** true = 加算しない（会計はレジ側でやる）。顧客の紐付けのためイベント自体は送る。 */
+  linkOnly?: boolean;
 }
 
 export interface BuildPointEventInput {
@@ -30,6 +32,7 @@ export interface BuildPointEventInput {
   memberId?: string | null;
   lineUserId?: string | null;
   phone?: string | null;
+  linkOnly?: boolean;
 }
 
 /** §10 ペイロードを組み立てる（純粋関数）。 */
@@ -44,6 +47,8 @@ export function buildPointEvent(input: BuildPointEventInput): PointEventPayload 
     type: 'trimming',
     amount: input.amount,
     at: input.at,
+    // レジ会計の予約は Core 側で加算しない（紐付けのみ）。二重付与の防止。
+    ...(input.linkOnly ? { linkOnly: true } : {}),
   };
 }
 
