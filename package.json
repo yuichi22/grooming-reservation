@@ -15,7 +15,11 @@
     "emulators": "firebase emulators:start --only auth,firestore,functions",
     "e2e": "node functions/e2e.mjs",
     "deploy:dev": "npm run build:dev && firebase deploy --project dev",
-    "deploy:prod": "npm run build && firebase deploy --project prod"
+    "deploy:prod": "npm run build && firebase deploy --project prod",
+    "check:dev": "node scripts/check-deploy.mjs dev",
+    "check:prod": "node scripts/check-deploy.mjs prod",
+    "deploy:dev:verify": "npm run deploy:dev && npm run check:dev",
+    "deploy:prod:verify": "npm run deploy:prod && npm run check:prod"
   },
   "dependencies": {
     "@line/liff": "^2.24.0",
