@@ -122,6 +122,31 @@ export async function redeemMemberPoints(input: {
 }
 
 /**
+ * 拠点が POS(レジ)を契約しているか。Core の契約状態(enabledApps)が唯一の出所。
+ * ⚠契約が変われば結果も変わる＝これは正しい挙動。POSをやめたら「この場で会計」に戻る。
+ * 落ちても会計は止めない（判定できなければ false=レジ無しとして扱う）。
+ */
+export async function hasPosApp(coreTenantId: string, coreSpaceId: string): Promise<boolean> {
+  const base = crmApiBase();
+  const secret = crmWebhookSecret();
+  if (!base || !secret || !coreTenantId || !coreSpaceId) return false;
+  try {
+    const res = await fetch(`${base}/getSpaceEntitlements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ tenantId: coreTenantId, spaceId: coreSpaceId }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { enabledApps?: Record<string, boolean> };
+    const apps = data.enabledApps ?? {};
+    // レジ会計の受け口は mobile_order（pos / order のどちらの契約でも同じアプリが受ける）
+    return apps.pos === true || apps.order === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 会計で実際に使える上限(pt)。残高・支払額・利用単位の3つで決まる。
  * 端数が単位に満たない場合は切り捨てる（Core 側も単位違反を弾く）。
  */

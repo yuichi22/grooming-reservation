@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { deleteDoc, doc, documentId, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -901,6 +901,10 @@ function BookingDetailModal({
   // 会計方法。'here'=この場で会計（groomがポイントを付ける） / 'pos'=レジで会計（POSが付ける）
   // ⚠ここで分岐しないと、groomとPOSの両方が同じ来店を送って二重付与になる。
   const [payAt, setPayAt] = useState<'here' | 'pos'>('here');
+  // 拠点がレジ(POS)を契約しているか。既定の会計方法を決め、無ければ選ばせない。
+  const [posAvailable, setPosAvailable] = useState(false);
+  // スタッフが自分で選んだ後に、遅れて届いた契約情報で上書きしないための印。
+  const payAtTouched = useRef(false);
   useEffect(() => {
     setSvcAdj(booking.serviceId ? dog?.serviceAdjustments?.[booking.serviceId] ?? 0 : 0);
     const oa: Record<string, number> = {};
@@ -915,6 +919,8 @@ function BookingDetailModal({
     setPointInfo(null);
     setPointsToUse(0);
     setPayAt('here');
+    setPosAvailable(false);
+    payAtTouched.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id]);
 
@@ -929,6 +935,9 @@ function BookingDetailModal({
         if (d.linked && d.redeem) {
           setPointInfo({ pointBalance: Number(d.pointBalance ?? 0), redeem: d.redeem });
         }
+        // レジがあるならレジ会計を既定にする（普段の操作で選ばせない）。
+        setPosAvailable(d.posAvailable === true);
+        if (d.posAvailable === true && !payAtTouched.current) setPayAt('pos');
       })
       .catch(() => {
         /* 残高が引けなくても完了操作は止めない */
@@ -1250,12 +1259,23 @@ function BookingDetailModal({
                 ポイントを付ける側が変わる（両方が付けると二重になる）。 */}
             <div className="book-summary" style={{ marginTop: 8 }}>
               会計
-              <label className="inline" style={{ marginLeft: 8 }}>
-                <input type="radio" name="payAt" checked={payAt === 'here'} onChange={() => setPayAt('here')} />
+              <label className="bdm-choice">
+                <input
+                  type="radio"
+                  name="payAt"
+                  checked={payAt === 'here'}
+                  onChange={() => { payAtTouched.current = true; setPayAt('here'); }}
+                />
                 この場で会計
               </label>
-              <label className="inline" style={{ marginLeft: 8 }}>
-                <input type="radio" name="payAt" checked={payAt === 'pos'} onChange={() => setPayAt('pos')} />
+              <label className={`bdm-choice${posAvailable ? '' : ' is-disabled'}`}>
+                <input
+                  type="radio"
+                  name="payAt"
+                  checked={payAt === 'pos'}
+                  disabled={!posAvailable}
+                  onChange={() => { payAtTouched.current = true; setPayAt('pos'); }}
+                />
                 レジで会計
               </label>
               {payAt === 'pos' && (

@@ -57,6 +57,8 @@ export const getBookingPoints = httpsCallable<
   { tenantId: string; bookingId: string },
   {
     linked: boolean;
+    /** 拠点がPOS(レジ)を契約しているか。会計方法の既定に使う。 */
+    posAvailable?: boolean;
     personId?: string;
     displayName?: string | null;
     pointBalance?: number;

@@ -1467,6 +1467,26 @@ tr.row-link td.chevron-cell {
   text-align: right;
   font-weight: 800;
 }
+/* 完了モーダルの「会計」の選択肢。上の確定料金(.bdm-price は min-height:36px)と
+   行の高さを揃えて、ラベルの縦位置がずれないようにする。 */
+.bdm-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.bdm-choice > input[type='radio'] {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+.bdm-choice.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .modal fieldset {
   margin: 12px 0;
 }

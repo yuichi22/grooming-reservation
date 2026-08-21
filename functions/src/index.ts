@@ -14,7 +14,7 @@ import { availability, freeIntervals, packDogs, toMinutes, toTimeStr, unionStart
 import { staffHoursFor, type ShiftDay } from './shifts.js';
 import { buildPointEvent, deliverPointEvent, crmWebhookSecret, type PointEventStatus } from './crm.js';
 import { buildCheckoutRequest, checkoutRequestId, deliverCheckoutRequest } from './posCheckout.js';
-import { lookupMemberPoints, redeemMemberPoints, maxUsablePoints } from './crmPoints.js';
+import { lookupMemberPoints, redeemMemberPoints, maxUsablePoints, hasPosApp } from './crmPoints.js';
 import { buildConfirmationMessage, buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
 import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
 
@@ -1822,9 +1822,14 @@ export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(
     base.collection('customers').doc(String(booking.customerId ?? '')).get(),
   ]);
   const coreTenantId = String(tenantSnap.data()?.coreTenantId ?? '');
+  const coreSpaceId = String(tenantSnap.data()?.coreSpaceId ?? '');
   const cust = custSnap.data() ?? {};
+
+  // レジ会計が使えるか（契約状態が出所）。CRM未連携でも返す＝会計方法の既定に使う。
+  const posAvailable = await hasPosApp(coreTenantId, coreSpaceId);
+
   if (!coreTenantId) {
-    return { linked: false, pointsRedeemed: booking.pointsRedeemed ?? 0 };
+    return { linked: false, posAvailable, pointsRedeemed: booking.pointsRedeemed ?? 0 };
   }
 
   try {
@@ -1833,13 +1838,14 @@ export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(
       lineUserId: (cust.lineUserId ?? null) as string | null,
       phone: (cust.phone ?? null) as string | null,
     });
-    if (!member) return { linked: false, pointsRedeemed: booking.pointsRedeemed ?? 0 };
+    if (!member) return { linked: false, posAvailable, pointsRedeemed: booking.pointsRedeemed ?? 0 };
     // 解決できたら顧客に残す（POSへの会計依頼が運ぶ personId もこれを使う）。
     if (!cust.memberId && custSnap.exists) {
       await custSnap.ref.update({ memberId: member.personId }).catch(() => {});
     }
     return {
       linked: true,
+      posAvailable,
       personId: member.personId,
       displayName: member.displayName,
       pointBalance: member.pointBalance,
@@ -1849,7 +1855,7 @@ export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(
   } catch (e) {
     // CRM 側が落ちていても完了操作そのものは止めない（欄を出さないだけ）。
     logger.warn('[getBookingPoints] CRM 照会に失敗', { tenantId, bookingId, error: String(e) });
-    return { linked: false, pointsRedeemed: booking.pointsRedeemed ?? 0 };
+    return { linked: false, posAvailable, pointsRedeemed: booking.pointsRedeemed ?? 0 };
   }
 });
 
