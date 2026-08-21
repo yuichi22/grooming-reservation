@@ -87,6 +87,21 @@ function KarteInner({ tenantId }: { tenantId: string }) {
 
   // §3 名寄せは電話番号で行うため、店頭でカルテを作るときに顧客（名前＋電話）も作成/再利用しておく。
   // 同じ電話で顧客が後から LINE 登録すると自動的にこの犬が紐づく。
+  // 何が足りなくて保存できないかを画面に出す（ボタンが点かない理由が分からないため）。
+  const missing: string[] = [];
+  if (!name.trim()) missing.push('犬の名前');
+  else if (hasKanji(name) && !nameKana.trim()) missing.push('ふりがな（漢字名のため）');
+  if (!ownerName.trim()) missing.push('飼い主名');
+  if (phone.replace(/\D/g, '').length < 10) missing.push('電話番号');
+
+  // 保存ボタンの活性条件。⚠onAdd 側のガードと必ず同じにすること
+  //（ずれると「押せるのに弾かれる」「入れたのに点かない」になる）。
+  const canSubmit =
+    name.trim() !== '' &&
+    !(hasKanji(name) && !nameKana.trim()) &&
+    ownerName.trim() !== '' &&
+    phone.replace(/\D/g, '').length >= 10;
+
   async function onAdd(e: FormEvent) {
     e.preventDefault();
     if (!name.trim() || busy) return;
@@ -226,21 +241,24 @@ function KarteInner({ tenantId }: { tenantId: string }) {
                 </select>
               </label>
               <label>
-                飼い主名（任意）
-                <input placeholder="飼い主名（必須）" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+                飼い主名（必須）
+                <input placeholder="例: 山田 花子" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
               </label>
               <label>
-                電話番号（任意）
-                <input placeholder="電話番号（必須）" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                電話番号（必須）
+                <input placeholder="例: 09012345678" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </label>
               <p className="muted">
                 電話番号を入れておくと、その方が同じ番号で LINE 登録したときに自動でこの犬が紐づきます。
               </p>
+              {missing.length > 0 && (
+                <p className="muted">未入力: {missing.join('・')}</p>
+              )}
               <div className="modal-actions">
                 <button type="button" onClick={closeModal} disabled={busy}>
                   キャンセル
                 </button>
-                <button type="submit" disabled={busy || !name.trim() || (hasKanji(name) && !nameKana.trim())}>
+                <button type="submit" disabled={busy || !canSubmit}>
                   {busy ? '作成中…' : 'カルテを追加'}
                 </button>
               </div>

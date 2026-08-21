@@ -634,7 +634,7 @@ function AttachCustomer({
           <button
             type="button"
             onClick={createAndAttach}
-            disabled={busy || (!ownerName.trim() && !phone.trim())}
+            disabled={busy || !ownerName.trim() || phone.replace(/\D/g, '').length < 10}
           >
             {busy ? '登録中…' : '登録して紐づけ'}
           </button>
