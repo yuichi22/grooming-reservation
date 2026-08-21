@@ -583,6 +583,16 @@ export const customerSession = onCall<{
 }>({ minInstances: minInstancesParam }, async (request) => {
   const { tenantId, accessToken, ownerName, phone } = request.data;
   if (!tenantId) throw new HttpsError('invalid-argument', 'tenantId required');
+  // 初回呼び出しは氏名も電話も無しで来る（登録フォームを出すため）ので、
+  // 「送られてきた場合だけ」検証する。⚠画面の required だけでは経路を塞げない。
+  const trimmedOwnerName = String(ownerName ?? '').trim();
+  const trimmedPhone = String(phone ?? '').trim();
+  if (ownerName !== undefined && !trimmedOwnerName) {
+    throw new HttpsError('invalid-argument', 'お名前を入力してください。');
+  }
+  if (phone !== undefined && trimmedPhone.replace(/\D/g, '').length < 10) {
+    throw new HttpsError('invalid-argument', '電話番号を入力してください。');
+  }
   const { lineUserId, dev } = await verifyLineAccessToken(accessToken);
   await assertLineFriend(tenantId, lineUserId, dev);
 
@@ -604,25 +614,35 @@ export const customerSession = onCall<{
   if (decision.action === 'create') {
     const ref = await customersRef.add({
       memberId: null,
-      ownerName: ownerName ?? '',
-      phone: phone ?? null,
+      ownerName: trimmedOwnerName,
+      phone: trimmedPhone || null,
       lineUserId,
       createdAt: FieldValue.serverTimestamp(),
     });
     customerId = ref.id;
   } else {
     customerId = decision.customerId;
+    const patch: Record<string, unknown> = {};
     if (decision.action === 'link') {
-      const patch: Record<string, unknown> = {};
       if (decision.addLineUserId) patch.lineUserId = decision.addLineUserId;
       if (decision.addPhone) patch.phone = decision.addPhone;
-      if (Object.keys(patch).length > 0) await customersRef.doc(customerId).update(patch);
     }
+    // ⚠既存顧客の氏名が空のまま埋まらない穴があった（link のパッチが電話とLINEだけだった）。
+    //   氏名が送られてきて、まだ入っていなければ保存する。
+    if (trimmedOwnerName) {
+      const cur = existing.find((e) => e.id === customerId) as { ownerName?: string } | undefined;
+      const curName = String(cur?.ownerName ?? '').trim();
+      if (!curName) patch.ownerName = trimmedOwnerName;
+    }
+    if (Object.keys(patch).length > 0) await customersRef.doc(customerId).update(patch);
   }
 
   const finalSnap = await customersRef.doc(customerId).get();
   const finalPhone = (finalSnap.data()?.phone ?? null) as string | null;
-  const needsPhone = !finalPhone;
+  const finalOwnerName = String(finalSnap.data()?.ownerName ?? '').trim();
+  // 氏名も名寄せ後の表示（レジの会計依頼・CRM）に必要なので、どちらか欠けたら登録画面へ。
+  // ※キー名は互換のため needsPhone のまま（登録画面は氏名と電話の両方を出す）。
+  const needsPhone = !finalPhone || !finalOwnerName;
   // 起動時の往復削減 (B): 電話登録済みなら予約オプションも同梱して返す（追加の getBookingOptions 呼び出しを省く）
   const options = needsPhone ? null : await fetchBookingOptions(tenantId, customerId);
   // 店舗情報（登録画面でもロゴ表示できるよう常に返す）

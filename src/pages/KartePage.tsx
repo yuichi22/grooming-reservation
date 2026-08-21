@@ -93,6 +93,13 @@ function KarteInner({ tenantId }: { tenantId: string }) {
     if (hasKanji(name) && !nameKana.trim()) return; // 漢字名はふりがな必須
     setBusy(true);
     try {
+      // ⚠飼い主名は必須。空だとレジの会計依頼が「様（ポロ）」になり、
+      //   中央CRMでも誰か分からなくなる（実データで発生した）。
+      if (!ownerName.trim()) {
+        setBusy(false);
+        alert('飼い主名を入力してください。');
+        return;
+      }
       const trimmedPhone = phone.trim();
       // ⚠電話番号は必須。中央CRMは電話/LINEを索引に person を名寄せするため、
       //   どちらも無い顧客は「二度と辿り着けない person」を来店のたびに増やしてしまう。
@@ -220,7 +227,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
               </label>
               <label>
                 飼い主名（任意）
-                <input placeholder="飼い主名（任意）" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+                <input placeholder="飼い主名（必須）" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
               </label>
               <label>
                 電話番号（任意）
