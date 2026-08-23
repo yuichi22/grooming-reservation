@@ -19,6 +19,8 @@ describe('buildPointEvent (§10)', () => {
       memberId: 'MBR_xxx',
       lineUserId: 'U_line1',
       phone: '09012345678',
+      // 飼い主名は未指定なので null（Core の person.displayName になる）
+      displayName: null,
       tenantId: 'groomhaus',
       brand: 'GROOM HAUS',
       type: 'trimming',

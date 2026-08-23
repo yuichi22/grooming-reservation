@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maxUsablePoints, redeemIdempotencyKey } from './crmPoints.js';
+import { netAmountForPoints, maxUsablePoints, redeemIdempotencyKey } from './crmPoints.js';
 
 describe('redeemIdempotencyKey', () => {
   it('付与(bookingId)と衝突しないキーにする', () => {
@@ -41,3 +41,27 @@ describe('maxUsablePoints', () => {
     expect(maxUsablePoints(500, Number.NaN, oneToOne)).toBe(0);
   });
 });
+
+describe('netAmountForPoints（CRMへ送る売上額）', () => {
+  it('ポイント利用は売上値引きなので、値引き後の対価を送る', () => {
+    // ¥5,000 の施術で 1,000pt(=¥1,000) 利用 → 売上は ¥4,000。付与も ¥4,000 に対して行う
+    expect(netAmountForPoints(5000, 1000)).toBe(4000);
+  });
+
+  it('ポイント未使用なら施術料金そのまま', () => {
+    expect(netAmountForPoints(5000, 0)).toBe(5000);
+  });
+
+  it('全額ポイントなら売上0（付与も0になる）', () => {
+    expect(netAmountForPoints(5000, 5000)).toBe(0);
+  });
+
+  it('値引きが料金を超えてもマイナスにしない', () => {
+    expect(netAmountForPoints(3000, 9999)).toBe(0);
+  });
+
+  it('不正値は0扱い', () => {
+    expect(netAmountForPoints(Number.NaN, 100)).toBe(0);
+    expect(netAmountForPoints(5000, Number.NaN)).toBe(5000);
+  });
+})

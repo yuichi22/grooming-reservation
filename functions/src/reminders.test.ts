@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  buildCancelMessage,
   buildConfirmationMessage,
+  buildPickupMessage,
   buildReminderMessage,
+  buildRescheduleMessage,
   dateStrInTimeZone,
   formatDateJa,
   tomorrowInTimeZone,
@@ -88,5 +91,52 @@ describe('文面 (§9 / 予約完了)', () => {
     expect(msg).not.toContain('📍');
     expect(msg).not.toContain('🗺');
     expect(msg).toContain('❌ キャンセル・変更はご予約の24時間前までに、お電話またはこのトークから');
+  });
+});
+
+describe('buildCancelMessage', () => {
+  const base = { tenantName: 'GROOM HAUS', dogName: 'ポロ', date: '2026-08-25', startTime: '10:00' };
+
+  it('キャンセルの事実と再予約の案内を入れる', () => {
+    const m = buildCancelMessage(base);
+    expect(m).toContain('ご予約を取り消しました');
+    expect(m).toContain('GROOM HAUS');
+    expect(m).toContain('ポロ');
+    expect(m).toContain('またご予約をお待ちしております');
+  });
+
+  it('無断欠席でも責める書き方にしない', () => {
+    const m = buildCancelMessage({ ...base, noshow: true });
+    expect(m).toContain('ご来店を確認できなかった');
+    // 「無断」「キャンセル料」等の刺さる語を入れない
+    expect(m).not.toContain('無断');
+    expect(m).not.toContain('ペナルティ');
+  });
+});
+
+describe('buildRescheduleMessage', () => {
+  it('変更前後を並べて誤解を防ぐ', () => {
+    const m = buildRescheduleMessage({
+      tenantName: 'GROOM HAUS', dogName: 'ポロ',
+      beforeDate: '2026-08-25', beforeStartTime: '10:00',
+      afterDate: '2026-08-27', afterStartTime: '14:30',
+    });
+    expect(m).toContain('変更前');
+    expect(m).toContain('変更後');
+    expect(m).toContain('14:30');
+    expect(m.indexOf('変更前')).toBeLessThan(m.indexOf('変更後'));
+  });
+});
+
+describe('buildPickupMessage', () => {
+  it('営業終了時刻が分かれば具体的に書く', () => {
+    expect(buildPickupMessage({ tenantName: 'GROOM HAUS', dogName: 'ポロ', closeTime: '19:00' }))
+      .toContain('本日 19:00 までにお迎え');
+  });
+
+  it('分からなければ「営業時間内」にする', () => {
+    const m = buildPickupMessage({ tenantName: 'GROOM HAUS', dogName: 'ポロ' });
+    expect(m).toContain('営業時間内にお迎え');
+    expect(m).not.toContain('null');
   });
 });

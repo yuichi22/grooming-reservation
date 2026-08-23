@@ -59,6 +59,12 @@ export const getBookingPoints = httpsCallable<
     linked: boolean;
     /** 拠点がPOS(レジ)を契約しているか。会計方法の既定に使う。 */
     posAvailable?: boolean;
+    /** LINEの個別送信の可否。共有OAのテナントは使えない（通数を食い合うため）。 */
+    lineSend?: {
+      available: boolean;
+      reason: 'no_line' | 'shared_oa' | null;
+      pickupDraft: string;
+    };
     personId?: string;
     displayName?: string | null;
     pointBalance?: number;
@@ -66,6 +72,12 @@ export const getBookingPoints = httpsCallable<
     pointsRedeemed: number;
   }
 >(functions, 'getBookingPoints');
+
+/** 予約のお客様へ LINE を送る（お迎え依頼など）。専用OAを持つテナントのみ。 */
+export const sendLineToBookingCustomer = httpsCallable<
+  { tenantId: string; bookingId: string; text: string },
+  { ok: boolean }
+>(functions, 'sendLineToBookingCustomer');
 
 /** 完了済み予約の会計依頼伝票をPOS(mobile_order)へ送信（①会計連携）。再送は冪等。 */
 export const sendCheckoutToPos = httpsCallable<

@@ -21,6 +21,17 @@ export interface CrmMemberPoints {
   redeem: CrmPointRules;
 }
 
+/**
+ * 中央CRMへ送る売上額。ポイント利用は「売上値引き」なので、値引き後の対価を送る。
+ * ⚠施術料金(finalPrice)そのものは下げない。次回予約に引き継ぐ confirmedPrice に
+ *   使われており、下げると次回の標準料金が値引き後の額になってしまう。
+ */
+export function netAmountForPoints(finalPrice: number, pointsRedeemedYen: number): number {
+  const gross = Math.max(0, Math.floor(Number(finalPrice) || 0));
+  const used = Math.max(0, Math.floor(Number(pointsRedeemedYen) || 0));
+  return Math.max(0, gross - used);
+}
+
 /** ポイント利用の冪等キー。付与(bookingId)と衝突させない。 */
 export function redeemIdempotencyKey(bookingId: string): string {
   return `redeem-${bookingId}`;

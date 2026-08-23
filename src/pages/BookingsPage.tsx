@@ -21,7 +21,7 @@ import {
   tenantDoc,
 } from '../lib/firestore';
 import { completeBooking,
-  getBookingPoints, createBookingByStaff, rescheduleBooking, sendCheckoutToPos } from '../lib/functions';
+  getBookingPoints, createBookingByStaff, rescheduleBooking, sendCheckoutToPos, sendLineToBookingCustomer } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import { isWithinHours, staffHoursFor, subtractIntervals } from '../lib/shifts';
@@ -903,6 +903,11 @@ function BookingDetailModal({
   const [payAt, setPayAt] = useState<'here' | 'pos'>('here');
   // 拠点がレジ(POS)を契約しているか。既定の会計方法を決め、無ければ選ばせない。
   const [posAvailable, setPosAvailable] = useState(false);
+  // LINEの個別送信。専用OAを持つテナントのみ（共有OAは通数を食い合うため使わせない）。
+  const [lineSend, setLineSend] = useState<{ available: boolean; reason: string | null; pickupDraft: string } | null>(null);
+  const [lineText, setLineText] = useState('');
+  const [lineBusy, setLineBusy] = useState(false);
+  const [lineMsg, setLineMsg] = useState<string | null>(null);
   // スタッフが自分で選んだ後に、遅れて届いた契約情報で上書きしないための印。
   const payAtTouched = useRef(false);
   useEffect(() => {
@@ -920,6 +925,9 @@ function BookingDetailModal({
     setPointsToUse(0);
     setPayAt('here');
     setPosAvailable(false);
+    setLineSend(null);
+    setLineText('');
+    setLineMsg(null);
     payAtTouched.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id]);
@@ -937,6 +945,7 @@ function BookingDetailModal({
         }
         // レジがあるならレジ会計を既定にする（普段の操作で選ばせない）。
         setPosAvailable(d.posAvailable === true);
+        if (d.lineSend) setLineSend(d.lineSend);
         if (d.posAvailable === true && !payAtTouched.current) setPayAt('pos');
       })
       .catch(() => {
@@ -1000,6 +1009,21 @@ function BookingDetailModal({
   }, [autoPrice, priceTouched]);
 
   const finalDur = autoDur > 0 ? autoDur : booking.durationMin;
+
+  async function sendLine() {
+    if (lineBusy || !lineText.trim()) return;
+    setLineBusy(true);
+    setLineMsg(null);
+    try {
+      await sendLineToBookingCustomer({ tenantId, bookingId: booking.id, text: lineText.trim() });
+      setLineMsg('送信しました');
+      setLineText('');
+    } catch (e) {
+      setLineMsg(e instanceof Error ? e.message : '送信できませんでした');
+    } finally {
+      setLineBusy(false);
+    }
+  }
 
   // 使えるポイントの上限。残高・確定料金・利用単位の3つで決まる（サーバ側でも同じ検証をする）。
   const pointYenPerPoint = Math.max(pointInfo?.redeem.yenPerPoint ?? 1, 1);
@@ -1355,6 +1379,41 @@ function BookingDetailModal({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* LINEで連絡。⚠専用OAを持つテナントのみ（共有OAは通数を全テナントで食い合うため、
+            任意送信には使わせない。自動通知＝予約確定/リマインド/キャンセル/変更 は共有OAでも送る）。 */}
+        {lineSend && (
+          <div className="row-form" style={{ margin: '10px 0 0', flexDirection: 'column', alignItems: 'stretch' }}>
+            <strong>LINEで連絡</strong>
+            {lineSend.available ? (
+              <>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
+                  <button type="button" onClick={() => setLineText(lineSend.pickupDraft)}>
+                    お迎え依頼
+                  </button>
+                </div>
+                <textarea
+                  rows={4}
+                  value={lineText}
+                  placeholder="定型を選ぶか、そのまま入力できます"
+                  onChange={(e) => setLineText(e.target.value)}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                  <button type="button" onClick={sendLine} disabled={lineBusy || !lineText.trim()}>
+                    {lineBusy ? '送信中…' : 'LINEで送信'}
+                  </button>
+                  {lineMsg && <span className="muted">{lineMsg}</span>}
+                </div>
+              </>
+            ) : (
+              <span className="muted">
+                {lineSend.reason === 'no_line'
+                  ? 'このお客様は LINE と連携していません。'
+                  : '個別メッセージは、店舗専用の LINE 公式アカウントを登録すると使えます。'}
+              </span>
+            )}
           </div>
         )}
 

@@ -14,8 +14,15 @@ import { availability, freeIntervals, packDogs, toMinutes, toTimeStr, unionStart
 import { staffHoursFor, type ShiftDay } from './shifts.js';
 import { buildPointEvent, deliverPointEvent, crmWebhookSecret, type PointEventStatus } from './crm.js';
 import { buildCheckoutRequest, checkoutRequestId, deliverCheckoutRequest } from './posCheckout.js';
-import { lookupMemberPoints, redeemMemberPoints, maxUsablePoints, hasPosApp } from './crmPoints.js';
-import { buildConfirmationMessage, buildReminderMessage, tomorrowInTimeZone } from './reminders.js';
+import { lookupMemberPoints, redeemMemberPoints, maxUsablePoints, hasPosApp, netAmountForPoints } from './crmPoints.js';
+import {
+  buildCancelMessage,
+  buildConfirmationMessage,
+  buildPickupMessage,
+  buildReminderMessage,
+  buildRescheduleMessage,
+  tomorrowInTimeZone,
+} from './reminders.js';
 import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
 
 // provisioning.ts 側の自衛初期化と共存するためガード（ESMのimport評価順対策）
@@ -266,6 +273,8 @@ interface StoreSettings {
   mapUrl?: string;
   phone?: string;
   cancelDeadlineHours?: number;
+  /** 営業時間。お迎え依頼の「◯時まで」に使う */
+  businessHours?: { start?: string; end?: string }[];
 }
 
 async function loadSettings(tenantId: string): Promise<SettingsLike> {
@@ -1718,13 +1727,15 @@ export const completeBooking = onCall<{
   // personId はクライアントの申告を信用せず、予約→顧客から必ずサーバで引く。
   const usePoints = Math.floor(Number(pointsToUse) || 0);
   let redeemedPoints = 0;
+  let redeemedYen = 0; // 値引き額(円)。CRMへ送る売上額の計算に使う
   if (usePoints > 0) {
     const bookingSnap = await bookingRef.get();
     if (!bookingSnap.exists) throw new HttpsError('not-found', 'booking not found');
-    const b = bookingSnap.data() as { customerId?: string; status?: string; pointsRedeemed?: number };
+    const b = bookingSnap.data() as { customerId?: string; status?: string; pointsRedeemed?: number; pointsRedeemedYen?: number };
     if (b.status === 'done' && (b.pointsRedeemed ?? 0) > 0) {
       // 再実行(冪等)。Core も同じ冪等キーで弾くが、二重に数えないようここで止める。
       redeemedPoints = b.pointsRedeemed ?? 0;
+      redeemedYen = b.pointsRedeemedYen ?? redeemedPoints;
     } else {
       const [tenantSnap, custSnap] = await Promise.all([
         base.get(),
@@ -1772,6 +1783,7 @@ export const completeBooking = onCall<{
         throw new HttpsError('unavailable', `ポイントを利用できませんでした: ${msg}`);
       }
       redeemedPoints = usePoints;
+      redeemedYen = usePoints * Math.max(member.redeem.yenPerPoint, 1);
     }
   }
 
@@ -1795,7 +1807,7 @@ export const completeBooking = onCall<{
       status: 'done',
       finalDurationMin,
       finalPrice,
-      ...(redeemedPoints > 0 ? { pointsRedeemed: redeemedPoints } : {}),
+      ...(redeemedPoints > 0 ? { pointsRedeemed: redeemedPoints, pointsRedeemedYen: redeemedYen } : {}),
       // レジ会計なら onBookingDone が linkOnly で送る（Core側で加算しない）。
       ...(paidAtPos === true ? { paidAtPos: true } : {}),
     });
@@ -1835,7 +1847,7 @@ export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(
   const base = db.collection('tenants').doc(tenantId);
   const bookingSnap = await base.collection('bookings').doc(bookingId).get();
   if (!bookingSnap.exists) throw new HttpsError('not-found', 'booking not found');
-  const booking = bookingSnap.data() as { customerId?: string; pointsRedeemed?: number };
+  const booking = bookingSnap.data() as { customerId?: string; dogId?: string; pointsRedeemed?: number };
 
   const [tenantSnap, custSnap] = await Promise.all([
     base.get(),
@@ -1848,8 +1860,25 @@ export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(
   // レジ会計が使えるか（契約状態が出所）。CRM未連携でも返す＝会計方法の既定に使う。
   const posAvailable = await hasPosApp(coreTenantId, coreSpaceId);
 
+  // LINEの個別送信が使えるか。⚠トークンはクライアントに出さず可否だけ返す。
+  //   共有OAは通数(=費用)を全テナントで食い合うので、任意送信は専用OAのテナント限定。
+  const t = tenantSnap.data() ?? {};
+  const { source: lineSource } = resolveLineChannel(t.lineConfig as Record<string, unknown> | undefined);
+  const hasCustomerLine = !!custSnap.data()?.lineUserId;
+  const dogSnap = await base.collection('dogs').doc(String(booking.dogId ?? '')).get();
+  const lineSend = {
+    available: hasCustomerLine && lineSource === 'tenant',
+    reason: !hasCustomerLine ? 'no_line' : lineSource === 'tenant' ? null : 'shared_oa',
+    // お迎え依頼の下書き（スタッフが編集して送る）
+    pickupDraft: buildPickupMessage({
+      tenantName: (t.name as string) ?? tenantId,
+      dogName: (dogSnap.data()?.name as string) ?? 'ワンちゃん',
+      closeTime: ((t.settings as StoreSettings | undefined)?.businessHours?.[0]?.end as string) ?? null,
+    }),
+  };
+
   if (!coreTenantId) {
-    return { linked: false, posAvailable, pointsRedeemed: booking.pointsRedeemed ?? 0 };
+    return { linked: false, posAvailable, lineSend, pointsRedeemed: booking.pointsRedeemed ?? 0 };
   }
 
   try {
@@ -1858,7 +1887,7 @@ export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(
       lineUserId: (cust.lineUserId ?? null) as string | null,
       phone: (cust.phone ?? null) as string | null,
     });
-    if (!member) return { linked: false, posAvailable, pointsRedeemed: booking.pointsRedeemed ?? 0 };
+    if (!member) return { linked: false, posAvailable, lineSend, pointsRedeemed: booking.pointsRedeemed ?? 0 };
     // 解決できたら顧客に残す（POSへの会計依頼が運ぶ personId もこれを使う）。
     if (!cust.memberId && custSnap.exists) {
       await custSnap.ref.update({ memberId: member.personId }).catch(() => {});
@@ -1866,6 +1895,7 @@ export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(
     return {
       linked: true,
       posAvailable,
+      lineSend,
       personId: member.personId,
       displayName: member.displayName,
       pointBalance: member.pointBalance,
@@ -1875,7 +1905,7 @@ export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(
   } catch (e) {
     // CRM 側が落ちていても完了操作そのものは止めない（欄を出さないだけ）。
     logger.warn('[getBookingPoints] CRM 照会に失敗', { tenantId, bookingId, error: String(e) });
-    return { linked: false, posAvailable, pointsRedeemed: booking.pointsRedeemed ?? 0 };
+    return { linked: false, posAvailable, lineSend, pointsRedeemed: booking.pointsRedeemed ?? 0 };
   }
 });
 
@@ -2092,7 +2122,8 @@ export const onBookingDone = onDocumentUpdated('tenants/{tenantId}/bookings/{boo
     bookingId,
     tenantId,
     brand,
-    amount: after.finalPrice as number,
+    // ポイント利用は売上値引き。値引き後の対価に対して付与する。
+    amount: netAmountForPoints(after.finalPrice as number, Number(after.pointsRedeemedYen ?? 0)),
     at: new Date().toISOString(),
     memberId: (cust.memberId ?? null) as string | null,
     lineUserId: (cust.lineUserId ?? null) as string | null,
@@ -2132,9 +2163,25 @@ export const retryPointEvents = onSchedule('every 30 minutes', async () => {
 // ===== M5: 前日リマインド (§9) =====
 
 /** テナントの Messaging API チャネルアクセストークンを解決。 */
-function reminderChannelToken(lineConfig: Record<string, unknown> | undefined): string | null {
+/**
+ * 送信に使う LINE チャネル。専用OAが無いテナントは共有OAへフォールバックする。
+ * ⚠どちらから送るかを呼び出し側が知る必要がある。共有OAは通数(＝費用)を全テナントで
+ *   食い合うため、自動通知(予約確定・リマインド・キャンセル・変更)だけに使い、
+ *   スタッフが任意に送るメッセージは専用OAを持つテナントに限る方針のため。
+ */
+function resolveLineChannel(lineConfig: Record<string, unknown> | undefined): {
+  token: string | null;
+  source: 'tenant' | 'shared' | null;
+} {
   const fromTenant = (lineConfig?.messagingChannelAccessToken as string) || null;
-  return fromTenant ?? process.env.LINE_CHANNEL_ACCESS_TOKEN ?? null;
+  if (fromTenant) return { token: fromTenant, source: 'tenant' };
+  const shared = process.env.LINE_CHANNEL_ACCESS_TOKEN || null;
+  if (shared) return { token: shared, source: 'shared' };
+  return { token: null, source: null };
+}
+
+function reminderChannelToken(lineConfig: Record<string, unknown> | undefined): string | null {
+  return resolveLineChannel(lineConfig).token;
 }
 
 /**
@@ -2220,6 +2267,135 @@ export const sendRemindersNow = onCall<{ tenantId: string; date: string }>(async
  * 予約成立(作成)時に確認メッセージを送る（リマインドとは別・即時）。
  * lineUserId を持つ顧客のみ。confirmationSentAt で冪等化（トリガ at-least-once 対策）。
  */
+/**
+ * 予約のキャンセル・無断欠席・日時変更をお客様の LINE へ自動で知らせる。
+ * ⚠キャンセルは画面から status を直接書き、日時変更は rescheduleBooking(サーバ)と
+ *   経路が分かれている。予約docの更新トリガー1本で拾えば、どちらから変更されても漏れない。
+ * 共有OAでも送る（連絡しないと事故になる「必須の通知」のため）。
+ * 送信済みフラグで冪等化し、トリガの再発火で二重送信しない。
+ */
+/**
+ * スタッフが予約のお客様へ LINE を送る（お迎え依頼など）。
+ * ⚠**専用OAを持つテナントのみ**。共有OAは通数(=費用)を全テナントで食い合うため、
+ *   任意送信には使わせない（自動通知だけ共有OAで送る方針）。
+ * 送信履歴を予約docに残す（誰が・いつ・何を送ったか。連投の抑止と問い合わせ対応用）。
+ */
+export const sendLineToBookingCustomer = onCall<{ tenantId: string; bookingId: string; text: string }>(
+  async (request) => {
+    const caller = request.auth?.token;
+    const { tenantId, bookingId, text } = request.data;
+    if (!tenantId || !bookingId) throw new HttpsError('invalid-argument', 'tenantId, bookingId required');
+    const body = String(text ?? '').trim();
+    if (!body) throw new HttpsError('invalid-argument', 'メッセージを入力してください。');
+    if (body.length > 1000) throw new HttpsError('invalid-argument', 'メッセージが長すぎます（1000文字まで）。');
+
+    const isSuper = caller?.superAdmin === true;
+    const isStaff = caller?.tenantId === tenantId && isStaffRole(caller?.role);
+    if (!isSuper && !isStaff) throw new HttpsError('permission-denied', 'tenant staff only');
+
+    const base = db.collection('tenants').doc(tenantId);
+    const bookingRef = base.collection('bookings').doc(bookingId);
+    const [bookingSnap, tenantSnap] = await Promise.all([bookingRef.get(), base.get()]);
+    if (!bookingSnap.exists) throw new HttpsError('not-found', 'booking not found');
+    const b = bookingSnap.data() as { customerId?: string };
+
+    const custSnap = await base.collection('customers').doc(String(b.customerId ?? '')).get();
+    const lineUserId = custSnap.data()?.lineUserId as string | undefined;
+    if (!lineUserId) throw new HttpsError('failed-precondition', 'このお客様は LINE と連携していません。');
+
+    const { token, source } = resolveLineChannel(tenantSnap.data()?.lineConfig as Record<string, unknown> | undefined);
+    if (!token) throw new HttpsError('failed-precondition', 'LINE の設定がありません。');
+    if (source !== 'tenant') {
+      throw new HttpsError(
+        'failed-precondition',
+        '共有アカウントからは個別メッセージを送れません。店舗専用の LINE 公式アカウントの登録が必要です。',
+      );
+    }
+
+    const result = await pushLineMessage(token, lineUserId, body);
+    if (result !== 'sent') throw new HttpsError('unavailable', '送信できませんでした。');
+
+    await bookingRef.update({
+      lineMessages: FieldValue.arrayUnion({
+        text: body,
+        sentAt: new Date().toISOString(),
+        byUid: request.auth?.uid ?? null,
+      }),
+    });
+    return { ok: true };
+  },
+);
+
+export const onBookingChangedNotify = onDocumentUpdated('tenants/{tenantId}/bookings/{bookingId}', async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (!before || !after) return;
+
+  const becameCanceled =
+    before.status === 'reserved' && (after.status === 'canceled' || after.status === 'noshow');
+  const movedDate = before.date !== after.date;
+  const movedTime = before.startTime !== after.startTime;
+  const rescheduled = after.status === 'reserved' && (movedDate || movedTime);
+  if (!becameCanceled && !rescheduled) return;
+
+  // 冪等: 同じ変更で二重に送らない（トリガは at-least-once）
+  const sentKey = becameCanceled ? 'cancelNotifiedAt' : `rescheduleNotifiedFor_${after.date}_${after.startTime}`;
+  if (after[sentKey]) return;
+
+  const { tenantId, bookingId } = event.params;
+  const base = db.collection('tenants').doc(tenantId);
+  const [tenantSnap, custSnap, dogSnap] = await Promise.all([
+    base.get(),
+    base.collection('customers').doc(String(after.customerId ?? '')).get(),
+    base.collection('dogs').doc(String(after.dogId ?? '')).get(),
+  ]);
+
+  const lineUserId = custSnap.data()?.lineUserId as string | undefined;
+  if (!lineUserId) return; // LINE 未連携は対象外
+
+  const t = tenantSnap.data() ?? {};
+  const { token, source } = resolveLineChannel(t.lineConfig as Record<string, unknown> | undefined);
+  if (!token) return;
+
+  const st = (t.settings ?? {}) as StoreSettings;
+  const tenantName = (t.name as string) ?? tenantId;
+  const dogName = (dogSnap.data()?.name as string) ?? 'ワンちゃん';
+  const store = {
+    address: st.address ?? null,
+    mapUrl: st.mapUrl ?? null,
+    phone: st.phone ?? null,
+    cancelDeadlineHours: st.cancelDeadlineHours ?? null,
+  };
+
+  const message = becameCanceled
+    ? buildCancelMessage({
+        tenantName, dogName,
+        date: after.date as string,
+        startTime: after.startTime as string,
+        noshow: after.status === 'noshow',
+        ...store,
+      })
+    : buildRescheduleMessage({
+        tenantName, dogName,
+        beforeDate: before.date as string,
+        beforeStartTime: before.startTime as string,
+        afterDate: after.date as string,
+        afterStartTime: after.startTime as string,
+        ...store,
+      });
+
+  try {
+    const result = await pushLineMessage(token, lineUserId, message);
+    if (result === 'sent') {
+      await event.data!.after.ref.update({ [sentKey]: FieldValue.serverTimestamp() });
+    }
+    logger.info('booking change notify', { tenantId, bookingId, kind: becameCanceled ? 'cancel' : 'reschedule', result, channel: source });
+  } catch (e) {
+    // 通知に失敗しても予約の変更自体は成立している。運用を止めない。
+    logger.warn('booking change notify failed', { tenantId, bookingId, error: String(e) });
+  }
+});
+
 export const onBookingCreated = onDocumentCreated('tenants/{tenantId}/bookings/{bookingId}', async (event) => {
   const snap = event.data;
   if (!snap) return;

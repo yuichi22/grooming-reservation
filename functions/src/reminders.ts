@@ -99,3 +99,81 @@ export function buildConfirmationMessage(ctx: ConfirmationContext): string {
   lines.push('', cancelLine(ctx), '', 'ご来店をお待ちしております😊');
   return lines.join('\n');
 }
+
+/** キャンセル通知。誰が取り消したかは書かず、事実と再予約の案内だけにする。 */
+export interface CancelContext extends StoreInfo {
+  tenantName: string;
+  dogName: string;
+  date: string;
+  startTime: string;
+  /** 無断欠席として処理した場合は文面を変える（責める書き方はしない） */
+  noshow?: boolean;
+}
+
+export function buildCancelMessage(ctx: CancelContext): string {
+  const lines = [
+    ctx.noshow ? '🐾 ご予約の取り扱いについて' : '🐾 ご予約を取り消しました',
+    '',
+    `【${ctx.tenantName}】`,
+    `📅 ${formatDateJa(ctx.date)} ${ctx.startTime}〜`,
+    `🐶 ${ctx.dogName} ちゃん`,
+  ];
+  const store = storeLines(ctx);
+  if (store.length) lines.push('', ...store);
+  lines.push(
+    '',
+    ctx.noshow
+      ? 'ご来店を確認できなかったため、上記のご予約を終了とさせていただきました。'
+      : '上記のご予約はキャンセルとなりました。',
+    'ご都合がつきましたら、またご予約をお待ちしております😊',
+  );
+  return lines.join('\n');
+}
+
+/** 予約変更（日時の移動）の通知。変更前後を並べて誤解を防ぐ。 */
+export interface RescheduleContext extends StoreInfo {
+  tenantName: string;
+  dogName: string;
+  beforeDate: string;
+  beforeStartTime: string;
+  afterDate: string;
+  afterStartTime: string;
+}
+
+export function buildRescheduleMessage(ctx: RescheduleContext): string {
+  const lines = [
+    '🐾 ご予約の日時を変更しました',
+    '',
+    `【${ctx.tenantName}】`,
+    `🐶 ${ctx.dogName} ちゃん`,
+    '',
+    `変更前: ${formatDateJa(ctx.beforeDate)} ${ctx.beforeStartTime}〜`,
+    `変更後: ${formatDateJa(ctx.afterDate)} ${ctx.afterStartTime}〜`,
+  ];
+  const store = storeLines(ctx);
+  if (store.length) lines.push('', ...store);
+  lines.push('', cancelLine(ctx), '', 'ご来店をお待ちしております😊');
+  return lines.join('\n');
+}
+
+/** 施術完了・お迎え依頼（スタッフが送るタイミングを決めるので手動送信用の下書き）。 */
+export interface PickupContext {
+  tenantName: string;
+  dogName: string;
+  /** 営業終了時刻。分かれば「◯時まで」と入れる */
+  closeTime?: string | null;
+}
+
+export function buildPickupMessage(ctx: PickupContext): string {
+  return [
+    '🐾 施術が完了しました！',
+    '',
+    `【${ctx.tenantName}】`,
+    `🐶 ${ctx.dogName} ちゃん、きれいになりました✨`,
+    '',
+    ctx.closeTime
+      ? `本日 ${ctx.closeTime} までにお迎えをお願いいたします。`
+      : '営業時間内にお迎えをお願いいたします。',
+    'お気をつけてお越しください😊',
+  ].join('\n');
+}
