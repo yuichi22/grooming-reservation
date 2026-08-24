@@ -267,11 +267,38 @@ function LineUsage({ tenantId, hasOwnOa }: { tenantId: string; hasOwnOa: boolean
           </ul>
         </>
       )}
-      <p className="muted">
-        {hasOwnOa
-          ? '店舗専用の LINE 公式アカウントから送信しています。料金はそのアカウントのプランに従います。'
-          : '共有の LINE 公式アカウントから送信しています。通数が増える場合は、店舗専用アカウントの登録をご検討ください。'}
-      </p>
+      {hasOwnOa ? (
+        <p className="muted">
+          店舗専用の LINE 公式アカウントから送信しています。料金はそのアカウントのプランに従います。
+        </p>
+      ) : (
+        /* ⚠共有OAは通数枠(スタンダードプラン=月30,000通)を全店で食い合う。
+           ただし枠内なら1通あたりの追加費用は0円なので、費用を理由に急かさず
+           「できることが増える」案内にとどめる。枠の残りは npm run line-usage:prod で見る。 */
+        <div
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--surface)',
+            padding: '12px 14px',
+            marginTop: 4,
+          }}
+        >
+          <p style={{ margin: '0 0 8px' }}>共有の LINE 公式アカウントから送信しています。</p>
+          <p className="muted" style={{ margin: '0 0 6px' }}>
+            店舗専用のアカウントを登録すると、次のことができるようになります。
+          </p>
+          <ul className="muted" style={{ margin: '0 0 10px', paddingLeft: 18, lineHeight: 1.7 }}>
+            <li>お客様に<strong>店舗名で届く</strong>（現在は共有アカウント名で届いています）</li>
+            <li>予約画面から<strong>個別メッセージ・お迎え依頼</strong>を送れる</li>
+            <li>お客様が<strong>そのまま返信できる</strong></li>
+            <li>友だちへの<strong>一斉配信</strong>ができる</li>
+          </ul>
+          <p className="muted" style={{ margin: 0 }}>
+            ご希望の場合はお問い合わせください。アカウントの接続はこちらで行います。
+          </p>
+        </div>
+      )}
     </section>
   );
 }

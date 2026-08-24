@@ -27,7 +27,9 @@
     "deploy:idx:dev": "firebase deploy --only firestore:indexes --project dev",
     "deploy:idx:prod": "firebase deploy --only firestore:indexes --project prod",
     "deploy:all:dev": "npm run build:dev && firebase deploy --project dev",
-    "deploy:all:prod": "npm run build && firebase deploy --project prod"
+    "deploy:all:prod": "npm run build && firebase deploy --project prod",
+    "line-usage:dev": "node functions/line-usage.mjs dev",
+    "line-usage:prod": "node functions/line-usage.mjs prod"
   },
   "dependencies": {
     "@line/liff": "^2.24.0",
