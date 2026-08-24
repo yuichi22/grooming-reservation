@@ -68,6 +68,8 @@ export const getBookingPoints = httpsCallable<
     personId?: string;
     displayName?: string | null;
     pointBalance?: number;
+    /** テナントがポイント機能をONにしているか（OFFでも残高>0なら利用可） */
+    pointsEnabled?: boolean;
     redeem?: { yenPerPoint: number; unit: number };
     pointsRedeemed: number;
   }

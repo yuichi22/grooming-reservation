@@ -18,6 +18,8 @@ export interface CrmMemberPoints {
   personId: string;
   displayName: string | null;
   pointBalance: number;
+  /** テナントがポイント機能をONにしているか。OFFでも残高>0なら使い切りまで利用可。 */
+  pointsEnabled: boolean;
   redeem: CrmPointRules;
 }
 
@@ -100,6 +102,8 @@ export async function lookupMemberPoints(
     personId: String(data.personId ?? personId ?? ''),
     displayName: (data.displayName as string | null) ?? null,
     pointBalance: Number(data.pointBalance ?? 0),
+    // 古いCore(フィールド無し)は true 扱い＝従来挙動
+    pointsEnabled: data.pointsEnabled !== false,
     redeem: {
       yenPerPoint: Math.max(Number(redeem.yenPerPoint ?? 1), 1),
       unit: Math.max(Math.floor(Number(redeem.unit ?? 1)), 1),

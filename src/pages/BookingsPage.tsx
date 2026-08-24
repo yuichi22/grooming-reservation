@@ -941,7 +941,12 @@ function BookingDetailModal({
         if (!alive) return;
         const d = res.data;
         if (d.linked && d.redeem) {
-          setPointInfo({ pointBalance: Number(d.pointBalance ?? 0), redeem: d.redeem });
+          // ポイントOFFのテナントでは欄ごと出さない。ただし残高が残っている
+          // お客様は使い切りまで利用できる(2026-08-25 決定)ので、残高>0なら出す。
+          const balance = Number(d.pointBalance ?? 0);
+          if (d.pointsEnabled !== false || balance > 0) {
+            setPointInfo({ pointBalance: balance, redeem: d.redeem });
+          }
         }
         // レジがあるならレジ会計を既定にする（普段の操作で選ばせない）。
         setPosAvailable(d.posAvailable === true);
@@ -1409,9 +1414,16 @@ function BookingDetailModal({
               </>
             ) : (
               <span className="muted">
-                {lineSend.reason === 'no_line'
-                  ? 'このお客様は LINE と連携していません。'
-                  : '個別メッセージは、店舗専用の LINE 公式アカウントを登録すると使えます。'}
+                {lineSend.reason === 'no_line' ? (
+                  'このお客様は LINE と連携していません。'
+                ) : (
+                  <>
+                    個別メッセージには、店舗専用の LINE 公式アカウントが必要です。登録すると、
+                    お迎え依頼などをこの画面から直接お送りできます。
+                    <br />
+                    予約確定・前日リマインド・キャンセルの自動連絡は、今のまま届いています。
+                  </>
+                )}
               </span>
             )}
           </div>

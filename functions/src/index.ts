@@ -1900,6 +1900,8 @@ export const getBookingPoints = onCall<{ tenantId: string; bookingId: string }>(
       personId: member.personId,
       displayName: member.displayName,
       pointBalance: member.pointBalance,
+      // ポイントOFFのテナント。UI は pointsEnabled || pointBalance>0 のときだけ利用欄を出す
+      pointsEnabled: member.pointsEnabled,
       redeem: member.redeem,
       pointsRedeemed: booking.pointsRedeemed ?? 0,
     };
