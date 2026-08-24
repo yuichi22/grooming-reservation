@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { updateDoc } from 'firebase/firestore';
 import { useAuth } from '../auth/AuthContext';
+import { doc } from 'firebase/firestore';
+import { db } from '../firebaseStaff';
 import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
 import type { BusinessHours, Tenant, TenantSettings } from '../lib/types';
@@ -204,6 +206,8 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
         </div>
       </form>
 
+      <LineUsage tenantId={tenantId} hasOwnOa={!!tenant?.lineConfig?.messagingChannelAccessToken} />
+
       {/* 休業日の管理は営業カレンダーの一部としてシフトへ集約（二重管理の入口を作らない） */}
       <section style={{ marginTop: 32 }}>
         <h2>休業日（臨時休業・祝日）</h2>
@@ -212,6 +216,62 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
           （予約カレンダーの月表示からも設定できます）。
         </p>
       </section>
+    </section>
+  );
+}
+
+/**
+ * 今月の LINE 送信通数。
+ * ⚠LINE の請求は公式アカウント単位でしか出ないため、共有アカウントを複数店で使うと
+ *   「どの店が何通使ったか」が分からなくなる。ここで内訳を見せる。
+ */
+function LineUsage({ tenantId, hasOwnOa }: { tenantId: string; hasOwnOa: boolean }) {
+  const month = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(new Date())
+    .slice(0, 7);
+
+  const { data: usage } = useDocument<Record<string, number>>(
+    doc(db, 'tenants', tenantId, 'lineUsage', month) as never,
+    [tenantId, month],
+  );
+
+  const n = (k: string) => Number(usage?.[k] ?? 0);
+  const total = n('total');
+  const rows: [string, number][] = [
+    ['予約確定', n('kind_confirmation')],
+    ['前日リマインド', n('kind_reminder')],
+    ['キャンセル', n('kind_cancel')],
+    ['日時変更', n('kind_reschedule')],
+    ['個別メッセージ', n('kind_manual')],
+  ];
+
+  return (
+    <section style={{ marginTop: 32 }}>
+      <h2>LINE送信（{month}）</h2>
+      {total === 0 ? (
+        <p className="muted">今月の送信はまだありません。</p>
+      ) : (
+        <>
+          <p style={{ fontWeight: 800, fontSize: 20, margin: '4px 0' }}>{total.toLocaleString()} 通</p>
+          <ul className="muted" style={{ margin: '4px 0 10px', paddingLeft: 18 }}>
+            {rows.filter(([, v]) => v > 0).map(([label, v]) => (
+              <li key={label}>
+                {label}: {v.toLocaleString()} 通
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className="muted">
+        {hasOwnOa
+          ? '店舗専用の LINE 公式アカウントから送信しています。料金はそのアカウントのプランに従います。'
+          : '共有の LINE 公式アカウントから送信しています。通数が増える場合は、店舗専用アカウントの登録をご検討ください。'}
+      </p>
     </section>
   );
 }

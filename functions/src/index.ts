@@ -9,7 +9,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger, setGlobalOptions } from 'firebase-functions/v2';
 import { defineInt } from 'firebase-functions/params';
 import { resolveLink, type CustomerIdentifiers } from './findOrLink.js';
-import { verifyLineAccessToken, pushLineMessage, isLineFriend } from './line.js';
+import { verifyLineAccessToken, pushLineMessage, isLineFriend, type PushResult } from './line.js';
 import { availability, freeIntervals, packDogs, toMinutes, toTimeStr, unionStarts } from './slots.js';
 import { staffHoursFor, type ShiftDay } from './shifts.js';
 import { buildPointEvent, deliverPointEvent, crmWebhookSecret, type PointEventStatus } from './crm.js';
@@ -21,6 +21,7 @@ import {
   buildPickupMessage,
   buildReminderMessage,
   buildRescheduleMessage,
+  dateStrInTimeZone,
   tomorrowInTimeZone,
 } from './reminders.js';
 import { isCancellableNow, mergeIdentifiers, type Identifiers } from './policy.js';
@@ -2180,6 +2181,52 @@ function resolveLineChannel(lineConfig: Record<string, unknown> | undefined): {
   return { token: null, source: null };
 }
 
+/** LINE 送信の種類。費用の内訳を見るために分けて数える。 */
+type LineMessageKind = 'confirmation' | 'reminder' | 'cancel' | 'reschedule' | 'manual';
+
+/**
+ * LINE を送り、テナント別・チャネル別の通数を記録する。
+ * ⚠**送信は必ずこの関数を通すこと。** LINE の請求は OA 単位でしか出ないため、
+ *   共有OAを複数テナントで使うと「どのテナントが何通使ったか」が永久に分からなくなる。
+ *   ここで数えておかないと、専用OAへ移行してもらう線引きも、費用の按分も判断できない。
+ * 記録先: tenants/{tid}/lineUsage/{YYYY-MM}
+ * 計測に失敗しても送信は成功扱いにする（数えられないことで連絡が止まる方が損害が大きい）。
+ */
+async function sendLineAndCount(args: {
+  tenantId: string;
+  lineConfig: Record<string, unknown> | undefined;
+  lineUserId: string;
+  text: string;
+  kind: LineMessageKind;
+}): Promise<{ result: PushResult; channel: 'tenant' | 'shared' | null }> {
+  const { token, source } = resolveLineChannel(args.lineConfig);
+  if (!token) return { result: 'skipped', channel: null };
+
+  const result = await pushLineMessage(token, args.lineUserId, args.text);
+  if (result !== 'sent') return { result, channel: source };
+
+  try {
+    const month = dateStrInTimeZone(new Date(), 'Asia/Tokyo').slice(0, 7); // YYYY-MM(JST)
+    await db
+      .collection('tenants').doc(args.tenantId)
+      .collection('lineUsage').doc(month)
+      .set(
+        {
+          month,
+          total: FieldValue.increment(1),
+          // 共有OAの通数が費用の判断材料。専用OAはテナント自身の負担。
+          [`channel_${source}`]: FieldValue.increment(1),
+          [`kind_${args.kind}`]: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+  } catch (e) {
+    logger.warn('line usage count failed', { tenantId: args.tenantId, error: String(e) });
+  }
+  return { result, channel: source };
+}
+
 function reminderChannelToken(lineConfig: Record<string, unknown> | undefined): string | null {
   return resolveLineChannel(lineConfig).token;
 }
@@ -2195,7 +2242,6 @@ async function runReminders(tenantId: string, date: string): Promise<{ sent: num
   if (!tenant || tenant.status !== 'active') return { sent: 0, skipped: 0 };
 
   const tenantName = (tenant.name as string) ?? tenantId;
-  const token = reminderChannelToken(tenant.lineConfig);
   const s = (tenant.settings ?? {}) as StoreSettings;
 
   const bookings = await base.collection('bookings').where('date', '==', date).get();
@@ -2227,7 +2273,10 @@ async function runReminders(tenantId: string, date: string): Promise<{ sent: num
       phone: s.phone ?? null,
       cancelDeadlineHours: s.cancelDeadlineHours ?? null,
     });
-    const result = await pushLineMessage(token, lineUserId, message);
+    const { result } = await sendLineAndCount({
+      tenantId, lineConfig: tenant.lineConfig as Record<string, unknown> | undefined,
+      lineUserId, text: message, kind: 'reminder',
+    });
     if (result === 'sent') {
       await bookingDoc.ref.update({ reminderSentAt: FieldValue.serverTimestamp() });
       sent++;
@@ -2312,7 +2361,10 @@ export const sendLineToBookingCustomer = onCall<{ tenantId: string; bookingId: s
       );
     }
 
-    const result = await pushLineMessage(token, lineUserId, body);
+    const { result } = await sendLineAndCount({
+      tenantId, lineConfig: tenantSnap.data()?.lineConfig as Record<string, unknown> | undefined,
+      lineUserId, text: body, kind: 'manual',
+    });
     if (result !== 'sent') throw new HttpsError('unavailable', '送信できませんでした。');
 
     await bookingRef.update({
@@ -2385,7 +2437,10 @@ export const onBookingChangedNotify = onDocumentUpdated('tenants/{tenantId}/book
       });
 
   try {
-    const result = await pushLineMessage(token, lineUserId, message);
+    const { result } = await sendLineAndCount({
+      tenantId, lineConfig: t.lineConfig as Record<string, unknown> | undefined,
+      lineUserId, text: message, kind: becameCanceled ? 'cancel' : 'reschedule',
+    });
     if (result === 'sent') {
       await event.data!.after.ref.update({ [sentKey]: FieldValue.serverTimestamp() });
     }
@@ -2419,7 +2474,6 @@ export const onBookingCreated = onDocumentCreated('tenants/{tenantId}/bookings/{
   const optionNames = Array.isArray(b.options) ? (b.options as { name: string }[]).map((o) => o.name).filter(Boolean) : [];
   const menuName = (serviceSnap?.data()?.name as string) ?? (optionNames.length ? optionNames.join('・') : 'メニュー');
 
-  const token = reminderChannelToken(tenantSnap.data()?.lineConfig);
   const s = (tenantSnap.data()?.settings ?? {}) as StoreSettings;
   const message = buildConfirmationMessage({
     tenantName: (tenantSnap.data()?.name as string) ?? tenantId,
@@ -2434,7 +2488,10 @@ export const onBookingCreated = onDocumentCreated('tenants/{tenantId}/bookings/{
     cancelDeadlineHours: s.cancelDeadlineHours ?? null,
   });
 
-  const result = await pushLineMessage(token, lineUserId, message);
+  const { result } = await sendLineAndCount({
+    tenantId, lineConfig: tenantSnap.data()?.lineConfig as Record<string, unknown> | undefined,
+    lineUserId, text: message, kind: 'confirmation',
+  });
   if (result === 'sent') {
     await snap.ref.update({ confirmationSentAt: FieldValue.serverTimestamp() });
   }
