@@ -14,6 +14,9 @@ import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const PROJECTS = { dev: 'groomhaus-dev', prod: 'groomhaus-prod' };
+// ⚠会員証(/card)の tenantId は Core CRM 側のテナントID(crmSources の coreTenantId)。
+//   groom のテナントIDを渡すと全員「まだ会員登録がありません」になる。
+const CORE_PROJECTS = { dev: 'suomin-9ff5a', prod: 'suomin-prod' };
 // 予約LIFF(環境ごと)。dev は .env.dev の VITE_LIFF_ID と同じ値。
 const BOOK_LIFF = { dev: '2010427516-pML6ldSE', prod: null }; // prod は接続時に確認して埋める
 const CARD_BASE = { dev: 'https://suomin-admin.web.app', prod: 'https://suomin-admin-54858.web.app' };
@@ -26,10 +29,20 @@ if (!projectId || !tenantId || !imagePath) {
 }
 if (!BOOK_LIFF[env]) { console.error(`${env} の予約LIFF IDが未設定です(このスクリプト冒頭のBOOK_LIFF)`); process.exit(1); }
 
-initializeApp({ credential: applicationDefault(), projectId });
-const db = getFirestore();
+const app = initializeApp({ credential: applicationDefault(), projectId });
+const db = getFirestore(app);
 const token = (await db.doc(`tenants/${tenantId}`).get()).get('lineConfig.messagingChannelAccessToken');
 if (!token) { console.error(`${tenantId}: messagingChannelAccessToken がありません`); process.exit(1); }
+
+// 会員証リンク用に Core 側テナントIDを解決（2ボタン時のみ必要）
+let coreTenantId = null;
+if (cardLiffId) {
+  const coreApp = initializeApp({ credential: applicationDefault(), projectId: CORE_PROJECTS[env] }, 'core');
+  const src = await getFirestore(coreApp).doc(`integrations/crmSources/sources/${tenantId}`).get();
+  coreTenantId = src.exists ? String(src.data().coreTenantId) : null;
+  if (!coreTenantId) { console.error(`crmSources に ${tenantId} のマッピングがありません(会員証リンクを作れない)`); process.exit(1); }
+  console.log(`会員証の Core テナント: ${coreTenantId}`);
+}
 
 const api = async (host, path, opts = {}) => {
   const res = await fetch(`https://${host}.line.me${path}`, {
@@ -57,7 +70,7 @@ const menu = {
     ? [
         { bounds: { x: 0, y: 0, width: W / 2, height: H }, action: { type: 'uri', label: '予約する', uri: bookUrl } },
         { bounds: { x: W / 2, y: 0, width: W / 2, height: H }, action: { type: 'uri', label: '会員証',
-            uri: `https://liff.line.me/${cardLiffId}?liffId=${cardLiffId}&tenantId=${tenantId}` } },
+            uri: `https://liff.line.me/${cardLiffId}?liffId=${cardLiffId}&tenantId=${coreTenantId}` } },
       ]
     : [ { bounds: { x: 0, y: 0, width: W, height: H }, action: { type: 'uri', label: '予約する', uri: bookUrl } } ],
 };
@@ -86,3 +99,4 @@ console.log('デフォルトメニューに設定完了');
 const def = await api('api', '/v2/bot/user/all/richmenu', {});
 console.log(def.richMenuId === richMenuId ? '✅ 検証OK: デフォルト=作成メニュー' : `❌ 検証NG: ${def.richMenuId}`);
 console.log(`\n予約リンク: ${bookUrl}`);
+if (cardLiffId) console.log(`会員証リンク: https://liff.line.me/${cardLiffId}?liffId=${cardLiffId}&tenantId=${coreTenantId}`);
