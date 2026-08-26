@@ -18,7 +18,7 @@ const PROJECTS = { dev: 'groomhaus-dev', prod: 'groomhaus-prod' };
 //   groom のテナントIDを渡すと全員「まだ会員登録がありません」になる。
 const CORE_PROJECTS = { dev: 'suomin-9ff5a', prod: 'suomin-prod' };
 // 予約LIFF(環境ごと)。dev は .env.dev の VITE_LIFF_ID と同じ値。
-const BOOK_LIFF = { dev: '2010427516-pML6ldSE', prod: null }; // prod は接続時に確認して埋める
+const BOOK_LIFF = { dev: '2010427516-pML6ldSE', prod: '2010431019-EJ1xAj6t' }; // 各環境の .env の VITE_LIFF_ID と同じ値
 const CARD_BASE = { dev: 'https://suomin-admin.web.app', prod: 'https://suomin-admin-54858.web.app' };
 
 const [env, tenantId, imagePath, cardLiffId] = process.argv.slice(2);
