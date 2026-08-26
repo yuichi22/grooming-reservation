@@ -25,7 +25,7 @@ LINE Developers プロバイダー: DECOLLE Inc.
 |---|---|---|
 | ログインチャネル | 2010427516 | 2010431019 |
 | 予約LIFF | 2010427516-pML6ldSE | 2010431019-EJ1xAj6t |
-| 会員証LIFF | 2010427516-dJa8I1jp | **（作成したらここに記入）** |
+| 会員証LIFF | 2010427516-dJa8I1jp | 2010431019-Pldm36rm |
 | 会員証 endpoint | https://suomin-admin.web.app/card | https://suomin-admin-54858.web.app/card |
 | Core プロジェクト | suomin-9ff5a | suomin-prod |
 | groom プロジェクト | groomhaus-dev | groomhaus-prod |
