@@ -1,0 +1,45 @@
+name: Prod Deploy (manual)
+
+# 本番デプロイの手動ボタン。Actions タブ → Prod Deploy (manual) → Run workflow (Branch: main)。
+# main 以外を選んだ場合は起動しない(=「prodは必ずmainから」を機械的に強制)。
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore .env.production from secret
+        run: printf '%s' "$ENV_PROD" > .env.production
+        env:
+          ENV_PROD: ${{ secrets.ENV_PROD }}
+
+      - name: Build (production mode)
+        run: npm run build
+
+      - name: Deploy to Firebase Hosting (live)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GROOMHAUS_PROD }}
+          projectId: groomhaus-prod
+          channelId: live
+
+      - name: Verify deployed build matches (check-deploy)
+        run: node scripts/check-deploy.mjs prod
