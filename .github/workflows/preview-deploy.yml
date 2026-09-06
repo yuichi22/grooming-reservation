@@ -1,0 +1,44 @@
+name: Preview Deploy (dev)
+
+on:
+  pull_request:
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    # fork からの PR では secrets が使えないため自 repo の PR に限定
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore .env.dev from secret
+        run: printf '%s' "$ENV_DEV" > .env.dev
+        env:
+          ENV_DEV: ${{ secrets.ENV_DEV }}
+
+      - name: Build (dev mode)
+        run: npm run build:dev
+
+      - name: Deploy to Firebase Hosting preview channel
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GROOMHAUS_DEV }}
+          projectId: groomhaus-dev
+          expires: 7d
