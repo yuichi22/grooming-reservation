@@ -1,0 +1,2600 @@
+:root {
+  /* テーマ: 茶系（ドッグサロン） */
+  --brand: #92603a;
+  --brand-dark: #6f4626;
+  --brand-50: #f6efe7;
+  --brand-100: #e8d7c4;
+
+  --bg: #f6f3ef;
+  --surface: #ffffff;
+  --fg: #1f2933;
+  --muted: #6b7785;
+  --border: #e4e8ec;
+  --danger: #d92d20;
+  --danger-50: #fef3f2;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+  letter-spacing: 0.01em;
+}
+h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+a {
+  color: var(--brand-dark);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.92em;
+}
+.error {
+  color: var(--danger);
+}
+
+/* ---------- controls ---------- */
+button {
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: var(--radius-sm);
+  padding: 9px 16px;
+  min-height: 40px;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+button:hover {
+  background: #f7f9fa;
+}
+button:active {
+  transform: translateY(0.5px);
+}
+button[type='submit'],
+button.btn-primary {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+button[type='submit']:hover,
+button.btn-primary:hover {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--brand-100);
+  border-color: var(--brand);
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--fg);
+  padding: 9px 12px;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  max-width: 100%;
+}
+textarea {
+  width: 100%;
+  min-height: 72px;
+}
+
+/* 数字入力のスピンボタン（上下矢印）は全廃 */
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* モバイルで readOnly 化した number 入力もタップ可能・通常表示に見せる */
+input[type='number'][readonly] {
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+label {
+  display: block;
+  margin: 12px 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+label > input,
+label > select,
+label > textarea {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  font-weight: 400;
+}
+label.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 16px;
+  flex-wrap: wrap;
+}
+label.inline > input,
+label.inline > select {
+  display: inline-block;
+  width: auto;
+  margin-top: 0;
+}
+
+/* ---------- auth ---------- */
+.auth-card {
+  max-width: 380px;
+  margin: 12vh auto;
+  padding: 32px 28px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.auth-card h1 {
+  color: var(--brand-dark);
+}
+.auth-card input {
+  width: 100%;
+}
+.auth-card button {
+  width: 100%;
+  margin-top: 16px;
+}
+
+/* ---------- app shell ---------- */
+.app-shell {
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  flex: 0 0 auto;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+/* 角丸アイコンボタン（lucide アイコン用・添付デザイン準拠） */
+.icon-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: #3f4654;
+  box-shadow: var(--shadow-sm);
+}
+.icon-btn:hover {
+  background: var(--brand-50);
+}
+.nav-toggle {
+  flex: 0 0 auto;
+}
+.header-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--fg);
+  background: var(--brand-50);
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 38px;
+}
+.header-btn:hover {
+  background: var(--brand-100);
+}
+.header-btn.active {
+  background: var(--brand);
+  color: #fff;
+}
+.header-center {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.store-logo {
+  height: 34px;
+  max-width: 170px;
+  object-fit: contain;
+  display: block;
+}
+.powered {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.topbar-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.topbar .user {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+/* ヘッダーの並び。モバイル: ロゴ → 予約/カルテ → ログインID を縦に中央寄せ */
+.topbar {
+  flex-direction: column;
+  position: relative;
+  padding-top: 24px; /* ロゴ上の余白 */
+}
+.nav-toggle {
+  order: 0;
+  position: absolute;
+  left: 10px;
+  bottom: 6px; /* ログインID（メール）の行あたりに配置 */
+  /* モバイルはボタン4つと重ならないよう小さめに（デスクトップは下で42pxに戻す） */
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 11px;
+}
+.header-center {
+  order: 1;
+}
+.header-quick {
+  order: 2;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px; /* ロゴと予約/カルテの間の余白 */
+}
+.topbar .user {
+  order: 3;
+  text-align: center;
+}
+/* デスクトップ: ＜ | 予約/カルテ/シフト/QR | ロゴ中央 | ログインID の横並び。
+   左（ボタン群）と右（ログインID）を等分フレックスにしてロゴを常に真ん中へ
+   （ボタンが増えても片側の重みでロゴがずれない）。 */
+@media (min-width: 820px) {
+  .topbar {
+    flex-direction: row;
+    padding-top: 12px;
+  }
+  .nav-toggle {
+    position: static;
+    transform: none;
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    border-radius: 16px;
+  }
+  .header-quick {
+    order: 1;
+    margin-top: 0;
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: flex-start;
+    flex-wrap: wrap; /* 狭い幅では折り返してロゴを侵食しない */
+  }
+  .header-center {
+    order: 2;
+    flex: 0 0 auto;
+  }
+  .topbar .user {
+    order: 3;
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+.nav-icon {
+  margin-right: 7px;
+}
+/* トグルのアイコン: モバイル=上下、デスクトップ=左右 */
+.ico-mobile {
+  display: inline-flex;
+}
+.ico-desktop {
+  display: none;
+}
+@media (min-width: 820px) {
+  .ico-mobile {
+    display: none;
+  }
+  .ico-desktop {
+    display: inline-flex;
+  }
+}
+/* サイドバー最下部のログアウト（デスクトップの縦並びでのみ最下部へ） */
+.nav-logout {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--danger);
+  font-weight: 700;
+}
+/* サイドバー開閉（モバイル: 縦方向にスライド表示） */
+.app-body.nav-collapsed .sidenav {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom-color: transparent;
+  pointer-events: none;
+}
+
+.app-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* nav: mobile-first = horizontal scrollable pills */
+.sidenav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0; /* コンテンツが長いページで flex により潰れて高さが変わるのを防ぐ */
+  gap: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: thin;
+  /* 開閉アニメーション（縦スライド）。flex item の min-height:auto を打ち消す */
+  min-height: 0;
+  max-height: 240px;
+  transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+}
+.sidenav a {
+  flex: 0 0 auto;
+  text-decoration: none;
+  color: var(--fg);
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 9px 16px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--brand-50);
+  transition: background 0.15s, color 0.15s;
+}
+.sidenav a:hover {
+  background: var(--brand-100);
+}
+.sidenav a.active {
+  background: var(--brand);
+  color: #fff;
+}
+
+.content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  margin: 0 auto;
+  padding: 18px 16px 48px;
+}
+.content > * {
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* page sections become cards */
+.content section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 18px;
+  margin-bottom: 18px;
+}
+
+/* ---------- tables (scrollable on small screens) ---------- */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-top: 14px;
+}
+
+/* 作業時間・料金テーブルの「個別加算」セル（＋ 入力 分） */
+.karte-time-table td.kt-adj {
+  white-space: nowrap;
+}
+.karte-time-table td.kt-adj input {
+  width: 64px;
+}
+
+/* 作業時間・料金テーブル：スマホ幅では1サービス=カード（2行×3列）に再構成。
+   横スクロールせずに全項目（特に編集する個別加算）が見えるようにする。 */
+@media (max-width: 600px) {
+  .karte-time-table thead {
+    display: none;
+  }
+  .karte-time-table,
+  .karte-time-table tbody {
+    display: block;
+  }
+  .karte-time-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px 10px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .karte-time-table tbody tr:last-child {
+    border-bottom: none;
+  }
+  .karte-time-table td {
+    display: block;
+    padding: 0;
+    border: none;
+    white-space: normal;
+    min-width: 0;
+  }
+  /* 各セルの上にヘッダ名（data-label）を小さく表示 */
+  .karte-time-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .karte-time-table td.kt-name {
+    grid-column: 1 / -1;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  /* カード時は「＋ 入力 分」が1行に収まるよう入力欄を細く（3桁入れば十分） */
+  .karte-time-table td.kt-adj {
+    white-space: nowrap;
+  }
+  .karte-time-table td.kt-adj input {
+    width: 44px;
+    max-width: 100%;
+    padding: 4px 5px;
+    min-height: 34px;
+    text-align: center;
+    vertical-align: middle;
+  }
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92rem;
+}
+th,
+td {
+  text-align: left;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+thead th {
+  background: var(--brand-50);
+  color: var(--brand-dark);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+}
+tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+td code {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+/* ---------- forms ---------- */
+/* カルテ一覧: ヘッダー（タイトル＋追加ボタン）＋五十音インデックスをまとめて固定 */
+.karte-sticky {
+  position: sticky;
+  /* .content の padding-top(18px) ぶん食い込ませ、ヘッダーの上に行が覗く隙間を作らない */
+  top: -18px;
+  z-index: 6;
+  background: var(--surface);
+  /* カード(section)の padding ぶん外へ広げ、下の行が左右から透けないようにする */
+  margin: -20px -18px 12px;
+  padding: 20px 18px 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+/* デスクトップは .content の padding-top が 28px */
+@media (min-width: 820px) {
+  .karte-sticky {
+    top: -28px;
+  }
+}
+/* 五十音インデックス（カルテ一覧のジャンプバー） */
+.kana-index {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding-bottom: 8px;
+}
+.kana-index button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--brand-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
+.kana-index button:hover {
+  border-color: var(--brand);
+}
+tr.kana-group {
+  /* JS 側で固定ヘッダー分オフセットするが、フォールバック用に確保 */
+  scroll-margin-top: 120px;
+}
+tr.kana-group td {
+  background: var(--brand-50);
+  color: var(--brand-dark);
+  font-weight: 700;
+}
+/* テーブル行の操作ボタン群（編集/停止 など） */
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* 招待リンク表示（メール不達時の共有用） */
+.invite-link {
+  border: 1px solid var(--brand);
+  background: var(--brand-50);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin: 12px 0;
+}
+.invite-link-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.invite-link-head button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+}
+.invite-link-row {
+  display: flex;
+  gap: 8px;
+}
+.invite-link-row input {
+  flex: 1;
+  font-size: 0.85rem;
+}
+.row-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 14px 0;
+}
+.row-form input,
+.row-form select {
+  flex: 1 1 160px;
+  min-width: 0;
+  /* select と input の高さを厳密に揃える（native select の描画差を吸収） */
+  height: 40px;
+}
+.row-form button {
+  flex: 0 0 auto;
+}
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 14px 0;
+  /* fieldset 既定の min-inline-size:min-content を解除。
+     これが無いと内部の .table-wrap(横スクロール)が縮まず表がはみ出す。 */
+  min-width: 0;
+}
+legend {
+  font-weight: 700;
+  color: var(--brand-dark);
+  padding: 0 6px;
+}
+
+/* ---------- desktop: sidebar layout ---------- */
+@media (min-width: 820px) {
+  .app-body {
+    flex-direction: row;
+    gap: 0;
+  }
+  .sidenav {
+    flex-direction: column;
+    width: 220px;
+    overflow-x: visible;
+    overflow-y: auto;
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+    padding: 18px 14px;
+    gap: 4px;
+    /* デスクトップは幅をアニメーション（縦の max-height は無効化） */
+    max-height: none;
+    min-width: 0;
+    transition: width 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+  }
+  /* 折りたたみ時は幅0でスライド収納 */
+  .app-body.nav-collapsed .sidenav {
+    width: 0;
+    max-height: none;
+    padding-left: 0;
+    padding-right: 0;
+    overflow: hidden;
+    border-right-color: transparent;
+  }
+  .sidenav a {
+    background: transparent;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+  }
+  .sidenav a:hover {
+    background: var(--brand-50);
+  }
+  /* 縦並びのときだけログアウトを最下部へ押し下げ */
+  .nav-logout {
+    margin-top: auto;
+  }
+  .content {
+    padding: 28px 28px 60px;
+  }
+}
+
+/* ---------- tabs ---------- */
+.tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  margin: 8px 0 18px;
+}
+.tabs .tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 8px 14px;
+  min-height: 40px;
+}
+.tabs .tab:hover {
+  background: var(--brand-50);
+}
+.tabs .tab.active {
+  color: var(--brand-dark);
+  border-bottom-color: var(--brand);
+}
+
+/* ---------- price cards (料金表) ---------- */
+.price-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+.price-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.price-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--brand-50);
+  border-bottom: 1px solid var(--border);
+}
+.price-card-title {
+  font-weight: 800;
+  color: var(--brand-dark);
+  font-size: 1.05rem;
+}
+.price-card-reorder button {
+  min-height: 30px;
+  padding: 2px 9px;
+  margin-left: 4px;
+}
+.svc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.svc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.svc-row:last-child {
+  border-bottom: none;
+}
+.svc-name {
+  font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+.svc-price {
+  font-weight: 800;
+  color: var(--brand-dark);
+}
+.svc-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+.svc-actions button {
+  min-height: 32px;
+  padding: 3px 10px;
+}
+
+/* ---------- 行クリックで開く（一覧UI統一） ---------- */
+tr.row-link {
+  cursor: pointer;
+}
+tr.row-link:hover td {
+  background: var(--brand-50);
+}
+tr.row-link td.chevron-cell {
+  width: 1%;
+  white-space: nowrap;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ---------- 詳細ヘッダー（戻る + タイトル） ---------- */
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.detail-head h1 {
+  margin: 0;
+}
+.back-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: #3f4654;
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+}
+.back-btn:hover {
+  background: var(--brand-50);
+}
+
+/* ---------- 顧客カード（カルテ詳細） ---------- */
+.customer-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px;
+  background: var(--brand-50);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin: 8px 0 18px;
+}
+.customer-card .cust-name {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.customer-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.line-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.line-badge.linked {
+  background: #def7e6;
+  color: #067a3a;
+}
+.line-badge.unlinked {
+  background: #f1f0ee;
+  color: var(--muted);
+}
+.line-btn,
+.tel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-decoration: none;
+  padding: 9px 15px;
+  min-height: 40px;
+}
+.line-btn {
+  background: #06c755;
+  color: #fff;
+  border: 1px solid #06c755;
+}
+.line-btn:hover {
+  background: #05b14b;
+}
+.tel-btn {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+.tel-btn:hover {
+  background: #f7f9fa;
+}
+
+/* サービス設定カードの縦並び */
+.svc-master-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* LIFF: オプション選択 */
+.opt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+/* 犬の行: 選択ボタン＋「外す」を横並び */
+.opt-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.opt-remove {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.opt-remove:hover {
+  border-color: var(--muted);
+}
+.opt-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+.opt-item.set {
+  background: var(--brand-50);
+  border-color: var(--brand);
+  color: var(--brand-dark);
+  font-weight: 700;
+}
+/* 複数選択オプションのチェック表示（生のcheckboxの代わり） */
+.opt-check {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand);
+}
+.opt-item input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+.opt-item .opt-meta {
+  margin-left: auto;
+  color: var(--brand-dark);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.est-total {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--brand-50);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
+/* ---------- カルテ: 時間・料金の自動計算グリッド ---------- */
+.calc-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 14px;
+  align-items: center;
+}
+.calc-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.calc-val {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.calc-total {
+  font-weight: 800;
+  color: var(--brand-dark);
+  font-size: 1.1rem;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--brand-dark);
+  text-decoration: underline;
+  padding: 0;
+  min-height: auto;
+  font-weight: 600;
+}
+.link-btn:hover {
+  background: none;
+}
+
+/* ---------- 予約カレンダー（月表示） ---------- */
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 6px 0 14px;
+}
+.cal-title {
+  font-weight: 800;
+  font-size: 1.1rem;
+  min-width: 7.5em;
+  text-align: center;
+}
+.cal-today-btn {
+  margin-left: 8px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-dow {
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 2px 0 4px;
+}
+.cal-dow.sun {
+  color: var(--danger);
+}
+.cal-dow.sat {
+  color: #2563eb;
+}
+.cal-cell {
+  min-height: 58px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 5px;
+  background: var(--surface);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.cal-cell:hover {
+  background: var(--brand-50);
+}
+.cal-cell.other {
+  opacity: 0.38;
+}
+.cal-cell.today {
+  border-color: var(--brand);
+}
+.cal-cell.selected {
+  box-shadow: 0 0 0 2px var(--brand);
+  background: var(--brand-50);
+}
+.cal-cell.closed {
+  background: var(--danger-50);
+}
+/* 最短でも入らない日（×・グレーアウト・選択不可） */
+.cal-cell.nofit {
+  opacity: 0.45;
+  background: var(--bg, #f4f4f5);
+}
+/* 内容を変えれば入る日（△・タップ可）。淡いアンバーで「要変更」を示す */
+.cal-cell.maybe {
+  background: #fff7ed;
+}
+.cal-daynum {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.cal-daynum.sun {
+  color: var(--danger);
+}
+.cal-daynum.sat {
+  color: #2563eb;
+}
+.cal-badge {
+  align-self: flex-start;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.cal-badge.count {
+  background: var(--brand-100);
+  color: var(--brand-dark);
+}
+.cal-badge.closed {
+  background: #fde2e0;
+  color: var(--danger);
+}
+.cal-badge.nofit {
+  background: #e5e7eb;
+  color: var(--muted);
+}
+.cal-badge.maybe {
+  background: #fed7aa;
+  color: #c2410c;
+}
+/* シフト未定（受付前）の日 */
+.cal-badge.undecided {
+  background: #ece9e2;
+  color: var(--muted);
+}
+/* ご予約内容カード（合計・犬リスト・追加ボタンを1枚に統合） */
+.book-cart-card {
+  border: 1.5px solid var(--brand-100);
+  background: #fff;
+  border-radius: 16px;
+  padding: 12px;
+  margin: 0 0 12px;
+  box-shadow: var(--shadow-sm);
+}
+.book-cart-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+.book-cart-sum {
+  margin-left: auto;
+  font-weight: 800;
+  color: var(--brand-dark);
+  white-space: nowrap;
+}
+.book-cart-add {
+  width: 100%;
+  margin-top: 8px;
+  min-height: 42px;
+  border: 1.5px dashed var(--brand);
+  background: transparent;
+  color: var(--brand-dark);
+  font-weight: 800;
+  border-radius: 12px;
+}
+.book-cart-add:hover {
+  background: var(--brand-50);
+}
+/* ワンちゃん未選択の間、日付ナビ・月カレンダーをグレーアウト（タップは案内モーダルへ） */
+.cal-disabled {
+  opacity: 0.45;
+}
+/* 予約カレンダー: 月カレンダー開閉＋時間/リスト切替の行と、画面下スティッキーの日ナビ */
+.cal-tools-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cal-tools-row .cal-acc-head {
+  flex: 1 1 auto;
+}
+.day-nav-fixed {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 10px rgba(60, 50, 40, 0.08);
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+}
+.day-nav-fixed .day-center {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.day-nav-fixed .day-label {
+  font-weight: 800;
+  min-width: 10em;
+  text-align: center;
+}
+/* 下部バー内の休業日切替（コンパクト表示） */
+.day-nav-fixed {
+  gap: 10px;
+  align-items: center;
+}
+.day-nav-fixed .closeday-btn {
+  font-size: 0.78rem;
+  min-height: 34px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+/* シフト由来の全員休み表示（ボタンではなく状態ラベル） */
+.day-nav-fixed .allday-off {
+  display: inline-flex;
+  align-items: center;
+  background: #eceae6;
+  color: #6d675e;
+  font-weight: 800;
+  border-radius: 8px;
+}
+
+/* 予約詳細モーダル（管理側）。名前を大きく・✕は右上・行間にゆとり */
+.bdm-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+/* ✕は名前より上の独立行・右寄せ */
+.bdm-close {
+  display: block;
+  margin: -6px -4px 2px auto;
+}
+.bdm-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+/* カルテ行: 個別加算/超過の入力と「分」を折り返させない */
+.karte-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 4px;
+}
+.karte-adj {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.karte-adj input {
+  width: 58px;
+  min-height: 34px;
+  text-align: right;
+}
+
+/* ---------- 個別加算ステッパー（− / 数値 / ＋） ----------
+   施術中でもタブレットで押せるよう、キーボードなしで5分刻みに動かせる形にしている。
+   符号は数値そのもの（-15）に出す。色は補助でしかないので、色だけに意味を持たせない。 */
+.adj-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  white-space: nowrap;
+}
+.adj-stepper .adj-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #f1f3f5;
+  color: #3f4654;
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: none;
+}
+.adj-stepper .adj-btn:disabled {
+  opacity: 0.35;
+}
+.adj-stepper input {
+  width: 52px;
+  min-height: 30px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.adj-stepper input::-webkit-outer-spin-button,
+.adj-stepper input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.adj-stepper .adj-unit {
+  margin: 0 4px 0 1px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.adj-stepper.plus {
+  border-color: #e0b070;
+  background: #fdf6ec;
+}
+.adj-stepper.plus input {
+  color: #8a5a1a;
+}
+.adj-stepper.minus {
+  border-color: #8fc4b4;
+  background: #eef7f4;
+}
+.adj-stepper.minus input {
+  color: #1f6b57;
+}
+
+/* スマホ幅の料金テーブルは1サービス=3列カード。ステッパーは3分の1幅に収まらないので、
+   編集する項目として1行を丸ごと使わせる（＋ボタンが切れて押せなくなるのを防ぐ）。 */
+@media (max-width: 600px) {
+  .karte-time-table td.kt-adj {
+    grid-column: 1 / -1;
+  }
+  /* カード時の入力欄を細くする既存指定はステッパーには効かせない */
+  .karte-time-table td.kt-adj .adj-stepper input {
+    width: 64px;
+    min-height: 34px;
+    padding: 0 2px;
+    text-align: right;
+  }
+  .adj-stepper .adj-btn {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+/* 確定時間セルの下に出す補足（お客様にはこう伝わる、の注記） */
+.kt-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ---------- カルテ: 犬の名前のインライン編集 ---------- */
+.name-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.name-edit input {
+  font-size: 1.5rem;
+  font-weight: 700;
+  min-height: 40px;
+  max-width: 260px;
+}
+.icon-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+/* ---------- カルテ末尾: 削除 / アーカイブ ---------- */
+.karte-danger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.karte-danger .muted {
+  flex: 1 1 220px;
+  margin: 0;
+  font-size: 13px;
+}
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-50);
+}
+.archived-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid #e0b070;
+  border-radius: var(--radius-sm);
+  background: #fdf6ec;
+  color: #8a5a1a;
+}
+/* 予約変更: 日付ごとの空きを縦スクロールで閲覧 */
+.resched-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #e6e0d6;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fdfcfa;
+}
+.resched-day {
+  margin: 0 0 10px;
+}
+/* 日付見出しはスクロール中リスト上端に張り付き、次の日付が来ると押し出される */
+.resched-date {
+  position: sticky;
+  top: -8px; /* コンテナのpadding(8px)ぶん上げて内側上端にピッタリ */
+  z-index: 1;
+  font-weight: 800;
+  font-size: 0.82rem;
+  background: #fdfcfa;
+  margin: 0 -10px 4px;
+  padding: 6px 10px 4px;
+  border-bottom: 1px solid #efe9df;
+}
+.resched-date.current {
+  color: var(--brand-dark);
+}
+
+/* 確定料金の入力（¥・3桁カンマをフィールド内表示） */
+.bdm-price {
+  width: 120px;
+  margin-left: 8px;
+  min-height: 36px;
+  text-align: right;
+  font-weight: 800;
+}
+/* 完了モーダルの「会計」の選択肢。上の確定料金(.bdm-price は min-height:36px)と
+   行の高さを揃えて、ラベルの縦位置がずれないようにする。 */
+.bdm-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.bdm-choice > input[type='radio'] {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+.bdm-choice.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.modal fieldset {
+  margin: 12px 0;
+}
+.modal label {
+  margin-top: 10px;
+}
+
+/* 常時表示カレンダーの選択日ラベル（月ナビに引っ付ける）と時間枠の見出し */
+.cal-selected-date {
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin: -10px 0 6px; /* cal-head の下余白(14px)を相殺して月ナビ直下に */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.slot-head {
+  font-size: 0.9rem;
+  font-weight: 800;
+  margin: 12px 0 6px;
+}
+/* 時間枠エリア: 高さを確保して読込中もレイアウトが揺れないように */
+.slot-area {
+  min-height: 300px;
+}
+.slot-loading {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.cal-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 22px 0 8px;
+}
+.cal-detail-head h2 {
+  margin: 0;
+}
+.btn-closed {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+.btn-closed:hover {
+  background: #b42318;
+  border-color: #b42318;
+}
+
+/* ---------- 予約: タイトル行（今日ボタン右寄せ） ---------- */
+.cal-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.cal-title-row h1 {
+  margin: 0;
+}
+
+/* ページ見出し＋右側アクションボタンの汎用レイアウト */
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.page-head h1 {
+  margin: 0;
+}
+
+/* ---------- 予約: 月アコーディオン & 日ナビ ---------- */
+.cal-acc-body {
+  padding-top: 12px;
+}
+.cal-closeday {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+/* 月表示トグル＋日付ナビを1行に */
+.cal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+.cal-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--brand-dark);
+  background: var(--brand-50);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+.cal-bar .day-center {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+.cal-bar .day-center button {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  min-height: 40px;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+.cal-bar .day-label {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 800;
+  font-size: 1.08rem;
+  text-align: center;
+  white-space: nowrap;
+}
+/* 曜日は「今日」と同じ白抜き（ブランド塗り＋白文字）の丸 */
+.cal-bar .day-dow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  margin-left: 6px;
+  background: var(--brand);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.cal-bar .day-today {
+  margin-left: 5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* ---------- 予約: 日の時間軸グリッド ---------- */
+.tg-colhead {
+  display: flex;
+  margin-top: 12px;
+  padding-right: 10px;
+}
+.tg-colhead .gutter {
+  flex: 0 0 56px;
+}
+.tg-colhead .col {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 6px 2px;
+  border-bottom: 2px solid var(--brand-100);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tg-colsep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+/* ---------- 予約: 日の時間軸グリッド(本体) ---------- */
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.view-toggle button {
+  border: none;
+  border-radius: 0;
+  min-height: 36px;
+  padding: 6px 14px;
+  background: var(--surface);
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+.view-toggle button.active {
+  background: var(--brand);
+  color: #fff;
+}
+.tg {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #f1f0ee;
+  margin-top: 12px;
+  overflow: hidden;
+}
+.tg-hour {
+  position: absolute;
+  left: 56px;
+  right: 10px;
+  border-top: 1px solid var(--border);
+}
+.tg-hour-label {
+  position: absolute;
+  left: 0;
+  width: 50px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  transform: translateY(-50%);
+  text-align: right;
+  padding-right: 6px;
+}
+.tg-open {
+  position: absolute;
+  left: 56px;
+  right: 10px;
+  background: var(--surface);
+}
+.tg-clicklayer {
+  position: absolute;
+  left: 56px;
+  right: 10px;
+  top: 0;
+  bottom: 0;
+  cursor: copy;
+}
+.tg-block {
+  position: absolute;
+  background: var(--brand);
+  color: #fff;
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 0.76rem;
+  line-height: 1.25;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  /* button 化に伴うリセット（カルテへ遷移） */
+  min-height: 0;
+  text-align: left;
+  cursor: pointer;
+}
+button.tg-block:hover {
+  background: var(--brand);
+  filter: brightness(0.93);
+}
+.tg-block.done {
+  background: var(--brand-dark);
+}
+/* テキストリンク風ボタン（カルテへ遷移など） */
+.link-btn {
+  background: transparent;
+  border: none;
+  color: var(--brand-dark);
+  font-weight: 700;
+  padding: 0;
+  min-height: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-btn:hover {
+  background: transparent;
+  color: var(--brand);
+}
+/* オプション追加フォーム（縦積み・モバイルでも崩れない） */
+.opt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 520px;
+  margin-bottom: 14px;
+}
+.opt-form > label {
+  margin: 0;
+}
+.opt-form-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.opt-form .opt-standalone {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: nowrap;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+.opt-form .opt-standalone input {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+.opt-form button[type='submit'] {
+  align-self: flex-start;
+}
+button.tg-block.done:hover {
+  background: var(--brand-dark);
+  filter: brightness(0.93);
+}
+.tg-block .b-time {
+  font-weight: 700;
+  font-size: 0.68rem;
+  opacity: 0.92;
+}
+/* シフト管理（月表×横スクロール） */
+.shift-controls {
+  margin: 0 0 14px;
+}
+.shift-controls select {
+  margin-left: 8px;
+  min-height: 34px;
+}
+.shift-month {
+  margin: 0 0 22px;
+}
+.shift-month h2 {
+  font-size: 1rem;
+  margin: 0 0 6px;
+}
+.shift-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e6e0d6;
+  border-radius: 10px;
+  background: #fff;
+}
+.shift-table {
+  border-collapse: collapse;
+  width: max-content;
+}
+.shift-table th,
+.shift-table td {
+  border: 1px solid #efe9df;
+  padding: 3px;
+  text-align: center;
+  min-width: 64px;
+  vertical-align: middle;
+}
+.shift-table th {
+  font-size: 0.72rem;
+  background: #faf7f2;
+  white-space: nowrap;
+}
+.shift-table th small {
+  font-weight: 600;
+  color: var(--muted);
+}
+.shift-table th .sun {
+  color: #c0392b;
+}
+.shift-table th .sat {
+  color: #2263a8;
+}
+/* 日付ヘッダー（タップで休業日設定） */
+.shift-day-head {
+  width: 100%;
+  min-height: 0;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 5px;
+}
+.shift-day-head:hover:not(:disabled) {
+  background: #efe9df;
+}
+.shift-day-head:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.shift-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #faf7f2 !important;
+  min-width: 92px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-align: left;
+  padding-left: 8px;
+}
+.shift-table td.shift-sticky {
+  background: #fff !important;
+}
+.shift-closed-day {
+  background: #f4f1ec;
+}
+.shift-closed-mark {
+  display: block;
+  color: #c0392b;
+  font-weight: 800;
+}
+.shift-undecided-mark {
+  display: block;
+  color: var(--muted);
+  font-weight: 800;
+}
+/* 設定モーダルのチェックボックス行（チェックとテキストを横並びに。テキストのみ折返し） */
+.shift-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.shift-check input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+}
+.shift-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.shift-opt {
+  font-size: 0.68rem;
+  padding: 2px 4px;
+  min-height: 0;
+  line-height: 1.4;
+  border-radius: 5px;
+  border: 1px solid #ddd6ca;
+  background: #fff;
+}
+.shift-opt.work.current,
+.shift-opt.work:hover {
+  background: #e7f4ea;
+  border-color: #58a06f;
+  color: #1e7d3c;
+}
+.shift-opt.off.current,
+.shift-opt.off:hover {
+  background: #eceae6;
+  border-color: #a49d92;
+  color: #6d675e;
+}
+.shift-opt.custom.current,
+.shift-opt.custom:hover {
+  background: #fdf1dd;
+  border-color: #d99b3d;
+  color: #a05a00;
+}
+.shift-opt.current {
+  outline: 2px solid currentColor;
+  outline-offset: -1px;
+  font-weight: 800;
+}
+.shift-chip {
+  width: 100%;
+  min-height: 0;
+  padding: 6px 4px;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.shift-chip.work {
+  background: #e7f4ea;
+  color: #1e7d3c;
+}
+.shift-chip.off {
+  background: #eceae6;
+  color: #6d675e;
+}
+.shift-chip.custom {
+  background: #fdf1dd;
+  color: #a05a00;
+}
+.shift-chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* シフト休み（スタッフ列単位）の表示。クリック層より上に重ねて予約作成もブロックする */
+.tg-off {
+  position: absolute;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(110, 100, 90, 0.12),
+    rgba(110, 100, 90, 0.12) 6px,
+    rgba(110, 100, 90, 0.05) 6px,
+    rgba(110, 100, 90, 0.05) 12px
+  );
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.74rem;
+  font-weight: 800;
+  border-radius: 4px;
+  cursor: not-allowed;
+}
+/* シフト未定の列（休み帯より薄く・文字はミュート） */
+.tg-off.tg-undecided {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(110, 100, 90, 0.07),
+    rgba(110, 100, 90, 0.07) 6px,
+    rgba(110, 100, 90, 0.03) 6px,
+    rgba(110, 100, 90, 0.03) 12px
+  );
+}
+.tg-closed {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(217, 45, 32, 0.07);
+  color: var(--danger);
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+.tg-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+
+/* ---------- モーダル ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px 18px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: var(--shadow-md);
+}
+.modal h2 {
+  margin-top: 0;
+}
+.modal-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--surface);
+  margin: 0 -18px 8px;
+  padding: 0 18px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.modal-close {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 2px;
+  line-height: 0;
+  cursor: pointer;
+}
+.modal-close:hover {
+  color: var(--fg);
+}
+/* 予約QR モーダル */
+.qr-modal {
+  max-width: 360px;
+  text-align: center;
+}
+.qr-canvas {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin: 10px 0;
+}
+.qr-url {
+  font-size: 0.78rem;
+  color: var(--muted);
+  word-break: break-all;
+  background: var(--brand-50);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+}
+/* 完了画面 */
+.done-card {
+  position: relative;
+  margin-top: 24px;
+  padding: 24px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.done-card h2 {
+  margin-top: 0;
+}
+.done-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.done-back {
+  width: 100%;
+  margin-top: 16px;
+}
+.done-back.primary {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.done-back.primary:hover {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+.done-again {
+  width: 100%;
+  margin-top: 8px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--brand-dark);
+  font-weight: 700;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ---------- LIFF 顧客: 管理画面風レイアウト ---------- */
+.book-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0 12px;
+}
+.book-logo .store-logo {
+  height: 38px;
+  max-width: 200px;
+}
+.store-name {
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--brand-dark);
+  letter-spacing: 0.04em;
+}
+/* ヘッダー（管理画面）内ではロゴ高さに合わせて少し小さく */
+.header-center .store-name {
+  font-size: 1.05rem;
+}
+.book-quick {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.book-quick button {
+  border-radius: 999px;
+  background: var(--brand-50);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-weight: 700;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+}
+.book-quick button.set {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+/* 主CTA: 予約開始ボタンは強い配色で目立たせる */
+.book-quick .book-start {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+  font-size: 1.05rem;
+  font-weight: 800;
+  padding: 14px 18px;
+  box-shadow: var(--shadow-sm);
+}
+.book-quick .book-start:hover {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+}
+/* モーダル: 新規ワンちゃん追加カード（犬カードと同じ枠・サイズ） */
+.opt-item.dog-add {
+  color: var(--brand-dark);
+  border-style: dashed;
+  font-weight: 700;
+}
+.book-pills {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+.book-pills button {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-weight: 700;
+  font-size: 0.84rem;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+.book-pills button.set {
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--brand-dark);
+}
+/* 空きスロット（時間軸グリッド内） */
+.tg-slot {
+  position: absolute;
+  left: 58px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  background: #def7e6;
+  border: 1px solid #9fe3b8;
+  color: #067a3a;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.tg-slot:hover {
+  background: #cdeed8;
+}
+.tg-slot.selected {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.book-summary {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--brand-50);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+/* 合計に添える注釈（追加料金の可能性） */
+.price-note {
+  margin: 6px 2px 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+/* 予約する子を追加（主ボタン） */
+.book-quick button {
+  width: 100%;
+}
+/* カートバー */
+.cart-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 700;
+  text-align: left;
+}
+.cart-bar.set {
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--brand-dark);
+  cursor: pointer;
+}
+.cart-bar-main {
+  flex: 1 1 auto;
+}
+.cart-bar-sum {
+  flex: 0 0 auto;
+  font-size: 0.9rem;
+}
+.cart-bar-chev {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+/* カート内の各項目 */
+.cart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cart-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.cart-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cart-item-title {
+  font-weight: 800;
+  color: var(--brand-dark);
+}
+.cart-item-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.cart-item-actions {
+  display: flex;
+  gap: 4px;
+}
+.cart-item-actions button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.cart-item-actions button:hover {
+  color: var(--brand-dark);
+  border-color: var(--brand-100);
+}
+/* 予約リスト: モバイルは横スクロールせずカード化（幅内に収める） */
+@media (max-width: 600px) {
+  .booking-list thead {
+    display: none;
+  }
+  .booking-list,
+  .booking-list tbody {
+    display: block;
+  }
+  .booking-list tbody tr {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    background: var(--surface);
+  }
+  .booking-list td {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 3px 0;
+    border: none;
+    white-space: normal;
+  }
+  .booking-list td::before {
+    content: attr(data-label);
+    flex: 0 0 5.5em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  /* 施術完了セルは縦積み（フォーム＋操作ボタンを幅いっぱいに） */
+  .booking-list td.bl-action {
+    display: block;
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+    padding-top: 6px;
+  }
+  .booking-list td.bl-action::before {
+    display: block;
+    margin-bottom: 4px;
+  }
+}
+/* 空き時間チップ（15分グリッド・入る枠だけ） */
+.slot-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.slot-chip {
+  padding: 11px 4px;
+  min-height: 46px;
+  border: 1px solid #9fe3b8;
+  background: #def7e6;
+  color: #067a3a;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.98rem;
+  cursor: pointer;
+}
+.slot-chip:hover {
+  background: #cdeed8;
+}
+.slot-chip.selected {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.slot-empty {
+  padding: 28px 0;
+  text-align: center;
+  color: var(--muted);
+}
+/* 空き無しの日に出す「短くして探す」CTA */
+.suggest-cta {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 8px;
+}
+.suggest-cta button {
+  background: transparent;
+  border: 1px solid var(--brand);
+  color: var(--brand);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* 提案カードは最短時刻を右に */
+.opt-item.suggest-item .opt-meta {
+  color: var(--brand);
+}
+/* ステップ間の視線誘導（下向き矢印） */
+.flow-arrow {
+  display: flex;
+  justify-content: center;
+  color: var(--brand);
+  margin: 4px 0 -2px;
+  animation: flow-bounce 1.3s ease-in-out infinite;
+}
+@keyframes flow-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-arrow {
+    animation: none;
+  }
+}
+/* モーダル内の見出し */
+.pick-head {
+  margin: 14px 0 6px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--brand-dark);
+}
+.pick-head:first-of-type {
+  margin-top: 4px;
+}
+/* モーダル内の主ボタン */
+.modal-actions .primary {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.modal-actions .primary:disabled {
+  opacity: 0.5;
+}
+/* LIFF 初回登録のカード */
+.liff-shell > section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 16px;
+}
+
+/* ---------- LIFF (顧客) ---------- */
+.liff-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 20px;
+  background: #fff;
+  min-height: 100vh;
+}
+.liff-shell select,
+.liff-shell input[type='date'] {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+}
+.slot.selected {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+
+/* ---------- モバイル用 数字キーパッド ---------- */
+.numpad-backdrop {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+  background: rgba(16, 24, 40, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+  box-sizing: border-box;
+  /* 端に張り付かないよう全方向に余白。下はブラウザ下部バー/ホームインジケータ分を多めに */
+  padding: 12px 12px calc(20px + env(safe-area-inset-bottom));
+}
+.numpad {
+  width: 100%;
+  max-width: 460px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 12px;
+}
+.numpad-display {
+  text-align: right;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--fg);
+  background: var(--brand-50);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  margin-bottom: 8px;
+  min-height: 1.4em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.numpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.numpad-grid button {
+  font-size: 1.25rem;
+  font-weight: 700;
+  padding: 0;
+  min-height: 46px;
+}
+.numpad-grid .numpad-fn {
+  color: var(--brand-dark);
+  background: var(--brand-50);
+}
+.numpad-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.numpad-actions button {
+  flex: 1;
+  min-height: 44px;
+  font-size: 1rem;
+  font-weight: 800;
+}
+.numpad-ok {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+
+/* nav slide animation */

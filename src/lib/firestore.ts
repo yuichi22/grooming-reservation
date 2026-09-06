@@ -1,0 +1,96 @@
+// 型付き Firestore コレクション参照 (§5)。
+// ドキュメント内には id を保持しないため、変換時に id を剥がす/付与する。
+import {
+  collection,
+  doc,
+  type CollectionReference,
+  type DocumentData,
+  type FirestoreDataConverter,
+  type QueryDocumentSnapshot,
+} from 'firebase/firestore';
+import { db } from '../firebaseStaff';
+import type {
+  Booking,
+  Breed,
+  Closure,
+  Customer,
+  Dog,
+  Option,
+  PriceEntry,
+  Service,
+  ServiceRecord,
+  ShiftDayDoc,
+  Staff,
+  Tenant,
+} from './types';
+
+/** id フィールドを持つ型に対する、id を除いたデータ部 */
+type WithoutId<T> = Omit<T, 'id'>;
+
+function converter<T extends { id: string }>(): FirestoreDataConverter<T> {
+  return {
+    toFirestore(model: T): DocumentData {
+      const { id: _id, ...rest } = model;
+      return rest;
+    },
+    fromFirestore(snap: QueryDocumentSnapshot): T {
+      return { id: snap.id, ...(snap.data() as WithoutId<T>) } as T;
+    },
+  };
+}
+
+const tenantConverter = converter<Tenant>();
+const closureConverter = converter<Closure>();
+const shiftDayConverter = converter<ShiftDayDoc>();
+const staffConverter = converter<Staff>();
+const breedConverter = converter<Breed>();
+const serviceConverter = converter<Service>();
+const optionConverter = converter<Option>();
+const pricingConverter = converter<PriceEntry>();
+const customerConverter = converter<Customer>();
+const dogConverter = converter<Dog>();
+const recordConverter = converter<ServiceRecord>();
+const bookingConverter = converter<Booking>();
+
+export const tenantsCol = (): CollectionReference<Tenant> =>
+  collection(db, 'tenants').withConverter(tenantConverter);
+
+export const tenantDoc = (tenantId: string) => doc(tenantsCol(), tenantId);
+
+export const staffCol = (tenantId: string): CollectionReference<Staff> =>
+  collection(db, 'tenants', tenantId, 'staff').withConverter(staffConverter);
+
+export const breedsCol = (tenantId: string): CollectionReference<Breed> =>
+  collection(db, 'tenants', tenantId, 'breeds').withConverter(breedConverter);
+
+export const servicesCol = (tenantId: string): CollectionReference<Service> =>
+  collection(db, 'tenants', tenantId, 'services').withConverter(serviceConverter);
+
+export const optionsCol = (tenantId: string): CollectionReference<Option> =>
+  collection(db, 'tenants', tenantId, 'options').withConverter(optionConverter);
+
+export const pricingCol = (tenantId: string): CollectionReference<PriceEntry> =>
+  collection(db, 'tenants', tenantId, 'pricing').withConverter(pricingConverter);
+
+export const customersCol = (tenantId: string): CollectionReference<Customer> =>
+  collection(db, 'tenants', tenantId, 'customers').withConverter(customerConverter);
+
+export const dogsCol = (tenantId: string): CollectionReference<Dog> =>
+  collection(db, 'tenants', tenantId, 'dogs').withConverter(dogConverter);
+
+export const recordsCol = (
+  tenantId: string,
+  dogId: string,
+): CollectionReference<ServiceRecord> =>
+  collection(db, 'tenants', tenantId, 'dogs', dogId, 'records').withConverter(recordConverter);
+
+export const bookingsCol = (tenantId: string): CollectionReference<Booking> =>
+  collection(db, 'tenants', tenantId, 'bookings').withConverter(bookingConverter);
+
+export const closuresCol = (tenantId: string): CollectionReference<Closure> =>
+  collection(db, 'tenants', tenantId, 'closures').withConverter(closureConverter);
+
+export const shiftsCol = (tenantId: string): CollectionReference<ShiftDayDoc> =>
+  collection(db, 'tenants', tenantId, 'shifts').withConverter(shiftDayConverter);
+
+export const shiftDoc = (tenantId: string, date: string) => doc(shiftsCol(tenantId), date);

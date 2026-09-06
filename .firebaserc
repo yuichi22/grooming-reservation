@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "groomhaus-dev",
+    "dev": "groomhaus-dev",
+    "prod": "groomhaus-prod"
+  }
+}

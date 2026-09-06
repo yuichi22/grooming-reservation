@@ -1,0 +1,51 @@
+{
+  "name": "groom-reservation-saas",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ペットトリミング予約 SaaS (GROOM HAUS / DECOLLE Inc.)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:dev": "tsc --noEmit && vite build --mode dev",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "emulators": "firebase emulators:start --only auth,firestore,functions",
+    "e2e": "node functions/e2e.mjs",
+    "deploy:dev": "npm run build:dev && firebase deploy --only hosting --project dev",
+    "deploy:prod": "npm run build && firebase deploy --only hosting --project prod",
+    "deploy:dev:verify": "npm run deploy:dev && npm run check:dev",
+    "deploy:prod:verify": "npm run deploy:prod && npm run check:prod",
+    "check:dev": "node scripts/check-deploy.mjs dev",
+    "check:prod": "node scripts/check-deploy.mjs prod",
+    "deploy:fn:dev": "firebase deploy --only functions --project dev",
+    "deploy:fn:prod": "firebase deploy --only functions --project prod",
+    "deploy:rules:dev": "firebase deploy --only firestore:rules --project dev",
+    "deploy:rules:prod": "firebase deploy --only firestore:rules --project prod",
+    "deploy:idx:dev": "firebase deploy --only firestore:indexes --project dev",
+    "deploy:idx:prod": "firebase deploy --only firestore:indexes --project prod",
+    "deploy:all:dev": "npm run build:dev && firebase deploy --project dev",
+    "deploy:all:prod": "npm run build && firebase deploy --project prod",
+    "line-usage:dev": "node functions/line-usage.mjs dev",
+    "line-usage:prod": "node functions/line-usage.mjs prod"
+  },
+  "dependencies": {
+    "@line/liff": "^2.24.0",
+    "firebase": "^10.12.0",
+    "lucide-react": "^1.21.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.24.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.3",
+    "vitest": "^1.6.0"
+  }
+}

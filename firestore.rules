@@ -1,0 +1,111 @@
+rules_version = '2';
+
+// テナント完全分離 + ロールベース制御 (§2 / §4)。
+// custom claims: tenantId(string), role('admin'|'trimmer'), superAdmin(bool)。
+// 方針:
+//   - テナントをまたぐアクセスは superAdmin 以外不可（token.tenantId スコープ）。
+//   - 設定系（tenant 本体 / staff / menus）の変更は admin のみ。
+//   - カルテ系（dogs / records）と予約・顧客は trimmer も編集可 (§2「trimmer はカルテ編集可」)。
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function claims() {
+      return request.auth.token;
+    }
+    function isSuperAdmin() {
+      return isSignedIn() && claims().superAdmin == true;
+    }
+    /** サインイン済みで、指定テナントに所属しているか */
+    function inTenant(tenantId) {
+      return isSignedIn() && claims().tenantId == tenantId;
+    }
+    function isAdmin(tenantId) {
+      return inTenant(tenantId) && (claims().role == 'admin' || claims().role == 'admin_trimmer');
+    }
+    /** 管理者系（admin / admin_trimmer）または trimmer（= このテナントのスタッフ） */
+    function isStaff(tenantId) {
+      return inTenant(tenantId)
+        && (claims().role == 'admin' || claims().role == 'admin_trimmer' || claims().role == 'trimmer');
+    }
+
+    // スーパーアドミン名簿: superAdmin のみ
+    match /superAdmins/{uid} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    match /tenants/{tenantId} {
+      // 本体の閲覧は所属スタッフ + superAdmin
+      allow read: if isSuperAdmin() || isStaff(tenantId);
+      // 発行・削除は superAdmin（テナント発行 Function 経由が原則）
+      allow create, delete: if isSuperAdmin();
+      // 設定変更(settings / lineConfig 等)は admin のみ (§2)
+      allow update: if isSuperAdmin() || isAdmin(tenantId);
+
+      // スタッフ名簿: 閲覧は所属スタッフ、変更は admin のみ
+      match /staff/{staffId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+
+      // 犬種マスタ / サービスマスタ / 料金表: 閲覧は所属スタッフ、変更は admin のみ
+      match /breeds/{breedId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+      match /services/{serviceId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+      match /options/{optionId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+      match /pricing/{priceId} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+
+      // 顧客: 所属スタッフが読み書き可（予約受付・find-or-link §3）
+      match /customers/{customerId} {
+        allow read, write: if isSuperAdmin() || isStaff(tenantId);
+      }
+
+      // 犬・カルテ: trimmer も編集可 (§2 / §7)
+      match /dogs/{dogId} {
+        allow read, write: if isSuperAdmin() || isStaff(tenantId);
+
+        match /records/{recordId} {
+          allow read, write: if isSuperAdmin() || isStaff(tenantId);
+        }
+      }
+
+      // 予約: 所属スタッフが読み書き可
+      match /bookings/{bookingId} {
+        allow read, write: if isSuperAdmin() || isStaff(tenantId);
+      }
+
+      // 臨時休業/祝日 (§11)。設定系のため変更は admin、閲覧は所属スタッフ。
+      match /closures/{date} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+
+      // スタッフ日別シフト（シフト①）。{ staff: { [staffId]: { intervals } } }。
+      // 閲覧は所属スタッフ（予約グリッドの警告バッジで参照）、変更は admin。
+      match /shifts/{date} {
+        allow read: if isSuperAdmin() || isStaff(tenantId);
+        allow write: if isSuperAdmin() || isAdmin(tenantId);
+      }
+
+      // 中央台帳イベントのアウトボックス (§10)。
+      // 生成・配信は Cloud Functions(admin SDK)のみ。クライアントは admin が閲覧のみ可。
+      match /pointEvents/{eventId} {
+        allow read: if isSuperAdmin() || isAdmin(tenantId);
+        allow write: if false;
+      }
+    }
+  }
+}
