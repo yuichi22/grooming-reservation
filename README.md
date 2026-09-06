@@ -99,3 +99,4 @@ npm run deploy:all:dev # hosting / functions / rules / indexes 一括
 ```
 
 デプロイ後の検証（`npm run check:dev` / `check:prod`）、Functions・ルール・インデックスの個別デプロイ、シークレット運用は [`DEPLOY.md`](./DEPLOY.md) と [`docs/deploy.md`](./docs/deploy.md) を参照。LINE LIFF・リッチメニューの設定手順は [`docs/line-liff-setup.md`](./docs/line-liff-setup.md)。
+
