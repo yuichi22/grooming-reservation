@@ -12,7 +12,14 @@ const PROJECT = 'demo-groomhaus';
 const FN = `http://127.0.0.1:5001/${PROJECT}/asia-northeast1`;
 const AUTH = `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts`;
 const TENANT = 'groomhaus';
-const DATE = '2026-06-20';
+// 日付は実行日基準で動的に取る（固定日付は過去日化するとキャンセル期限§11等で腐る）。
+// 予約受付範囲(既定: 今月+3ヶ月の月末)に収まるよう +30日前後を使う。
+const daysFromNow = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const DATE = daysFromNow(30);
 
 initializeApp({ projectId: PROJECT });
 const db = getFirestore();
@@ -105,6 +112,20 @@ async function main() {
   check('電話番号リンク後は needsPhone=false', s2.needsPhone === false);
   const customerId = s2.customerId;
 
+  console.log('\n# 単体可オプション: チェックすると予約カタログに standalone として載る');
+  const optsCol = db.collection('tenants').doc(TENANT).collection('options');
+  await optsCol.doc('opt_tooth').set({ name: '歯磨き', price: 500, durationMin: 10, active: true, standalone: false });
+  await optsCol.doc('opt_nail').set({ name: '爪切り', price: 800, durationMin: 15, active: true, standalone: false });
+  await optsCol.doc('opt_off').set({ name: '無効オプション', price: 100, durationMin: 5, active: false, standalone: true });
+  // 管理画面の「単体可」チェックに相当する更新（メニュー管理 > オプション > 編集）
+  await optsCol.doc('opt_nail').update({ standalone: true });
+  const cat = await call('getPublicBookingOptions', { tenantId: TENANT });
+  const catNail = cat.options.find((o) => o.id === 'opt_nail');
+  const catTooth = cat.options.find((o) => o.id === 'opt_tooth');
+  check('チェック済みオプションは standalone=true で返る（予約画面でメニューと同列に表示される）', catNail?.standalone === true, JSON.stringify(cat.options));
+  check('未チェックのオプションは standalone=false（追加オプション欄のみ）', catTooth?.standalone === false);
+  check('無効(active=false)のオプションはカタログに載らない', !cat.options.some((o) => o.id === 'opt_off'));
+
   console.log('\n# 犬の登録 (§7 初回 confirmedDurationMin=null, 犬種=b1)');
   const dog = await call('registerDog', { tenantId: TENANT, accessToken: token, customerId, name: 'ポチ', breedId: 'b1' });
   const dogId = dog.dogId;
@@ -119,12 +140,15 @@ async function main() {
   check('シャンプー(b1×sham=50分,need60)は10:00が出る', eq(avSham.slots, ['10:00']), `slots=${JSON.stringify(avSham.slots)}`);
   check('  duration=50 (料金表セル)', avSham.durationMin === 50);
 
-  // 犬ごとの確定(§7)が料金表より優先: confirmed=50 にすると cut でも need60 → 10:00
-  await db.collection('tenants').doc(TENANT).collection('dogs').doc(dogId).update({ confirmedDurationMin: 50 });
-  const avCut50 = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, serviceId: 'cut', dogId });
-  check('確定50分(§7)はcutでも10:00が出る', eq(avCut50.slots, ['10:00']), `slots=${JSON.stringify(avCut50.slots)} duration=${avCut50.durationMin}`);
-  // 次の検証のため confirmed を戻す
-  await db.collection('tenants').doc(TENANT).collection('dogs').doc(dogId).update({ confirmedDurationMin: null });
+  // 犬ごとの個別加算(§7/adjust.ts)が料金表に上乗せ: cut に -30分 → 80-30=50, need60 → 10:00。
+  // 料金は短縮しても下げない（メニュー料金が下限）。
+  await db.collection('tenants').doc(TENANT).collection('dogs').doc(dogId).update({ serviceAdjustments: { cut: -30 } });
+  const avCutAdj = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: DATE, serviceId: 'cut', dogId });
+  check('個別短縮(cut -30分)で10:00が出る', eq(avCutAdj.slots, ['10:00']), `slots=${JSON.stringify(avCutAdj.slots)} duration=${avCutAdj.durationMin}`);
+  check('  duration=50 (80-30)', avCutAdj.durationMin === 50);
+  check('  price=5500 (短縮でも値引きしない)', avCutAdj.price === 5500);
+  // 次の検証のため個別加算を戻す
+  await db.collection('tenants').doc(TENANT).collection('dogs').doc(dogId).update({ serviceAdjustments: {} });
 
   console.log('\n# §8 予約確定 (指名なし→空きスタッフ割当) / §6 サーバ再検証');
   const bk = await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, serviceId: 'sham', date: DATE, startTime: '10:00' });
@@ -172,7 +196,7 @@ async function main() {
   console.log(`    → sent=${rem.sent}, skipped=${rem.skipped} (LINEトークン未設定のため送信はskip)`);
 
   console.log('\n# §11 営業時間の例外（休業日）');
-  const CLOSED = '2026-06-25';
+  const CLOSED = daysFromNow(35);
   await db.collection('tenants').doc(TENANT).collection('closures').doc(CLOSED).set({ reason: '臨時休業', fullDay: true });
   const avClosed = await call('getAvailability', { tenantId: TENANT, accessToken: token, date: CLOSED, serviceId: 'sham', dogId });
   check('休業日は closed=true で空きなし', avClosed.closed === true && eq(avClosed.slots, []), JSON.stringify(avClosed));
@@ -185,7 +209,7 @@ async function main() {
   check('休業日は予約も拒否される', closedBookingRejected);
 
   console.log('\n# §11 キャンセル（締切前は顧客が取消可）');
-  const FREE = '2026-06-24'; // 空き日（十分先＝締切前）
+  const FREE = daysFromNow(34); // 空き日（十分先＝締切前）
   const bk2 = await call('createBooking', { tenantId: TENANT, accessToken: token, customerId, dogId, serviceId: 'sham', date: FREE, startTime: '09:00' });
   const cancelRes = await call('cancelBookingByCustomer', { tenantId: TENANT, accessToken: token, bookingId: bk2.bookingId });
   check('顧客キャンセルで status=canceled', cancelRes.status === 'canceled');

@@ -17,7 +17,7 @@ import {
 } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
-import { hasKanji } from './KartePage';
+import { hasKanji } from '../lib/kana';
 import type { Booking, Breed, Customer, Dog, Option, PriceEntry, Service, ServiceRecord } from '../lib/types';
 
 /** 順序非依存で number マップを比較。 */

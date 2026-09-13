@@ -25,6 +25,7 @@ import { completeBooking,
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import { isWithinHours, staffHoursFor, subtractIntervals } from '../lib/shifts';
+import { kanaGroups, kanaKey } from '../lib/kana';
 import type { Booking, Breed, Closure, Customer, Dog, Option, PriceEntry, Service, ServiceRecord, ShiftDayDoc, Staff, Tenant } from '../lib/types';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
@@ -617,6 +618,11 @@ function CreateModal({
   onClose: () => void;
 }) {
   const customerName = useMemo(() => new Map(customers.map((c) => [c.id, c.ownerName])), [customers]);
+  // カルテ一覧と同じ五十音順（漢字名はふりがなで索引）。アーカイブ済みは予約対象外。
+  const dogGroups = useMemo(
+    () => kanaGroups(dogs.filter((d) => !d.archivedAt), (d) => kanaKey(d.name, d.nameKana)),
+    [dogs],
+  );
   const [start, setStart] = useState(startTime);
   const [dogId, setDogId] = useState('');
   const [serviceId, setServiceId] = useState('');
@@ -674,11 +680,15 @@ function CreateModal({
             ワンちゃん
             <select value={dogId} onChange={(e) => setDogId(e.target.value)}>
               <option value="">選択してください</option>
-              {dogs.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                  {customerName.get(d.customerId) ? `（${customerName.get(d.customerId)}）` : ''}
-                </option>
+              {dogGroups.map((g) => (
+                <optgroup key={g.row} label={g.row === '他' ? 'その他' : `${g.row}行`}>
+                  {g.items.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                      {customerName.get(d.customerId) ? `（${customerName.get(d.customerId)}）` : ''}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>

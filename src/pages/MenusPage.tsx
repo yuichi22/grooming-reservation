@@ -496,9 +496,18 @@ function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Optio
   const [editing, setEditing] = useState(false);
   const [price, setPrice] = useState(option.price);
   const [dur, setDur] = useState(option.durationMin);
+  const [standalone, setStandalone] = useState(option.standalone ?? false);
+
+  function startEdit() {
+    // 他の操作（単体可トグル等）で option が更新されていても最新値から編集を始める
+    setPrice(option.price);
+    setDur(option.durationMin);
+    setStandalone(option.standalone ?? false);
+    setEditing(true);
+  }
 
   async function save() {
-    await updateDoc(doc(optionsCol(tenantId), option.id), { price, durationMin: dur });
+    await updateDoc(doc(optionsCol(tenantId), option.id), { price, durationMin: dur, standalone });
     setEditing(false);
   }
 
@@ -522,15 +531,21 @@ function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Optio
         )}
       </td>
       <td>
-        <button
-          type="button"
-          className="link-btn"
-          style={{ textDecoration: 'none', color: option.standalone ? 'var(--brand)' : 'var(--muted)' }}
-          title="オプションのみ可（メニューと同列に表示）を切替"
-          onClick={() => updateDoc(doc(optionsCol(tenantId), option.id), { standalone: !option.standalone })}
-        >
-          {option.standalone ? '✓ 可' : '—'}
-        </button>
+        {editing ? (
+          <input
+            type="checkbox"
+            checked={standalone}
+            onChange={(e) => setStandalone(e.target.checked)}
+            title="オプションのみ可（メニューと同列に表示し、単体でも予約できる）"
+          />
+        ) : (
+          <input
+            type="checkbox"
+            checked={option.standalone ?? false}
+            onChange={(e) => updateDoc(doc(optionsCol(tenantId), option.id), { standalone: e.target.checked })}
+            title="オプションのみ可（メニューと同列に表示し、単体でも予約できる）"
+          />
+        )}
       </td>
       <td>{option.active ? '有効' : '無効'}</td>
       <td>
@@ -541,7 +556,7 @@ function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Optio
           </>
         ) : (
           <>
-            <button onClick={() => setEditing(true)}>編集</button>
+            <button onClick={startEdit}>編集</button>
             <button onClick={() => updateDoc(doc(optionsCol(tenantId), option.id), { active: !option.active })}>
               {option.active ? '無効化' : '有効化'}
             </button>
