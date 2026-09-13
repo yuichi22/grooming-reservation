@@ -2,6 +2,10 @@ name: Prod Deploy (manual)
 
 # 本番デプロイの手動ボタン。Actions タブ → Prod Deploy (manual) → Run workflow (Branch: main)。
 # main 以外を選んだ場合は起動しない(=「prodは必ずmainから」を機械的に強制)。
+#
+# 必要な Secrets:
+#   ENV_PROD                                  .env.production の中身 (VITE_* 一式, groomhaus-prod)
+#   FIREBASE_SERVICE_ACCOUNT_GROOMHAUS_PROD   groomhaus-prod のサービスアカウントキー(JSON)
 
 on:
   workflow_dispatch:
@@ -32,6 +36,13 @@ jobs:
 
       - name: Build (production mode)
         run: npm run build
+
+      # デプロイ前に dist が prod 向けか検査する。ENV_PROD 未登録/空だと
+      # 接続先の無い壊れたビルドになるため、本番に出す前にここで止める。
+      - name: Preflight - dist points at groomhaus-prod
+        run: |
+          grep -rl "groomhaus-prod" dist/assets > /dev/null \
+            || { echo "::error::dist が groomhaus-prod を向いていません (Secret ENV_PROD が未登録/不正の可能性)"; exit 1; }
 
       - name: Deploy to Firebase Hosting (live)
         uses: FirebaseExtended/action-hosting-deploy@v0
