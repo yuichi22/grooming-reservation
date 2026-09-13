@@ -532,20 +532,19 @@ function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Optio
       </td>
       <td>
         {editing ? (
-          <label className="inline" style={{ margin: 0 }}>
-            <input type="checkbox" checked={standalone} onChange={(e) => setStandalone(e.target.checked)} />
-            単体可
-          </label>
+          <input
+            type="checkbox"
+            checked={standalone}
+            onChange={(e) => setStandalone(e.target.checked)}
+            title="オプションのみ可（メニューと同列に表示し、単体でも予約できる）"
+          />
         ) : (
-          <button
-            type="button"
-            className="link-btn"
-            style={{ textDecoration: 'none', color: option.standalone ? 'var(--brand)' : 'var(--muted)' }}
-            title="オプションのみ可（メニューと同列に表示）を切替"
-            onClick={() => updateDoc(doc(optionsCol(tenantId), option.id), { standalone: !option.standalone })}
-          >
-            {option.standalone ? '✓ 可' : '—'}
-          </button>
+          <input
+            type="checkbox"
+            checked={option.standalone ?? false}
+            onChange={(e) => updateDoc(doc(optionsCol(tenantId), option.id), { standalone: e.target.checked })}
+            title="オプションのみ可（メニューと同列に表示し、単体でも予約できる）"
+          />
         )}
       </td>
       <td>{option.active ? '有効' : '無効'}</td>
