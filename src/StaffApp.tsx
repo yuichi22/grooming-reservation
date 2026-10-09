@@ -1,3 +1,4 @@
+import QrPage from './pages/QrPage';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
@@ -41,6 +42,7 @@ export default function StaffApp() {
           <Route index element={<Navigate to="/bookings" replace />} />
           <Route path="bookings" element={<BookingsPage />} />
           <Route path="karte" element={<KartePage />} />
+          <Route path="qr" element={<QrPage />} />
           <Route path="karte/:dogId" element={<DogDetailPage />} />
           <Route
             path="menus"

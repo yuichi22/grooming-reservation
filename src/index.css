@@ -2871,3 +2871,10 @@ button.tg-block.done:hover {
     display: inline-flex;
   }
 }
+
+/* 予約QR のページ(ヘッダーの QR タブ) */
+.qr-page {
+  max-width: 420px;
+  margin: 0 auto;
+  text-align: center;
+}

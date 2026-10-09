@@ -4,7 +4,6 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, LogOut, QrCode, Scissors, Settings, SlidersHorizontal, UserRound, Users, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import MobileNumpad from './MobileNumpad';
-import BookingQrModal from './BookingQrModal';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
 import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
@@ -32,7 +31,6 @@ export default function Layout() {
   const location = useLocation();
   // スマホ: 歯車で「アカウントと管理」のモーダル(アコーディオンはファイルのタブと相性が悪いので廃止 2026-10-09)
   const [menuOpen, setMenuOpen] = useState(false);
-  const [qrOpen, setQrOpen] = useState(false);
   const { data: tenant } = useDocument<Tenant>(tenantDoc(claims.tenantId ?? '__none__'), [claims.tenantId]);
 
   const storeName = tenant?.name ?? 'サロン';
@@ -86,10 +84,10 @@ export default function Layout() {
             </NavLink>
           )}
           {claims.tenantId && (
-            <button type="button" className="header-action" onClick={() => setQrOpen(true)} aria-label="予約QR">
-              <QrCode size={15} style={{ verticalAlign: '-2px', marginRight: 3 }} />
+            <NavLink to="/qr" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+              <QrCode size={15} strokeWidth={1.75} style={{ marginRight: 4 }} />
               QR
-            </button>
+            </NavLink>
           )}
         </div>
       </header>
@@ -140,9 +138,6 @@ export default function Layout() {
             </button>
           </div>
         </div>
-      )}
-      {qrOpen && claims.tenantId && (
-        <BookingQrModal tenantId={claims.tenantId} storeName={storeName} onClose={() => setQrOpen(false)} />
       )}
     </div>
   );
