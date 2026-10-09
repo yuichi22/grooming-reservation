@@ -1,3 +1,4 @@
+import { applyStoreAccent } from '../lib/storeColors';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
@@ -178,8 +179,13 @@ function BookingPage({ tenantId }: { tenantId: string }) {
   const [storeInfo, setStoreInfo] = useState<{
     name: string;
     logoUrl: string | null;
+    accentColor?: string | null;
     addFriendUrl?: string;
   } | null>(null);
+  // 店の色(管理画面の設定で7色から選択・未設定はスチールブルー)を画面に差し込む
+  useEffect(() => {
+    applyStoreAccent(options?.store?.accentColor ?? storeInfo?.accentColor);
+  }, [options?.store?.accentColor, storeInfo?.accentColor]);
 
   // ゲストモード（Web集客導線）: LINE未ログインのまま閲覧〜内容決定まで進め、確定時にログインへ誘導。
   // ?guest=1 は開発モードでゲスト動線を試すための強制フラグ。
@@ -815,7 +821,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     if (!closeLiff()) startOver();
   }
 
-  if (phase === 'init') return <Center>読み込み中…</Center>;
+  if (phase === 'init') return <Center>確認しています</Center>;
   if (phase === 'error')
     return (
       <Center>
@@ -1077,7 +1083,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         <div className="slot-area">
           <h3 className="slot-head">時間を選択してください</h3>
           {slots == null && loadingSlots ? (
-            <p className="tg-hint">空き時間を読み込み中…</p>
+            <p className="tg-hint">空き時間を確認しています</p>
           ) : (
             <div className={loadingSlots ? 'slot-loading' : undefined}>
               <AvailabilityGrid
@@ -1624,7 +1630,7 @@ export default function BookEntry() {
   }
 
   if (phase === 'go' && tenantId) return <BookingPage key={tenantId} tenantId={tenantId} />;
-  if (phase === 'init') return <Center>読み込み中…</Center>;
+  if (phase === 'init') return <Center>確認しています</Center>;
   if (phase === 'error')
     return (
       <Center>

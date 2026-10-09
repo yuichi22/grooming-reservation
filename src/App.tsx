@@ -36,7 +36,7 @@ export default function App() {
   const entrySlug = matchEntrySlug(pathname);
 
   return (
-    <Suspense fallback={<p style={{ padding: '2rem' }}>読み込み中…</p>}>
+    <Suspense fallback={<p style={{ padding: '2rem' }}>確認しています</p>}>
       {entrySlug ? (
         // 公開URLの入口はログイン状態に関係なく予約導線へ変換する
         <SlugEntry slug={entrySlug} />

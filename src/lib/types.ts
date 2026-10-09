@@ -68,6 +68,8 @@ export interface TenantSettings {
   phone?: string;
   /** 店舗ロゴ画像URL（ヘッダー中央に表示・任意） */
   logoUrl?: string;
+  /** 店の色(お客様の予約画面のボタン・空き枠)。STORE_ACCENT_COLORS の7色から選ぶ。未設定=スチールブルー */
+  accentColor?: string;
   /** 消費税率(%)。既定 10 */
   taxRate?: number;
   /** 料金の税表示: 税込 or 税抜。既定 'exclusive'(税抜) */

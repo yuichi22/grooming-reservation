@@ -7,11 +7,12 @@
   --brand-50: #f3f4f6;
   --brand-100: #e5e7eb;
 
-  /* 店の色(GROOM HAUS の茶)。白文字 5.3:1 */
-  --accent: #92603a;
-  --accent-dark: #6f4626;
-  --accent-50: #f6efe7;
-  --accent-100: #e8d7c4;
+  /* 店の色(お客様の予約画面だけ)。既定=スチールブルー。店が管理画面の設定で7色から選ぶ(settings.accentColor)。
+     予約画面が --accent を差し込み、濃淡は color-mix で作る */
+  --accent: #3b6e8f;
+  --accent-dark: color-mix(in srgb, var(--accent) 78%, #000);
+  --accent-50: color-mix(in srgb, var(--accent) 10%, #fff);
+  --accent-100: color-mix(in srgb, var(--accent) 22%, #fff);
 
   --bg: #f9fafb;
   --surface: #ffffff;
@@ -1043,10 +1044,15 @@ tr.row-link td.chevron-cell {
   font-weight: 500;
 }
 .opt-item.set {
-  background: var(--brand-50);
+  /* 選択中は塗る(AKUTO: 未選択=白地+灰枠、選択中=文字色で塗り)。お客様画面=黒、管理画面(.app-shell)=操作色 */
+  background: var(--brand);
   border-color: var(--brand);
-  color: var(--brand-dark);
+  color: #fff;
   font-weight: 700;
+}
+.opt-item.set .opt-meta,
+.opt-item.set .opt-check {
+  color: #fff;
 }
 /* 複数選択オプションのチェック表示（生のcheckboxの代わり） */
 .opt-check {
@@ -2966,4 +2972,39 @@ button.tg-block.done:hover {
   background: transparent;
   color: var(--fg);
   border-color: rgba(59, 110, 143, 0.35);
+}
+
+/* 店の色の選択(設定) */
+.field-label {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+.accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.accent-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 14px 6px 8px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.accent-swatch.on {
+  border-color: var(--brand);
+}
+.accent-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  flex: 0 0 auto;
 }
