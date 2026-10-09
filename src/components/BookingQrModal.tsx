@@ -3,18 +3,11 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { X } from 'lucide-react';
 
 /**
- * 店舗の予約QR（顧客が読むと ?tenant= 付きで予約画面が開く）を表示するモーダル。
+ * 店舗の予約QR（顧客が読むと ?tenant= 付きで予約画面が開く）。
  * 内容: https://liff.line.me/<LIFF_ID>?tenant=<tenantId>
+ * 2026-10-09: ヘッダーの「QR」をファイルのタブにしたので、本文は /qr のページ(QrPage)でも使う。
  */
-export default function BookingQrModal({
-  tenantId,
-  storeName,
-  onClose,
-}: {
-  tenantId: string;
-  storeName: string;
-  onClose: () => void;
-}) {
+export function BookingQrPanel({ tenantId, storeName }: { tenantId: string; storeName: string }) {
   const liffId = (import.meta.env.VITE_LIFF_ID as string | undefined) ?? '';
   const url = `https://liff.line.me/${liffId}?tenant=${tenantId}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -40,6 +33,40 @@ export default function BookingQrModal({
   }
 
   return (
+    <>
+      <p className="muted" style={{ marginTop: 0 }}>
+        お客様がこのQRを読み取ると、{storeName || 'この店舗'}の予約画面が開きます。
+      </p>
+      <div className="qr-canvas" ref={wrapRef}>
+        {liffId ? (
+          <QRCodeCanvas value={url} size={232} marginSize={2} />
+        ) : (
+          <p className="error">LIFF ID が未設定です（開発モード）。本番ビルドで表示されます。</p>
+        )}
+      </div>
+      <div className="qr-url">{url}</div>
+      <div className="modal-actions">
+        <button type="button" onClick={copy}>
+          {copied ? 'コピーしました' : 'リンクをコピー'}
+        </button>
+        <button type="button" className="primary" onClick={download} disabled={!liffId}>
+          画像を保存
+        </button>
+      </div>
+    </>
+  );
+}
+
+export default function BookingQrModal({
+  tenantId,
+  storeName,
+  onClose,
+}: {
+  tenantId: string;
+  storeName: string;
+  onClose: () => void;
+}) {
+  return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal qr-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
@@ -48,25 +75,7 @@ export default function BookingQrModal({
             <X size={20} />
           </button>
         </div>
-        <p className="muted" style={{ marginTop: 0 }}>
-          お客様がこのQRを読み取ると、{storeName || 'この店舗'}の予約画面が開きます。
-        </p>
-        <div className="qr-canvas" ref={wrapRef}>
-          {liffId ? (
-            <QRCodeCanvas value={url} size={232} marginSize={2} />
-          ) : (
-            <p className="error">LIFF ID が未設定です（開発モード）。本番ビルドで表示されます。</p>
-          )}
-        </div>
-        <div className="qr-url">{url}</div>
-        <div className="modal-actions">
-          <button type="button" onClick={copy}>
-            {copied ? 'コピーしました' : 'リンクをコピー'}
-          </button>
-          <button type="button" className="primary" onClick={download} disabled={!liffId}>
-            画像を保存
-          </button>
-        </div>
+        <BookingQrPanel tenantId={tenantId} storeName={storeName} />
       </div>
     </div>
   );
