@@ -1,3 +1,4 @@
+import { PoweredByAkuto } from './AkutoWordmark';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, QrCode } from 'lucide-react';
@@ -78,7 +79,7 @@ export default function Layout() {
           ) : (
             <span className="store-name">{storeName}</span>
           )}
-          <span className="powered">CONNECTED BY AKUTO</span>
+          <PoweredByAkuto />
         </div>
         <span className="user">
           {user?.email}
@@ -98,7 +99,7 @@ export default function Layout() {
             </NavLink>
           )}
           {claims.tenantId && (
-            <button type="button" className="header-btn" onClick={() => setQrOpen(true)} aria-label="予約QR">
+            <button type="button" className="header-action" onClick={() => setQrOpen(true)} aria-label="予約QR">
               <QrCode size={15} style={{ verticalAlign: '-2px', marginRight: 3 }} />
               QR
             </button>

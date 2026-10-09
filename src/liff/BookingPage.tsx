@@ -1,3 +1,4 @@
+import { PoweredByAkuto } from '../components/AkutoWordmark';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
@@ -1557,7 +1558,7 @@ function StoreLogo({ store }: { store: { name: string; logoUrl: string | null } 
       ) : (
         <span className="store-name">{store?.name || 'ご予約'}</span>
       )}
-      <span className="powered">CONNECTED BY AKUTO</span>
+      <PoweredByAkuto />
     </div>
   );
 }
