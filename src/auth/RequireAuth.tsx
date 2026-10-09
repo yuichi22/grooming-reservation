@@ -17,7 +17,7 @@ export function RequireAuth({
   const { user, claims, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return <p style={{ padding: '2rem' }}>読み込み中…</p>;
+  if (loading) return <p style={{ padding: '2rem' }}>確認しています</p>;
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
 
   if (adminOnly && !(isAdminRole(claims.role) || claims.superAdmin)) {
