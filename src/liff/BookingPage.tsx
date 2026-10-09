@@ -944,12 +944,14 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       )}
 
       {/* 予約開始（主CTA）はカートが空の時だけ。追加後は下のカード内「ワンちゃんを追加」に集約 */}
+      {/* 最初は「予約をはじめる」だけ(一画面、一つの用件)。押せないカレンダーは並べない */}
       {cart.length === 0 && (
-        <div className="book-quick">
+        <div className="book-quick book-hero">
           <button type="button" className="book-start" onClick={openNewItem}>
             <Plus size={20} style={{ verticalAlign: '-4px', marginRight: 4 }} />
             予約をはじめる
           </button>
+          <p className="book-steps">ワンちゃん → メニュー → 日時 の順に選びます</p>
         </div>
       )}
 
@@ -1000,8 +1002,9 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         </div>
       )}
 
-      {/* 月カレンダーは常時表示（トグル・日ナビ廃止）。日付タップで下に時間枠が出る一本道。
-          ワンちゃん未選択の間はグレーアウトし、タップしたら「予約をはじめる」への案内を出す */}
+      {/* 月カレンダーはワンちゃんとメニューを選んでから出す(空き時間が入った状態だけを見せる)。
+          日付タップで下に時間枠が出る一本道 */}
+      {cart.length > 0 && (
       <div
         className={cart.length === 0 ? 'cal-disabled' : undefined}
         onClickCapture={(e) => {
@@ -1074,12 +1077,11 @@ function BookingPage({ tenantId }: { tenantId: string }) {
           </div>
         </div>
       </div>
+      )}
 
       {/* 選択日の時間枠（カレンダーの直下に常時表示）。
           エリアの高さを固定し、読込中は前の枠を薄く残す＝差し替えでカレンダー位置が揺れない */}
-      {cart.length === 0 ? (
-        <p className="tg-hint">上の「予約をはじめる」から、ワンちゃんとメニューを選んでください。</p>
-      ) : (
+      {cart.length === 0 ? null : (
         <div className="slot-area">
           <h3 className="slot-head">時間を選択してください</h3>
           {slots == null && loadingSlots ? (

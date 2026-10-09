@@ -3008,3 +3008,20 @@ button.tg-block.done:hover {
   border-radius: 999px;
   flex: 0 0 auto;
 }
+
+/* 予約の最初の画面: 「予約をはじめる」だけを真ん中に(2026-10-09) */
+.book-hero {
+  min-height: 52vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+  text-align: center;
+}
+.book-steps {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+}
