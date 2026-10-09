@@ -37,5 +37,5 @@ export default function SlugEntry({ slug }: { slug: string }) {
     };
   }, [slug, navigate]);
 
-  return <p style={{ padding: '2rem' }}>読み込み中…</p>;
+  return <p style={{ padding: '2rem' }}>確認しています</p>;
 }

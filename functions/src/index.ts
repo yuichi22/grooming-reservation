@@ -660,6 +660,8 @@ export const customerSession = onCall<{
   const store = {
     name: (tSnap.data()?.name ?? '') as string,
     logoUrl: (tSnap.data()?.settings?.logoUrl ?? null) as string | null,
+    // 店の色(予約画面のボタン・空き枠)。未設定=null→画面側の既定(スチールブルー)
+    accentColor: (tSnap.data()?.settings?.accentColor ?? null) as string | null,
     addFriendUrl: (tSnap.data()?.lineConfig?.addFriendUrl ?? '') as string,
   };
   // 「このLINEユーザーが使った店」をインデックス化（リッチメニューの店選択/直近店に使用）
@@ -1512,6 +1514,7 @@ async function fetchBookingOptions(tenantId: string, customerId: string | null) 
     store: {
       name: (tdata.name ?? '') as string,
       logoUrl: (tdata.settings?.logoUrl ?? null) as string | null,
+      accentColor: (tdata.settings?.accentColor ?? null) as string | null,
       // ⚠ 友だち追加URLはテナントごと。拠点OAのテナントが混在すると
       //   ビルド時固定のURLでは他店のOAへ誘導してしまうため必ずここから返す。
       addFriendUrl: (tdata.lineConfig?.addFriendUrl ?? '') as string,

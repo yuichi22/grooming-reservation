@@ -89,7 +89,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     if (customer) setCust({ ownerName: customer.ownerName ?? '', phone: customer.phone ?? '' });
   }, [customer]);
 
-  if (loading) return <p>読み込み中…</p>;
+  if (loading) return <p>確認しています</p>;
   if (!dog) return <p className="error">カルテが見つかりません。</p>;
 
   const cellFor = (svcId: string) =>

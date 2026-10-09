@@ -95,7 +95,7 @@ function CustomersInner({ tenantId }: { tenantId: string }) {
       )}
 
       {loading ? (
-        <p>読み込み中…</p>
+        <p>確認しています</p>
       ) : (
         <div className="table-wrap"><table>
           <thead>

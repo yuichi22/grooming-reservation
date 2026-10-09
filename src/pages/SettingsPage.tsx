@@ -1,3 +1,4 @@
+import { DEFAULT_STORE_ACCENT, STORE_ACCENT_COLORS } from '../lib/storeColors';
 import { useEffect, useState, type FormEvent } from 'react';
 import { updateDoc } from 'firebase/firestore';
 import { useAuth } from '../auth/AuthContext';
@@ -28,7 +29,7 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
     }
   }, [tenant]);
 
-  if (loading || !settings) return <p>読み込み中…</p>;
+  if (loading || !settings) return <p>確認しています</p>;
 
   function setHours(i: number, key: keyof BusinessHours, value: string) {
     setSettings((s) =>
@@ -166,6 +167,28 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
             店舗名
             <input value={name} placeholder="例: GROOM HAUS" onChange={(e) => setName(e.target.value)} />
           </label>
+          <div className="field">
+            <div className="field-label">店の色（お客様の予約画面の「予約をはじめる」・空き時間に使います）</div>
+            <div className="accent-swatches" role="radiogroup" aria-label="店の色">
+              {STORE_ACCENT_COLORS.map((c) => {
+                const on = (settings.accentColor ?? DEFAULT_STORE_ACCENT).toLowerCase() === c.value.toLowerCase();
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    className={`accent-swatch${on ? ' on' : ''}`}
+                    onClick={() => setSettings((s) => (s ? { ...s, accentColor: c.value } : s))}
+                  >
+                    <span className="accent-dot" style={{ background: c.value }} />
+                    {c.label}
+                    {c.value === DEFAULT_STORE_ACCENT && <span className="muted">（既定）</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <label>
             ロゴ画像URL（ヘッダー中央に表示）
             <input
