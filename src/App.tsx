@@ -1,3 +1,4 @@
+import { PoweredByAkuto } from './components/AkutoWordmark';
 import { lazy, Suspense } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 
@@ -42,7 +43,17 @@ export default function App() {
       ) : (
         <Routes>
           {/* 顧客向け LIFF（公開ルート, §2 LINE 認証） */}
-          <Route path="/book" element={<BookingPage />} />
+          <Route
+            path="/book"
+            element={
+              <>
+                <BookingPage />
+                <footer className="app-footer">
+                  <PoweredByAkuto />
+                </footer>
+              </>
+            }
+          />
           {/* それ以外はスタッフ用アプリ（遅延読み込み） */}
           <Route path="/*" element={<StaffApp />} />
         </Routes>

@@ -63,7 +63,6 @@ export default function Layout() {
           ) : (
             <span className="store-name">{storeName}</span>
           )}
-          <PoweredByAkuto />
         </div>
         <div className="topbar-right">
           <button type="button" className="menu-btn icon-btn" onClick={() => setMenuOpen(true)} aria-label="アカウントと管理">
@@ -105,6 +104,10 @@ export default function Layout() {
         </nav>
         <main className="content">
           <Outlet />
+          {/* AKUTO は前に出ない: 店のロゴの下ではなく画面の一番下に小さく */}
+          <footer className="app-footer">
+            <PoweredByAkuto />
+          </footer>
         </main>
       </div>
       <MobileNumpad />

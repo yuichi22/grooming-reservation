@@ -2949,3 +2949,21 @@ button.tg-block.done:hover {
 .app-shell .store-name {
   color: var(--fg);
 }
+
+/* ---------- powered by はフッターへ(2026-10-09) ---------- */
+.app-footer {
+  display: flex;
+  justify-content: center;
+  padding: 32px 0 12px;
+}
+.app-footer .powered {
+  font-size: 0.65rem;
+}
+/* ---------- タブのマウスオーバー(2026-10-09) ----------
+   地を塗ると下の線を覆って途切れるので塗らない。縁(上と左右)だけを薄い操作色で出して「タブの形」を予告する。
+   選択中のタブはそのまま(他のタブに触れただけで今の場所の表示を変えない) */
+.app-shell .header-btn:not(.active):hover {
+  background: transparent;
+  color: var(--fg);
+  border-color: rgba(59, 110, 143, 0.35);
+}
