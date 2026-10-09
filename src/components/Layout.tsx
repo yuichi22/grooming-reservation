@@ -1,7 +1,8 @@
 import { PoweredByAkuto } from './AkutoWordmark';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, QrCode } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, QrCode, Scissors, Settings, UserRound, Users } from 'lucide-react';
+import type { ReactNode } from 'react';
 import MobileNumpad from './MobileNumpad';
 import BookingQrModal from './BookingQrModal';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
@@ -9,15 +10,16 @@ import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
 import { STAFF_ROLE_LABELS, type Tenant } from '../lib/types';
 
-type NavItem = { to: string; label: string; icon: string; end?: boolean; admin?: boolean };
+type NavItem = { to: string; label: string; icon: ReactNode; end?: boolean; admin?: boolean };
 
 // 予約・カルテ・シフトはヘッダーのボタンに集約（サイドバーからは除外）。
 // ダッシュボードは内容が無いため廃止し、顧客を先頭に。
 const NAV: NavItem[] = [
-  { to: '/customers', label: '顧客', icon: '👥', admin: true },
-  { to: '/menus', label: 'メニュー', icon: '✂️', admin: true },
-  { to: '/staff', label: 'スタッフ', icon: '👤', admin: true },
-  { to: '/settings', label: '設定', icon: '⚙️', admin: true },
+  // アイコンは線幅1.5の線アイコン(AKUTO: 絵文字・塗りアイコンは使わない)
+  { to: '/customers', label: '顧客', icon: <Users size={16} strokeWidth={1.5} />, admin: true },
+  { to: '/menus', label: 'メニュー', icon: <Scissors size={16} strokeWidth={1.5} />, admin: true },
+  { to: '/staff', label: 'スタッフ', icon: <UserRound size={16} strokeWidth={1.5} />, admin: true },
+  { to: '/settings', label: '設定', icon: <Settings size={16} strokeWidth={1.5} />, admin: true },
 ];
 
 // サイドバーの各ページのパス。モバイルでこれらを開いた状態でメニューを閉じたら予約画面に戻す。
