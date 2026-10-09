@@ -2880,17 +2880,12 @@ button.tg-block.done:hover {
   text-align: center;
 }
 
-/* [試作・比較用] 店の色を地に薄く混ぜる(?tint=1)。決まりにする前の見比べ用 */
-html.tint {
-  --bg: color-mix(in srgb, var(--accent) 6%, #f9fafb);
-  --brand-50: color-mix(in srgb, var(--accent) 9%, #ffffff);
-  --brand-100: color-mix(in srgb, var(--accent) 16%, #ffffff);
-  --border: color-mix(in srgb, var(--accent) 14%, #e5e7eb);
-}
 
-/* [試作・比較用] 管理画面の操作色=スチールブルー(?ui=blue)
-   選択中・リンク・入力中・目で探すもの(空き枠・予約の塊)だけ青。主ボタン(進む・確定)は黒のまま。店の色は管理画面では使わない */
-html.ui-blue {
+/* ---------- 管理画面の操作色=スチールブルー #3B6E8F 【確定 2026-10-09】 ----------
+   AKUTO の管理画面共通。選択中・リンク・入力中・目で探すもの(空き枠・予約の塊)だけ青。
+   主ボタン(進む・確定)は黒のまま。店の色(--accent)は管理画面では使わない。
+   ⚠ .app-shell(スタッフ用レイアウト)の中だけに効かせる。お客様の予約画面(/book)は店の色のまま */
+.app-shell {
   --brand: #3b6e8f;
   --brand-dark: #2f5873;
   --brand-50: #eef3f6;
@@ -2900,58 +2895,57 @@ html.ui-blue {
   --accent-50: #eef3f6;
   --accent-100: #d6e2ea;
 }
-html.ui-blue button[type='submit'],
-html.ui-blue button.btn-primary,
-html.ui-blue button.primary,
-html.ui-blue .done-back.primary {
+.app-shell button[type='submit'],
+.app-shell button.btn-primary,
+.app-shell button.primary,
+.app-shell .done-back.primary {
   background: #111827;
   border-color: #111827;
   color: #fff;
 }
-html.ui-blue .header-btn.active {
+.app-shell .header-btn.active {
   color: #3b6e8f;
 }
-html.ui-blue input:focus-visible,
-html.ui-blue select:focus-visible,
-html.ui-blue textarea:focus-visible {
+.app-shell input:focus-visible,
+.app-shell select:focus-visible,
+.app-shell textarea:focus-visible {
   border-color: #3b6e8f;
 }
-html.ui-blue a,
-html.ui-blue .link-btn {
+.app-shell a,
+.app-shell .link-btn {
   color: #3b6e8f;
 }
-html.ui-blue .header-btn,
-html.ui-blue .sidenav a:not(.active),
-html.ui-blue .account-link {
+.app-shell .header-btn,
+.app-shell .sidenav a:not(.active),
+.app-shell .account-link {
   color: inherit;
 }
-html.ui-blue .header-btn:not(.active) {
+.app-shell .header-btn:not(.active) {
   color: var(--muted);
 }
 
-/* [試作・比較用] 選択中のタブの上辺にスチールブルーの線(?tabline=1)
-   ⚠角に触れないまっすぐな線(左右に余白)。辺いっぱいにすると角丸に沿って曲がり「括弧形」になるので禁止 */
-html.tabline .header-btn.active {
+/* ファイルのタブ: 選択中のタブの縁・根元の曲線・ヘッダーの下の線をスチールブルー(太いバーは付けない) */
+.app-shell .header-btn.active {
   background: var(--bg);
 }
-html.tabline .header-btn.active {
+.app-shell .header-btn.active {
   color: var(--fg);
 }
 
-/* [試作] タブの線につながる細い線(タブの縁・ヘッダーの下の線・つけ根の曲線)もスチールブルー */
-html.tabline .topbar {
+
+.app-shell .topbar {
   border-bottom-color: #3b6e8f;
 }
-html.tabline .header-btn.active {
+.app-shell .header-btn.active {
   border-color: #3b6e8f;
 }
-html.tabline .header-btn.active::before {
+.app-shell .header-btn.active::before {
   background: radial-gradient(circle at 0 0, transparent 11.5px, #3b6e8f 11.5px, #3b6e8f 12.5px, var(--bg) 12.5px);
 }
-html.tabline .header-btn.active::after {
+.app-shell .header-btn.active::after {
   background: radial-gradient(circle at 100% 0, transparent 11.5px, #3b6e8f 11.5px, #3b6e8f 12.5px, var(--bg) 12.5px);
 }
-/* 試作の不具合修正: 店名は青にしない */
-html.ui-blue .store-name {
+/* 店名は青にしない */
+.app-shell .store-name {
   color: var(--fg);
 }
