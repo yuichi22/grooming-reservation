@@ -428,10 +428,14 @@ label.inline > select {
 }
 /* サイドバー最下部のログアウト（デスクトップの縦並びでのみ最下部へ） */
 .nav-logout {
+  /* ログアウトは取り消せない操作ではないので赤にしない(控えめ=文字だけ) */
   flex: 0 0 auto;
   white-space: nowrap;
-  color: var(--danger);
+  color: var(--muted);
   font-weight: 700;
+  background: none;
+  border: none;
+  text-decoration: underline;
 }
 /* サイドバー開閉（モバイル: 縦方向にスライド表示） */
 .app-body.nav-collapsed .sidenav {
@@ -2660,3 +2664,78 @@ button.tg-block.done:hover {
 }
 
 /* nav slide animation */
+
+/* ---------- ヘッダーの出し分け(2026-10-09) ----------
+   スマホ: メールアドレスは下矢印のメニューの中。PC: 矢印なし・右上にメール+小さなログアウト、
+   管理(顧客など)はタブ、その中にいる間だけ左に切り替え */
+.topbar .user {
+  display: none;
+}
+.pc-only {
+  display: none !important;
+}
+.sidenav-user {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  padding: 0 4px;
+}
+.user-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.user-logout {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  min-height: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.user-logout:hover {
+  color: var(--fg);
+}
+@media (min-width: 820px) {
+  .topbar .nav-toggle {
+    display: none;
+  }
+  .topbar .user {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .pc-only {
+    display: inline-flex !important;
+  }
+  .sidenav-user,
+  .nav-logout {
+    display: none;
+  }
+  /* 管理タブの外では左の切り替えを出さない */
+  .app-body .sidenav,
+  .app-body.nav-collapsed .sidenav {
+    width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    overflow: hidden;
+    border-right-color: transparent;
+  }
+  .app-body.pc-nav-open .sidenav,
+  .app-body.pc-nav-open.nav-collapsed .sidenav {
+    width: 220px;
+    padding: 18px 14px;
+    overflow-y: auto;
+    border-right-color: var(--border);
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

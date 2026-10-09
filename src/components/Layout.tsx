@@ -45,6 +45,15 @@ export default function Layout() {
   const { data: tenant } = useDocument<Tenant>(tenantDoc(claims.tenantId ?? '__none__'), [claims.tenantId]);
 
   const storeName = tenant?.name ?? 'サロン';
+  // PC: 「管理」タブの中(顧客・メニュー・スタッフ・設定)にいる間だけ左に切り替えを出す
+  const onAdminPage = SIDEBAR_PATHS.some(
+    (p) => location.pathname === p || location.pathname.startsWith(p + '/'),
+  );
+  const roleLabel = claims.role
+    ? `（${STAFF_ROLE_LABELS[claims.role] ?? claims.role}）`
+    : claims.superAdmin
+      ? '（superAdmin）'
+      : '';
   const logoUrl = tenant?.settings?.logoUrl;
 
   // 予約・カルテへ移動するときはモバイルのサイドバー（ダッシュボード〜設定）を閉じる。
@@ -81,10 +90,16 @@ export default function Layout() {
           )}
           <PoweredByAkuto />
         </div>
-        <span className="user">
-          {user?.email}
-          {claims.role ? `（${STAFF_ROLE_LABELS[claims.role] ?? claims.role}）` : claims.superAdmin ? '（superAdmin）' : ''}
-        </span>
+        {/* PC だけ: 右上にメールアドレスと小さなログアウト(スマホは下のメニューの中) */}
+        <div className="user">
+          <span className="user-email">
+            {user?.email}
+            {roleLabel}
+          </span>
+          <button type="button" className="user-logout" onClick={onLogout}>
+            ログアウト
+          </button>
+        </div>
         <div className="header-quick">
           <NavLink to="/bookings" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
             予約
@@ -98,6 +113,16 @@ export default function Layout() {
               シフト
             </NavLink>
           )}
+          {/* 管理(顧客・メニュー・スタッフ・設定)。PC はタブ、スマホは下のメニュー */}
+          {isAdmin && (
+            <NavLink
+              to="/customers"
+              onClick={closeNavOnMobile}
+              className={`header-btn pc-only${onAdminPage ? ' active' : ''}`}
+            >
+              管理
+            </NavLink>
+          )}
           {claims.tenantId && (
             <button type="button" className="header-action" onClick={() => setQrOpen(true)} aria-label="予約QR">
               <QrCode size={15} style={{ verticalAlign: '-2px', marginRight: 3 }} />
@@ -106,8 +131,12 @@ export default function Layout() {
           )}
         </div>
       </header>
-      <div className={`app-body${navOpen ? '' : ' nav-collapsed'}`}>
+      <div className={`app-body${navOpen ? '' : ' nav-collapsed'}${onAdminPage ? ' pc-nav-open' : ''}`}>
         <nav className="sidenav">
+          <div className="sidenav-user">
+            {user?.email}
+            {roleLabel}
+          </div>
           {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end}>
               <span className="nav-icon" aria-hidden="true">
