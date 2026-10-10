@@ -2,8 +2,9 @@ import { PoweredByAkuto } from './AkutoWordmark';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, LogOut, QrCode, Scissors, Settings, SlidersHorizontal, UserRound, Users, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import MobileNumpad from './MobileNumpad';
+import { AppConfirmHost, confirmLeaveIfUnsaved } from './SaveControls';
 import { useAuth, useIsAdmin } from '../auth/AuthContext';
 import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
@@ -49,7 +50,20 @@ export default function Layout() {
     setMenuOpen(false);
   }
 
+  // 保存していない変更があるときは、画面を移る前に確認する【AKUTOブランド基準 10-10】
+  function guardNav(to: string, after?: () => void) {
+    return async (event: MouseEvent<HTMLAnchorElement>) => {
+      after?.();
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1) return;
+      if (location.pathname === to) return;
+      event.preventDefault();
+      if (await confirmLeaveIfUnsaved()) navigate(to);
+    };
+  }
+
   async function onLogout() {
+    setMenuOpen(false);
+    if (!(await confirmLeaveIfUnsaved())) return;
     await logout();
     navigate('/login', { replace: true });
   }
@@ -70,20 +84,20 @@ export default function Layout() {
           </button>
         </div>
         <div className="header-quick">
-          <NavLink to="/bookings" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+          <NavLink to="/bookings" onClick={guardNav('/bookings', closeNavOnMobile)} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
             予約
           </NavLink>
-          <NavLink to="/karte" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+          <NavLink to="/karte" onClick={guardNav('/karte', closeNavOnMobile)} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
             カルテ
           </NavLink>
           {/* シフトは週次で触る運用ページなのでヘッダーに昇格（admin専用。トリマーは従来の3つ） */}
           {isAdmin && (
-            <NavLink to="/shifts" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+            <NavLink to="/shifts" onClick={guardNav('/shifts', closeNavOnMobile)} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
               シフト
             </NavLink>
           )}
           {claims.tenantId && (
-            <NavLink to="/qr" onClick={closeNavOnMobile} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
+            <NavLink to="/qr" onClick={guardNav('/qr', closeNavOnMobile)} className={({ isActive }) => `header-btn${isActive ? ' active' : ''}`}>
               <QrCode size={15} strokeWidth={1.75} style={{ marginRight: 4 }} />
               QR
             </NavLink>
@@ -94,7 +108,7 @@ export default function Layout() {
       <div className={`app-body${onAdminPage ? ' admin-open' : ''}`}>
         <nav className="sidenav">
           {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end}>
+            <NavLink key={n.to} to={n.to} end={n.end} onClick={guardNav(n.to)}>
               <span className="nav-icon" aria-hidden="true">
                 {n.icon}
               </span>
@@ -104,6 +118,8 @@ export default function Layout() {
         </nav>
         <main className="content">
           <Outlet />
+          {/* 変更があるときだけ出る保存バーの置き場(本文の列の下端に貼り付く) */}
+          <div id="akuto-savebar-slot" className="savebar-slot" />
           {/* AKUTO は前に出ない: 店のロゴの下ではなく画面の一番下に小さく */}
           <footer className="app-footer">
             <PoweredByAkuto />
@@ -111,6 +127,7 @@ export default function Layout() {
         </main>
       </div>
       <MobileNumpad />
+      <AppConfirmHost />
       {menuOpen && (
         <div className="modal-backdrop account-backdrop" onClick={() => setMenuOpen(false)}>
           <div className="modal account-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="アカウントと管理">
@@ -127,7 +144,7 @@ export default function Layout() {
               <div className="account-links">
                 <div className="account-label">管理</div>
                 {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
-                  <NavLink key={n.to} to={n.to} onClick={() => setMenuOpen(false)} className="account-link">
+                  <NavLink key={n.to} to={n.to} onClick={guardNav(n.to, () => setMenuOpen(false))} className="account-link">
                     <span className="nav-icon" aria-hidden="true">{n.icon}</span>
                     <span className="account-link-label">{n.label}</span>
                     <ChevronRight size={16} strokeWidth={1.5} className="account-chev" />

@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { ChangesBar, appConfirm, confirmLeaveIfUnsaved } from '../components/SaveControls';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { addDoc, deleteDoc, doc, query, updateDoc, where } from 'firebase/firestore';
 import { Archive, ArchiveRestore, ChevronLeft, MessageCircle, Pencil, Phone, Trash2 } from 'lucide-react';
@@ -71,9 +72,12 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const [optPick, setOptPick] = useState(''); // 追加するオプションの選択
   const [msg, setMsg] = useState<string | null>(null);
   const [cust, setCust] = useState({ ownerName: '', phone: '' });
+  const [saving, setSaving] = useState(false);
+  // 編集中は別の端末の更新で入力を上書きしない【AKUTOブランド基準 10-10】
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
-    if (!dog) return;
+    if (!dog || dirtyRef.current) return;
     setForm({
       name: dog.name ?? '',
       nameKana: dog.nameKana ?? '',
@@ -86,7 +90,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   }, [dog]);
 
   useEffect(() => {
-    if (customer) setCust({ ownerName: customer.ownerName ?? '', phone: customer.phone ?? '' });
+    if (customer && !dirtyRef.current) setCust({ ownerName: customer.ownerName ?? '', phone: customer.phone ?? '' });
   }, [customer]);
 
   if (loading) return <p>確認しています</p>;
@@ -125,6 +129,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     (form.allergies ?? '') !== (dog.allergies ?? '') ||
     !sameMap(nonZero(serviceAdj), nonZero(dog.serviceAdjustments ?? {})) ||
     !sameMap(optAdj, dog.optionAdjustments ?? {});
+  dirtyRef.current = dirty;
 
   function cancelEdit() {
     setForm({
@@ -136,11 +141,21 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     });
     setServiceAdj(dog?.serviceAdjustments ?? {});
     setOptAdj(dog?.optionAdjustments ?? {});
+    setCust({ ownerName: customer?.ownerName ?? '', phone: customer?.phone ?? '' });
     setEditingName(false);
     setMsg(null);
   }
 
   async function saveDog() {
+    setSaving(true);
+    try {
+      await saveDogInner();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveDogInner() {
     setMsg(null);
     const finalName = form.name.trim() || dog?.name || '';
     if (hasKanji(finalName) && !form.nameKana.trim()) {
@@ -190,7 +205,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
 
   async function onDelete() {
     if (!canDelete) return;
-    if (!confirm(`「${dog?.name}」のカルテを削除します。元に戻せません。よろしいですか？`)) return;
+    if (!(await appConfirm(`「${dog?.name}」のカルテを削除します。元に戻せません。よろしいですか？`, { okLabel: '削除する', tone: 'danger' }))) return;
     await deleteDoc(doc(dogsCol(tenantId), dogId));
     navigate('/karte');
   }
@@ -211,7 +226,15 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   return (
     <section>
       <div className="detail-head">
-        <Link to="/karte" className="back-btn" aria-label="カルテ一覧へ戻る">
+        <Link
+          to="/karte"
+          className="back-btn"
+          aria-label="カルテ一覧へ戻る"
+          onClick={async (e) => {
+            e.preventDefault();
+            if (await confirmLeaveIfUnsaved()) navigate('/karte');
+          }}
+        >
           <ChevronLeft size={22} strokeWidth={2.25} />
         </Link>
         {editingName ? (
@@ -242,15 +265,7 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
           </span>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          {!dirty && msg && <span className="muted">{msg}</span>}
-          {dirty && (
-            <button type="button" onClick={cancelEdit}>
-              キャンセル
-            </button>
-          )}
-          <button type="button" className={dirty ? 'btn-primary' : ''} disabled={!dirty || needsKana} onClick={saveDog}>
-            保存
-          </button>
+          {msg && <span className="muted">{msg}</span>}
         </div>
       </div>
 
@@ -555,6 +570,14 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
           </>
         )}
       </div>
+      <ChangesBar
+        dirty={dirty}
+        saving={saving}
+        disabled={needsKana}
+        onSave={() => void saveDog()}
+        onDiscard={cancelEdit}
+        message={`${dog.name} のカルテを変更しました`}
+      />
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import { DEFAULT_STORE_ACCENT, STORE_ACCENT_COLORS } from '../lib/storeColors';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ChangesBar } from '../components/SaveControls';
 import { updateDoc } from 'firebase/firestore';
 import { useAuth } from '../auth/AuthContext';
 import { doc } from 'firebase/firestore';
@@ -20,14 +21,27 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
 
   const [settings, setSettings] = useState<TenantSettings | null>(null);
   const [name, setName] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 保存済み(Firestore の現物)と違うときだけ保存バーを出す。編集中は別の端末の更新で入力を上書きしない【AKUTOブランド基準 10-10】
+  const dirty = !!tenant && !!settings && (name !== tenant.name || JSON.stringify(settings) !== JSON.stringify(tenant.settings));
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
 
   useEffect(() => {
-    if (tenant) {
+    if (tenant && !dirtyRef.current) {
       setSettings(tenant.settings);
       setName(tenant.name);
     }
   }, [tenant]);
+
+  function discard() {
+    if (!tenant) return;
+    setSettings(tenant.settings);
+    setName(tenant.name);
+    setError(null);
+  }
 
   if (loading || !settings) return <p>確認しています</p>;
 
@@ -45,18 +59,29 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
     setSettings((s) => (s ? { ...s, businessHours: s.businessHours.filter((_, idx) => idx !== i) } : s));
   }
 
-  async function onSave(e: FormEvent) {
+  async function save() {
+    if (!settings || !dirty) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await updateDoc(tenantDoc(tenantId), { name, settings });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存に失敗しました');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!settings) return;
-    setMsg(null);
-    await updateDoc(tenantDoc(tenantId), { name, settings });
-    setMsg('保存しました');
+    void save();
   }
 
   return (
+    <>
     <section>
       <h1>設定</h1>
-      <form onSubmit={onSave}>
+      <form onSubmit={onSubmit}>
         <fieldset>
           <legend>営業時間（空き計算の基準）</legend>
           {settings.businessHours.map((h, i) => (
@@ -223,23 +248,23 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
           </label>
         </fieldset>
 
-        <div>
-          <button type="submit">保存</button>
-          {msg && <span className="muted" style={{ marginLeft: 12 }}>{msg}</span>}
-        </div>
+        {error && <p className="error">{error}</p>}
       </form>
+    </section>
 
-      <LineUsage tenantId={tenantId} hasOwnOa={!!tenant?.lineConfig?.messagingChannelAccessToken} />
+    <LineUsage tenantId={tenantId} hasOwnOa={!!tenant?.lineConfig?.messagingChannelAccessToken} />
 
       {/* 休業日の管理は営業カレンダーの一部としてシフトへ集約（二重管理の入口を作らない） */}
-      <section style={{ marginTop: 32 }}>
+      <section>
         <h2>休業日（臨時休業・祝日）</h2>
         <p className="muted">
           休業日の設定は「シフト」ページへ移動しました。月表の日付をタップして設定・解除できます
           （予約カレンダーの月表示からも設定できます）。
         </p>
       </section>
-    </section>
+
+    <ChangesBar dirty={dirty} saving={saving} onSave={() => void save()} onDiscard={discard} message="設定を変更しました" />
+    </>
   );
 }
 
@@ -274,7 +299,7 @@ function LineUsage({ tenantId, hasOwnOa }: { tenantId: string; hasOwnOa: boolean
   ];
 
   return (
-    <section style={{ marginTop: 32 }}>
+    <section>
       <h2>LINE送信（{month}）</h2>
       {total === 0 ? (
         <p className="muted">今月の送信はまだありません。</p>

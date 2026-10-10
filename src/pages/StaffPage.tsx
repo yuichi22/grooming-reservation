@@ -198,7 +198,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
                   <td>{s.email ?? '—'}</td>
                   <td>{s.active ? '在籍' : '停止'}</td>
                   <td className="row-actions">
-                    <button onClick={() => saveEdit(s)} disabled={editBusy || !editName.trim()}>
+                    <button className="btn-primary" onClick={() => saveEdit(s)} disabled={editBusy || !editName.trim()}>
                       {editBusy ? '保存中…' : '保存'}
                     </button>
                     <button onClick={() => setEditId(null)} disabled={editBusy}>
