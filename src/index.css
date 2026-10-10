@@ -139,6 +139,18 @@ textarea {
   min-height: 72px;
 }
 
+/* 選択欄の▼【AKUTOブランド基準 10-10】ブラウザ任せだと右の枠に寄りすぎるので、
+   自前の▼で右に14pxの余白を取る。文字は右40pxで止める。複数選択・リスト表示は対象外。 */
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
+  padding-right: 40px;
+}
+
 /* 数字入力のスピンボタン（上下矢印）は全廃 */
 input[type='number'] {
   -moz-appearance: textfield;
@@ -1038,7 +1050,7 @@ tr.row-link td.chevron-cell {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 10px 14px 10px 12px; /* 右端の▼まで14px(選択欄と同じ) */
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-weight: 500;
