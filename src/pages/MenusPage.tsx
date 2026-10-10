@@ -6,6 +6,7 @@ import { breedsCol, optionsCol, pricingCol, servicesCol, tenantDoc } from '../li
 import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import type { Breed, Option, PriceEntry, Service, Tenant } from '../lib/types';
+import { ChangesBar, appConfirm, confirmLeaveIfUnsaved } from '../components/SaveControls';
 
 /** 金額を税表示付きで整形（税抜なら税込も併記）。 */
 function priceLabel(price: number, taxMode: 'inclusive' | 'exclusive', taxRate: number): string {
@@ -30,15 +31,19 @@ function MenusInner({ tenantId }: { tenantId: string }) {
   const taxMode = tenant?.settings?.taxMode ?? 'exclusive';
   const taxRate = tenant?.settings?.taxRate ?? 10;
   const [tab, setTab] = useState<'pricing' | 'masters'>('pricing');
+  async function switchTab(next: 'pricing' | 'masters') {
+    if (next === tab || !(await confirmLeaveIfUnsaved())) return;
+    setTab(next);
+  }
 
   return (
     <section>
       <h1>メニュー</h1>
       <div className="tabs">
-        <button className={`tab ${tab === 'pricing' ? 'active' : ''}`} onClick={() => setTab('pricing')}>
+        <button className={`tab ${tab === 'pricing' ? 'active' : ''}`} onClick={() => void switchTab('pricing')}>
           料金表
         </button>
-        <button className={`tab ${tab === 'masters' ? 'active' : ''}`} onClick={() => setTab('masters')}>
+        <button className={`tab ${tab === 'masters' ? 'active' : ''}`} onClick={() => void switchTab('masters')}>
           犬種・サービス設定
         </button>
       </div>
@@ -114,8 +119,12 @@ function PricingTab({
     setDuration('');
   }
 
+  // 並び替えは押すたびに保存せず、画面下の保存バーで確定する【AKUTOブランド基準 10-10】
+  const [draftOrder, setDraftOrder] = useState<string[] | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+
   // 犬種ごとにグループ化。カードの並びは犬種(breed.order)順。
-  const groups = useMemo(() => {
+  const savedGroups = useMemo(() => {
     const m = new Map<string, PriceEntry[]>();
     for (const p of sorted) {
       if (!m.has(p.breedId)) m.set(p.breedId, []);
@@ -127,15 +136,34 @@ function PricingTab({
       .map((b) => ({ breed: b, entries: m.get(b.id) ?? [] }));
   }, [sorted, breeds]);
 
-  // 犬種カードの並べ替え（breed.order を書き戻す）
-  async function moveBreed(index: number, dir: -1 | 1) {
+  const groups = useMemo(() => {
+    if (!draftOrder) return savedGroups;
+    const rank = new Map(draftOrder.map((id, i) => [id, i]));
+    return [...savedGroups].sort((a, b) => (rank.get(a.breed.id) ?? 9999) - (rank.get(b.breed.id) ?? 9999));
+  }, [savedGroups, draftOrder]);
+  const orderDirty = !!draftOrder && draftOrder.join() !== savedGroups.map((g) => g.breed.id).join();
+
+  // 犬種カードの並べ替え(画面の上だけ)
+  function moveBreed(index: number, dir: -1 | 1) {
     const next = index + dir;
     if (next < 0 || next >= groups.length) return;
-    const arr = groups.map((g) => g.breed);
-    [arr[index], arr[next]] = [arr[next], arr[index]];
-    const batch = writeBatch(db);
-    arr.forEach((b, i) => batch.update(doc(breedsCol(tenantId), b.id), { order: i }));
-    await batch.commit();
+    const ids = groups.map((g) => g.breed.id);
+    [ids[index], ids[next]] = [ids[next], ids[index]];
+    setDraftOrder(ids);
+  }
+
+  // 保存: breed.order を書き戻す
+  async function saveOrder() {
+    if (!draftOrder) return;
+    setSavingOrder(true);
+    try {
+      const batch = writeBatch(db);
+      draftOrder.forEach((id, i) => batch.update(doc(breedsCol(tenantId), id), { order: i }));
+      await batch.commit();
+      setDraftOrder(null);
+    } finally {
+      setSavingOrder(false);
+    }
   }
 
   return (
@@ -196,6 +224,13 @@ function PricingTab({
         ))}
         {groups.length === 0 && <p className="muted">料金表が空です。上のフォームから追加してください。</p>}
       </div>
+      <ChangesBar
+        dirty={orderDirty}
+        saving={savingOrder}
+        onSave={() => void saveOrder()}
+        onDiscard={() => setDraftOrder(null)}
+        message="犬種の並び順を変更しました"
+      />
     </>
   );
 }
@@ -272,7 +307,7 @@ function ServiceRow({
     setEditing(false);
   }
   async function remove() {
-    if (confirm(`「${serviceName}」を削除しますか？`)) {
+    if (await appConfirm(`「${serviceName}」を削除しますか？`, { okLabel: '削除する', tone: 'danger' })) {
       await deleteDoc(doc(pricingCol(tenantId), entry.id));
     }
   }
@@ -284,8 +319,8 @@ function ServiceRow({
         <input type="number" min={0} step={100} value={price} onChange={(e) => setPrice(Number(e.target.value))} style={{ width: 90 }} />
         <input type="number" min={5} step={5} value={durationMin} onChange={(e) => setDuration(Number(e.target.value))} style={{ width: 70 }} />
         <span className="svc-actions">
-          <button type="button" onClick={save}>保存</button>
-          <button type="button" onClick={() => setEditing(false)}>取消</button>
+          <button type="button" className="btn-primary" onClick={save}>保存</button>
+          <button type="button" onClick={() => setEditing(false)}>キャンセル</button>
         </span>
       </li>
     );
@@ -393,8 +428,8 @@ function ServiceMasterRow({ tenantId, service }: { tenantId: string; service: Se
       <td>
         {editing ? (
           <>
-            <button onClick={save}>保存</button>
-            <button onClick={() => { setName(service.name); setEditing(false); }}>取消</button>
+            <button className="btn-primary" onClick={save}>保存</button>
+            <button onClick={() => { setName(service.name); setEditing(false); }}>キャンセル</button>
           </>
         ) : (
           <>
@@ -402,7 +437,14 @@ function ServiceMasterRow({ tenantId, service }: { tenantId: string; service: Se
             <button onClick={() => updateDoc(doc(servicesCol(tenantId), service.id), { active: !service.active })}>
               {service.active ? '無効化' : '有効化'}
             </button>
-            <button onClick={() => deleteDoc(doc(servicesCol(tenantId), service.id))}>削除</button>
+            <button
+              onClick={async () => {
+                if (await appConfirm(`サービス「${service.name}」を削除しますか？`, { okLabel: '削除する', tone: 'danger' }))
+                  await deleteDoc(doc(servicesCol(tenantId), service.id));
+              }}
+            >
+              削除
+            </button>
           </>
         )}
       </td>
@@ -551,8 +593,8 @@ function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Optio
       <td>
         {editing ? (
           <>
-            <button onClick={save}>保存</button>
-            <button onClick={() => setEditing(false)}>取消</button>
+            <button className="btn-primary" onClick={save}>保存</button>
+            <button onClick={() => setEditing(false)}>キャンセル</button>
           </>
         ) : (
           <>
@@ -560,7 +602,14 @@ function OptionMasterRow({ tenantId, option }: { tenantId: string; option: Optio
             <button onClick={() => updateDoc(doc(optionsCol(tenantId), option.id), { active: !option.active })}>
               {option.active ? '無効化' : '有効化'}
             </button>
-            <button onClick={() => deleteDoc(doc(optionsCol(tenantId), option.id))}>削除</button>
+            <button
+              onClick={async () => {
+                if (await appConfirm(`オプション「${option.name}」を削除しますか？`, { okLabel: '削除する', tone: 'danger' }))
+                  await deleteDoc(doc(optionsCol(tenantId), option.id));
+              }}
+            >
+              削除
+            </button>
           </>
         )}
       </td>
@@ -606,7 +655,14 @@ function BreedMaster({ tenantId, breeds }: { tenantId: string; breeds: Breed[] }
                     <button onClick={() => updateDoc(doc(breedsCol(tenantId), b.id), { active: !b.active })}>
                       {b.active ? '無効化' : '有効化'}
                     </button>
-                    <button onClick={() => deleteDoc(doc(breedsCol(tenantId), b.id))}>削除</button>
+                    <button
+                      onClick={async () => {
+                        if (await appConfirm(`犬種「${b.name}」を削除しますか？`, { okLabel: '削除する', tone: 'danger' }))
+                          await deleteDoc(doc(breedsCol(tenantId), b.id));
+                      }}
+                    >
+                      削除
+                    </button>
                   </td>
                 </tr>
               ))}

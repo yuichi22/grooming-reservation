@@ -3025,3 +3025,108 @@ button.tg-block.done:hover {
   font-weight: 700;
   color: var(--muted);
 }
+
+/* ---------- 保存バー・確認ダイアログ【AKUTOブランド基準 10-10】 ---------- */
+/* 変更があるときだけ本文の下端に出る［元に戻す］［保存］。置き場は Layout の #akuto-savebar-slot */
+.savebar-slot {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+}
+.changes-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+}
+.changes-bar-message {
+  margin-right: auto;
+  font-weight: 800;
+  font-size: 0.92rem;
+}
+.changes-bar button {
+  min-height: 44px;
+  padding: 0 22px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.changes-bar-discard {
+  border: 2px solid var(--border);
+  background: #fff;
+  color: #374151;
+}
+.changes-bar-discard:hover {
+  border-color: #d1d5db;
+  background: #fff;
+}
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(3, 7, 18, 0.6);
+}
+.confirm-dialog {
+  width: 100%;
+  max-width: 448px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+  overflow: hidden;
+}
+.confirm-title {
+  padding: 24px 24px 8px;
+  font-size: 1rem;
+  font-weight: 800;
+}
+.confirm-message {
+  padding: 0 24px 20px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.7;
+  color: #4b5563;
+  white-space: pre-line;
+}
+.confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 24px 24px;
+}
+.confirm-actions button {
+  width: 100%;
+  min-height: 44px;
+  font-weight: 800;
+}
+.confirm-ok {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.confirm-ok:hover {
+  background: #1f2937;
+}
+.confirm-ok.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+.confirm-ok.danger:hover {
+  background: #b91c1c;
+}
+.confirm-cancel {
+  border: 2px solid var(--border);
+  background: #fff;
+  color: #374151;
+}

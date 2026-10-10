@@ -27,6 +27,7 @@ import { useDocument } from '../lib/useDocument';
 import { isWithinHours, staffHoursFor, subtractIntervals } from '../lib/shifts';
 import { kanaGroups, kanaKey } from '../lib/kana';
 import type { Booking, Breed, Closure, Customer, Dog, Option, PriceEntry, Service, ServiceRecord, ShiftDayDoc, Staff, Tenant } from '../lib/types';
+import { appConfirm } from '../components/SaveControls';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const PX_PER_MIN = 1; // 時間軸の縮尺
@@ -667,7 +668,8 @@ function CreateModal({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    // 入力途中で外側を触って消えないよう、背景のクリックでは閉じない(閉じるはキャンセル/✕)【AKUTOブランド基準 10-10】
+    <div className="modal-backdrop">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>予約を作成</h2>
         <p className="muted">{formatDateJa(date)}</p>
@@ -992,7 +994,7 @@ function BookingDetailModal({
   }
   async function doResched(ds: string, s: string) {
     if (reschedBusy) return;
-    if (!confirm(`${mdLabel(booking.date)} ${booking.startTime} → ${mdLabel(ds)} ${s} に変更しますか？`)) return;
+    if (!(await appConfirm(`${mdLabel(booking.date)} ${booking.startTime} → ${mdLabel(ds)} ${s} に変更しますか？`, { okLabel: '変更する' }))) return;
     setReschedBusy(true);
     setErr(null);
     try {
@@ -1508,7 +1510,7 @@ function statusLabel(s: Booking['status']): string {
 
 async function setStatus(tenantId: string, bookingId: string, status: Booking['status']) {
   const label = status === 'canceled' ? 'キャンセル' : '無断欠席';
-  if (confirm(`この予約を「${label}」にしますか？`)) {
+  if (await appConfirm(`この予約を「${label}」にしますか？`, { okLabel: `${label}にする`, cancelLabel: '戻る', tone: 'danger' })) {
     await updateDoc(doc(bookingsCol(tenantId), bookingId), { status });
   }
 }

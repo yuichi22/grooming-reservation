@@ -182,7 +182,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
       </div>
 
       {open && (
-        <div className="modal-backdrop" onClick={closeModal}>
+        <div className="modal-backdrop">
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>カルテを追加</h2>
             <form onSubmit={onAdd}>

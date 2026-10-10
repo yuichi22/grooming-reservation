@@ -5,6 +5,7 @@ import { customersCol } from '../lib/firestore';
 import { mergeCustomers } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import type { Customer } from '../lib/types';
+import { appConfirm } from '../components/SaveControls';
 
 export default function CustomersPage() {
   const { claims } = useAuth();
@@ -31,7 +32,7 @@ function CustomersInner({ tenantId }: { tenantId: string }) {
     }
     const src = active.find((c) => c.id === source);
     const tgt = active.find((c) => c.id === target);
-    if (!confirm(`「${src ? label(src) : ''}」を「${tgt ? label(tgt) : ''}」にまとめます。よろしいですか？`)) return;
+    if (!(await appConfirm(`「${src ? label(src) : ''}」を「${tgt ? label(tgt) : ''}」にまとめます。よろしいですか？`, { okLabel: 'まとめる' }))) return;
     setBusy(true);
     setMsg(null);
     try {
