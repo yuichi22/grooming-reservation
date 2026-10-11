@@ -4,68 +4,217 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5173
     },
     {
       "name": "groom-guest",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--mode", "devguest", "--port", "5177", "--strictPort"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--mode",
+        "devguest",
+        "--port",
+        "5177",
+        "--strictPort"
+      ],
       "port": 5177
     },
     {
       "name": "mobile-order",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/mobile_order-app", "run", "dev", "--", "--port", "5174", "--strictPort"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/mobile_order-app",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5174",
+        "--strictPort"
+      ],
       "port": 5174
     },
     {
       "name": "akuto-lp",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/akuto-lp", "run", "dev", "--", "-p", "3100"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/akuto-lp",
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3100"
+      ],
       "port": 3100
     },
     {
       "name": "suomi-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/suomi-site", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/suomi-site",
+        "run",
+        "dev"
+      ],
       "port": 3200
     },
     {
       "name": "decolle-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/decolle-site", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/decolle-site",
+        "run",
+        "dev"
+      ],
       "port": 3300
     },
     {
       "name": "decolle-shop-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/decolle-shop-site", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/decolle-shop-site",
+        "run",
+        "dev"
+      ],
       "port": 3400
     },
     {
       "name": "kukkula-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/kukkula-site", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/kukkula-site",
+        "run",
+        "dev"
+      ],
       "port": 3500
     },
     {
       "name": "groom-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/groom-site", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/groom-site",
+        "run",
+        "dev"
+      ],
       "port": 3600
     },
     {
       "name": "haus-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/haus-site", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/haus-site",
+        "run",
+        "dev"
+      ],
       "port": 3700
     },
     {
       "name": "suomi-admin",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/yuuichirouishihara/suomi-admin", "run", "start:dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/suomi-admin",
+        "run",
+        "start:dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "mobile-order-brand",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/yuuichirouishihara/mobile_order-brand",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5174",
+        "--strictPort"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "scratch-mock",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /private/tmp/claude-501/-Users-yuuichirouishihara-Library-Mobile-Documents-iCloud-com-toketaware-ios-ithoughts-Documents-code/e0c1d6c2-7a71-47bd-988f-fd3d60d53484/scratchpad && exec python3 -m http.server 8799 --bind 127.0.0.1"
+      ],
+      "port": 8799
+    },
+    {
+      "name": "suomi-admin-card",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/yuuichirouishihara/suomi-admin-card && PORT=3010 BROWSER=none npm run start:dev"
+      ],
+      "port": 3010
+    },
+    {
+      "name": "staff-emu",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:emu",
+        "--prefix",
+        "/Users/yuuichirouishihara/akuto-staff-app"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "scratch-static",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "/private/tmp/claude-501/-Users-yuuichirouishihara-Library-Mobile-Documents-iCloud-com-toketaware-ios-ithoughts-Documents-code/db07bce1-1ca5-47d2-ae9f-7c4bb5d12ef2/scratchpad/serve.js"
+      ],
+      "port": 8765
+    },
+    {
+      "name": "suomi-izumo-theme",
+      "runtimeExecutable": "/Users/yuuichirouishihara/suomi-izumo-theme/scripts/dev.sh",
+      "runtimeArgs": [],
+      "port": 9293
+    },
+    {
+      "name": "customer",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/yuuichirouishihara/customer && PORT=3020 BROWSER=none npm run start:dev"
+      ],
+      "port": 3020
+    },
+    {
+      "name": "groom-brand-staff",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/yuuichirouishihara/groom-brand && npx vite --mode dev --port 5178 --strictPort"
+      ],
+      "port": 5178
+    },
+    {
+      "name": "groom-brand-guest",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/yuuichirouishihara/groom-brand && npx vite --mode devguest --port 5179 --strictPort"
+      ],
+      "port": 5179
     }
   ]
 }
