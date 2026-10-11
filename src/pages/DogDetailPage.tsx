@@ -74,10 +74,16 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   const [cust, setCust] = useState({ ownerName: '', phone: '' });
   const [saving, setSaving] = useState(false);
   // 編集中は別の端末の更新で入力を上書きしない【AKUTOブランド基準 10-10】
+  // ⚠最初の取り込みは必ず行う(取り込む前の空欄を「編集あり」と見なして取り込みを止めない)。
+  //   取り込みが済むまでは dirty も数えない(開いただけで移動の確認が出る不具合 10-11)
   const dirtyRef = useRef(false);
+  const [loadedDogId, setLoadedDogId] = useState<string | null>(null);
+  const [loadedCustomerId, setLoadedCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!dog || dirtyRef.current) return;
+    if (!dog) return;
+    if (loadedDogId === dog.id && dirtyRef.current) return;
+    setLoadedDogId(dog.id);
     setForm({
       name: dog.name ?? '',
       nameKana: dog.nameKana ?? '',
@@ -87,10 +93,15 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
     });
     setServiceAdj(dog.serviceAdjustments ?? {});
     setOptAdj(dog.optionAdjustments ?? {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dog]);
 
   useEffect(() => {
-    if (customer && !dirtyRef.current) setCust({ ownerName: customer.ownerName ?? '', phone: customer.phone ?? '' });
+    if (!customer) return;
+    if (loadedCustomerId === customer.id && dirtyRef.current) return;
+    setLoadedCustomerId(customer.id);
+    setCust({ ownerName: customer.ownerName ?? '', phone: customer.phone ?? '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer]);
 
   if (loading) return <p>確認しています</p>;
@@ -117,18 +128,21 @@ function DogDetailInner({ tenantId, dogId }: { tenantId: string; dogId: string }
   // 顧客(飼い主名・電話)の変更。右上の「保存」に統合するため dirty に含める。
   const custDirty =
     !!dog.customerId &&
-    (cust.ownerName.trim() !== (customer?.ownerName ?? '') ||
-      cust.phone.trim() !== (customer?.phone ?? ''));
+    !!customer &&
+    loadedCustomerId === customer.id &&
+    (cust.ownerName.trim() !== (customer.ownerName ?? '').trim() ||
+      cust.phone.trim() !== (customer.phone ?? '').trim());
 
   const dirty =
-    custDirty ||
-    form.name.trim() !== (dog.name ?? '') ||
-    form.nameKana.trim() !== (dog.nameKana ?? '') ||
+    loadedDogId === dog.id &&
+    (custDirty ||
+    form.name.trim() !== (dog.name ?? '').trim() ||
+    form.nameKana.trim() !== (dog.nameKana ?? '').trim() ||
     (form.breedId ?? null) !== (dog.breedId ?? null) ||
     (form.notes ?? '') !== (dog.notes ?? '') ||
     (form.allergies ?? '') !== (dog.allergies ?? '') ||
     !sameMap(nonZero(serviceAdj), nonZero(dog.serviceAdjustments ?? {})) ||
-    !sameMap(optAdj, dog.optionAdjustments ?? {});
+    !sameMap(optAdj, dog.optionAdjustments ?? {}));
   dirtyRef.current = dirty;
 
   function cancelEdit() {
