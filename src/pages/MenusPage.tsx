@@ -7,6 +7,8 @@ import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import type { Breed, Option, PriceEntry, Service, Tenant } from '../lib/types';
 import { ChangesBar, appConfirm, confirmLeaveIfUnsaved } from '../components/SaveControls';
+import { PageHead, SubTabs } from '../components/PageHead';
+import { Scissors } from 'lucide-react';
 
 /** 金額を税表示付きで整形（税抜なら税込も併記）。 */
 function priceLabel(price: number, taxMode: 'inclusive' | 'exclusive', taxRate: number): string {
@@ -38,15 +40,15 @@ function MenusInner({ tenantId }: { tenantId: string }) {
 
   return (
     <section>
-      <h1>メニュー</h1>
-      <div className="tabs">
-        <button className={`tab ${tab === 'pricing' ? 'active' : ''}`} onClick={() => void switchTab('pricing')}>
-          料金表
-        </button>
-        <button className={`tab ${tab === 'masters' ? 'active' : ''}`} onClick={() => void switchTab('masters')}>
-          犬種・サービス設定
-        </button>
-      </div>
+      <PageHead icon={Scissors} title="メニュー" />
+      <SubTabs
+        items={[
+          ['pricing', '料金表'],
+          ['masters', '犬種・サービス設定'],
+        ]}
+        value={tab}
+        onChange={(key) => void switchTab(key)}
+      />
 
       {tab === 'pricing' ? (
         <PricingTab

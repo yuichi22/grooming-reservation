@@ -7,6 +7,8 @@ import { staffCol } from '../lib/firestore';
 import { getStaffInviteLink, inviteStaff, updateStaff } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import { STAFF_ROLE_LABELS, type Staff, type StaffRole } from '../lib/types';
+import { PageHead } from '../components/PageHead';
+import { UserRound } from 'lucide-react';
 
 export default function StaffPage() {
   const { claims } = useAuth();
@@ -125,7 +127,7 @@ function StaffInner({ tenantId }: { tenantId: string }) {
 
   return (
     <section>
-      <h1>スタッフ</h1>
+      <PageHead icon={UserRound} title="スタッフ" />
       <p className="muted">
         氏名・メール・ロールを入力して招待します。初めての方にはパスワード設定メールが届き、設定後にログインできます。
         「管理者」は予約枠・シフト表に入りません（「管理者兼トリマー」は管理権限を持ちつつ予約枠にも入ります）。
