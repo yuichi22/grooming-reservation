@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Users } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { customersCol } from '../lib/firestore';
 import { mergeCustomers } from '../lib/functions';
 import { useCollection } from '../lib/useCollection';
 import type { Customer } from '../lib/types';
 import { appConfirm } from '../components/SaveControls';
+import { PageHead } from '../components/PageHead';
 
 export default function CustomersPage() {
   const { claims } = useAuth();
@@ -50,7 +51,7 @@ function CustomersInner({ tenantId }: { tenantId: string }) {
 
   return (
     <section>
-      <h1>顧客</h1>
+      <PageHead icon={Users} title="顧客" meta={loading ? undefined : `${customers.length}件`} />
 
       {/* 重複顧客の統合。トリマーにも分かる言葉にし、普段は畳んでおく */}
       <button type="button" className="cal-acc-head" onClick={() => setMergeOpen((o) => !o)}>
@@ -102,9 +103,9 @@ function CustomersInner({ tenantId }: { tenantId: string }) {
           <thead>
             <tr>
               <th>氏名</th>
-              <th>phone</th>
-              <th>lineUserId</th>
-              <th>memberId</th>
+              <th>電話番号</th>
+              <th>LINE</th>
+              <th>会員番号</th>
               <th>状態</th>
             </tr>
           </thead>
@@ -113,7 +114,7 @@ function CustomersInner({ tenantId }: { tenantId: string }) {
               <tr key={c.id}>
                 <td>{c.ownerName || '—'}</td>
                 <td>{c.phone ?? '—'}</td>
-                <td><code>{c.lineUserId ?? '—'}</code></td>
+                <td>{c.lineUserId ? '連携済み' : '—'}</td>
                 <td>{c.memberId ?? '未連携'}</td>
                 <td>{c.mergedInto ? `統合済→${c.mergedInto}` : '有効'}</td>
               </tr>

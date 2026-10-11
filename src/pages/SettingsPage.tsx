@@ -8,6 +8,8 @@ import { db } from '../firebaseStaff';
 import { tenantDoc } from '../lib/firestore';
 import { useDocument } from '../lib/useDocument';
 import type { BusinessHours, Tenant, TenantSettings } from '../lib/types';
+import { PageHead } from '../components/PageHead';
+import { CalendarOff, MessageCircle, SlidersHorizontal } from 'lucide-react';
 
 export default function SettingsPage() {
   const { claims } = useAuth();
@@ -80,7 +82,7 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
   return (
     <>
     <section>
-      <h1>設定</h1>
+      <PageHead icon={SlidersHorizontal} title="設定" />
       <form onSubmit={onSubmit}>
         <fieldset>
           <legend>営業時間（空き計算の基準）</legend>
@@ -256,7 +258,7 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
 
       {/* 休業日の管理は営業カレンダーの一部としてシフトへ集約（二重管理の入口を作らない） */}
       <section>
-        <h2>休業日（臨時休業・祝日）</h2>
+        <PageHead level={2} icon={CalendarOff} title="休業日（臨時休業・祝日）" />
         <p className="muted">
           休業日の設定は「シフト」ページへ移動しました。月表の日付をタップして設定・解除できます
           （予約カレンダーの月表示からも設定できます）。
@@ -300,7 +302,7 @@ function LineUsage({ tenantId, hasOwnOa }: { tenantId: string; hasOwnOa: boolean
 
   return (
     <section>
-      <h2>LINE送信（{month}）</h2>
+      <PageHead level={2} icon={MessageCircle} title="LINE送信" meta={month} />
       {total === 0 ? (
         <p className="muted">今月の送信はまだありません。</p>
       ) : (

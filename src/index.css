@@ -3142,3 +3142,95 @@ button.tg-block.done:hover {
   background: #fff;
   color: #374151;
 }
+
+/* ---------- 見出しの帯・画面の中の切り替え【AKUTOブランド基準 10-10】 ---------- */
+/* カード(section)の一番上に置く帯。section の余白(20px 18px)を打ち消して端まで敷く */
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 96px;
+  margin: -20px -18px 20px;
+  padding: 16px 24px;
+  background: #f6f9fa; /* ui-50 を半分の濃さ */
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.card-head-main {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+.card-head-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: 12px;
+  border-radius: 16px;
+  background: #111827;
+  color: #fff;
+}
+.card-head-text {
+  min-width: 0;
+}
+.card-head-title,
+.content section h1.card-head-title,
+.content section h2.card-head-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: #111827;
+}
+.card-head-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.card-head-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.subtab {
+  min-height: 40px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: #fff;
+  color: #374151;
+  font-weight: 800;
+  font-size: 0.875rem;
+}
+.subtab:hover {
+  border-color: #9ca3af;
+  background: #fff;
+}
+.subtab.active,
+.subtab.active:hover {
+  background: #3b6e8f;
+  border-color: #3b6e8f;
+  color: #fff;
+}
+@media (max-width: 640px) {
+  .card-head {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+  .card-head-main {
+    gap: 14px;
+  }
+}
