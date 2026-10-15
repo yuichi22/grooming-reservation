@@ -284,24 +284,33 @@ label.inline > select {
   color: var(--fg);
   border-color: var(--border);
 }
-/* つけ根の内側の角丸(12px) */
+/* つけ根の内側の角丸(12px)。角丸の「枠線」で描く【10-15】
+   (グラデーションで描くと iPad など拡大率が整数でない画面で、縦線と曲線がずれて交差する。枠線なら他の線と同じく画面の点に揃う)
+   中身=バーの地＋縁2辺＋角丸、角の外側(下線の上)は影で画面の地を塗って下線とタブの縦線の下端を隠す */
 .header-btn.active::before,
 .header-btn.active::after {
   content: '';
   position: absolute;
   bottom: 0;
-  /* 13px = 曲線(12px)+タブの縦の縁1px。縁の下端12pxを覆って、縦線→曲線→横線を1本につなぐ */
+  /* 13px = 曲線(12px)+タブの縦の縁1px */
   width: 13px;
   height: 12px;
+  box-sizing: border-box;
   pointer-events: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--tab-line, var(--border));
 }
 .header-btn.active::before {
   left: -13px;
-  background: radial-gradient(circle at 0 0, transparent 11.5px, var(--border) 11.5px, var(--border) 12.5px, var(--bg) 12.5px);
+  border-right: 1px solid var(--tab-line, var(--border));
+  border-bottom-right-radius: 12px;
+  box-shadow: 3px 3px 0 3px var(--bg);
 }
 .header-btn.active::after {
   right: -13px;
-  background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--border) 11.5px, var(--border) 12.5px, var(--bg) 12.5px);
+  border-left: 1px solid var(--tab-line, var(--border));
+  border-bottom-left-radius: 12px;
+  box-shadow: -3px 3px 0 3px var(--bg);
 }
 /* 区分ではない操作(QR)は丸い小さなボタン */
 .header-action {
@@ -2956,12 +2965,7 @@ button.tg-block.done:hover {
 }
 .app-shell .header-btn.active {
   border-color: #3b6e8f;
-}
-.app-shell .header-btn.active::before {
-  background: radial-gradient(circle at 0 0, transparent 11.5px, #3b6e8f 11.5px, #3b6e8f 12.5px, var(--bg) 12.5px);
-}
-.app-shell .header-btn.active::after {
-  background: radial-gradient(circle at 100% 0, transparent 11.5px, #3b6e8f 11.5px, #3b6e8f 12.5px, var(--bg) 12.5px);
+  --tab-line: #3b6e8f;
 }
 /* 店名は青にしない */
 .app-shell .store-name {
