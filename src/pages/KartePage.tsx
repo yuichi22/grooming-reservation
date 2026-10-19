@@ -1,11 +1,12 @@
 import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore';
-import { Archive, ChevronRight, Plus } from 'lucide-react';
+import { Archive, ChevronRight, Plus, Search, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { breedsCol, customersCol, dogsCol } from '../lib/firestore';
 import { useCollection } from '../lib/useCollection';
 import type { Breed, Customer, Dog } from '../lib/types';
+import { matchesKarteQuery } from '../lib/karteSearch';
 
 // 五十音ユーティリティは lib/kana.ts に集約（予約作成のワンちゃん選択と共用）。
 // 既存 import 互換のため hasKanji はここから再エクスポートする。
@@ -25,12 +26,23 @@ function KarteInner({ tenantId }: { tenantId: string }) {
   const { data: breeds } = useCollection<Breed>(breedsCol(tenantId), [tenantId]);
   const { data: customers } = useCollection<Customer>(customersCol(tenantId), [tenantId]);
   const breedName = useMemo(() => new Map(breeds.map((b) => [b.id, b.name])), [breeds]);
-  const customerName = useMemo(() => new Map(customers.map((c) => [c.id, c.ownerName])), [customers]);
+  const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
   // アーカイブは既定で隠す。件数が0なら切替ボタン自体を出さない（使わない店に余計な操作を見せない）
   const [showArchived, setShowArchived] = useState(false);
   const archivedCount = dogs.filter((d) => d.archivedAt).length;
-  const visibleDogs = showArchived ? dogs : dogs.filter((d) => !d.archivedAt);
+  const unarchivedOrAll = showArchived ? dogs : dogs.filter((d) => !d.archivedAt);
+
+  // 検索（犬の名前・ふりがな・飼い主名・電話番号の部分一致）
+  const [query, setQuery] = useState('');
+  const searching = query.trim() !== '';
+  const matches = (d: Dog) => {
+    const c = customerById.get(d.customerId);
+    return matchesKarteQuery({ name: d.name, nameKana: d.nameKana, ownerName: c?.ownerName, phone: c?.phone }, query);
+  };
+  const visibleDogs = searching ? unarchivedOrAll.filter(matches) : unarchivedOrAll;
+  // 一致が無いとき、アーカイブ側にだけ一致があれば案内する
+  const archivedHits = searching && !showArchived ? dogs.filter((d) => d.archivedAt && matches(d)).length : 0;
 
   // 五十音でグループ化（行内は名前の五十音順）。索引バー＋見出し区切りに使う。
   const groups = useMemo(
@@ -170,6 +182,24 @@ function KarteInner({ tenantId }: { tenantId: string }) {
             カルテを追加
           </button>
         </div>
+        <div className="karte-search">
+          <Search size={16} className="karte-search-icon" aria-hidden />
+          <input
+            type="search"
+            placeholder="名前・飼い主名・電話番号で検索"
+            aria-label="カルテを検索"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setQuery('');
+            }}
+          />
+          {searching && (
+            <button type="button" className="karte-search-clear" aria-label="検索をクリア" onClick={() => setQuery('')}>
+              <X size={16} />
+            </button>
+          )}
+        </div>
         {!loading && groups.length > 1 && (
           <div className="kana-index">
             {groups.map((g) => (
@@ -268,7 +298,7 @@ function KarteInner({ tenantId }: { tenantId: string }) {
                       )}
                     </td>
                     <td>{(d.breedId && breedName.get(d.breedId)) || d.breed || '—'}</td>
-                    <td>{customerName.get(d.customerId) || '—'}</td>
+                    <td>{customerById.get(d.customerId)?.ownerName || '—'}</td>
                     <td>{d.confirmedDurationMin != null ? `${d.confirmedDurationMin}分` : '未確定'}</td>
                     <td className="chevron-cell">
                       <ChevronRight size={18} />
@@ -280,7 +310,12 @@ function KarteInner({ tenantId }: { tenantId: string }) {
             {groups.length === 0 && (
               <tr>
                 <td colSpan={5} className="muted">
-                  {dogs.length === 0 ? 'カルテ未登録' : 'アーカイブ以外のカルテはありません'}
+                  {dogs.length === 0
+                    ? 'カルテ未登録'
+                    : searching
+                      ? `「${query.trim()}」に一致するカルテはありません` +
+                        (archivedHits > 0 ? `（アーカイブに${archivedHits}件あり）` : '')
+                      : 'アーカイブ以外のカルテはありません'}
                 </td>
               </tr>
             )}
