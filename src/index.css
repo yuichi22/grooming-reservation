@@ -3239,3 +3239,38 @@ button.tg-block.done:hover {
     gap: 14px;
   }
 }
+
+/* カルテ一覧の検索窓（固定ヘッダー内、五十音インデックスの上） */
+.karte-search {
+  position: relative;
+  margin: 0 0 8px;
+}
+.karte-search input {
+  width: 100%;
+  padding-left: 34px;
+  padding-right: 36px;
+}
+.karte-search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.karte-search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-height: 0;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  line-height: 0;
+  cursor: pointer;
+}
+.karte-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
