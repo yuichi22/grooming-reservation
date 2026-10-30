@@ -5,9 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>GROOM HAUS 予約</title>
+    <!-- 起動直後に使う通信先へ先に接続しておく（JS の取得中に TLS の握手を済ませる）。
+         予約画面(/book)は liff.init → LINE API、続けて Cloud Functions(customerSession 等)を呼ぶ。 -->
+    <link rel="preconnect" href="https://api.line.me" crossorigin />
+    <!-- Cloud Functions の preconnect は vite.config.ts がビルド時に差し込む（プロジェクトIDが環境ごとに違うため） -->
   </head>
   <body>
-    <div id="root"></div>
+    <!-- JS が届くまでの間も白紙にしない（App の Suspense 表示と同じ。最初の描画で置き換わる） -->
+    <div id="root"><p style="padding: 2rem">確認しています</p></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
