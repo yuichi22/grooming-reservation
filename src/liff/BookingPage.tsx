@@ -2,7 +2,8 @@ import { applyStoreAccent } from '../lib/storeColors';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { ADD_FRIEND_URL, buildLiffDeepLink, closeLiff, getAccessToken, getProfile, initLiff, initLiffOptional, isDevMode, loginForBooking, openAddFriend } from './liff';
+import { ADD_FRIEND_URL, buildLiffDeepLink, closeLiff, getAccessToken, getLocalUserId, initLiff, initLiffOptional, isDevMode, loginForBooking, openAddFriend } from './liff';
+import { clearBootSnapshot, loadBootSnapshot, saveBootSnapshot } from './bootCache';
 import {
   createGroupBooking,
   customerSession,
@@ -251,6 +252,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
 
   async function boot() {
     setPhase('init');
+    let optimistic = false; // 覚えておいた内容で先に画面を出したか
     try {
       const forceGuest = new URLSearchParams(window.location.search).get('guest') === '1';
       const loggedIn = forceGuest ? false : await initLiffOptional();
@@ -271,7 +273,19 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         return;
       }
       setGuest(false);
-      await getProfile();
+      // 前回この端末・このLINEユーザーで予約画面まで進めていれば、覚えておいた内容で先に出し、
+      // 下の customerSession は裏で確認として流す（bootCache.ts の説明を参照）。
+      // ⚠以前ここにあった getProfile は結果を使っておらず、LINE への往復が1本余計だったので外した
+      //   （userId の解決はサーバが accessToken から行う）。
+      const snap = loadBootSnapshot(tenantId, getLocalUserId());
+      if (snap) {
+        optimistic = true;
+        setCustomerId(snap.customerId);
+        setStoreInfo(snap.store);
+        setOptions(snap.options);
+        setPhase('ready');
+        resumeGuestDraft();
+      }
       // A方式: 友だち必須化はサーバ判定を正とする（クライアントの getFriendship は
       // チャネル-OAリンク状況で友だちでも false を返すことがあり誤ブロックの原因になる）。
       // 未追加ならサーバが 'line-friend-required' を返し、下の catch で needFriend に分岐。
@@ -279,17 +293,21 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       setCustomerId(res.data.customerId);
       setStoreInfo(res.data.store);
       if (res.data.needsPhone) {
+        clearBootSnapshot();
         setPhase('needPhone');
       } else {
         if (res.data.options) setOptions(res.data.options);
         else await loadOptions(res.data.customerId);
-        setPhase('ready');
-        resumeGuestDraft();
+        if (!optimistic) {
+          setPhase('ready');
+          resumeGuestDraft();
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
       // サーバ側の友だち必須化に弾かれた場合も案内画面へ
       if (/line-friend-required/.test(msg)) {
+        clearBootSnapshot();
         // customerSession が例外で抜けているため店舗情報が未取得。
         // 公開カタログ（認証不要）から取り直す。ロゴ表示と、
         // テナントごとの友だち追加URLの取得に必要。
@@ -302,10 +320,23 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         setPhase('needFriend');
         return;
       }
+      // 先に出した画面がある場合、裏の確認が通信などで失敗しただけなら画面はそのままにする
+      // （予約の確定などはサーバが毎回確認するので、そこで改めてエラーになる）
+      if (optimistic) {
+        console.warn('[BookingPage] background customerSession failed', e);
+        return;
+      }
       setError(msg || '初期化に失敗しました');
       setPhase('error');
     }
   }
+
+  // 予約画面まで進めた内容を端末に覚える（次回 LINE から開いたときに先に出す）。
+  // 犬の登録・削除でメニュー一式を取り直したときもここで更新される。
+  useEffect(() => {
+    if (guest || phase !== 'ready' || !customerId || !options) return;
+    saveBootSnapshot(tenantId, getLocalUserId(), { customerId, options, store: storeInfo ?? options.store });
+  }, [guest, phase, customerId, options, storeInfo, tenantId]);
 
   useEffect(() => {
     boot();
@@ -1590,7 +1621,6 @@ export default function BookEntry() {
   async function resolve() {
     try {
       await initLiff();
-      await getProfile();
       const res = await getMyTenants({ accessToken: getAccessToken() });
       const list = res.data.tenants;
       if (list.length === 0) {

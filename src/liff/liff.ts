@@ -20,20 +20,36 @@ const DEV_USER_ID = 'Udev_local_tester';
  */
 export const ADD_FRIEND_URL = (import.meta.env.VITE_LINE_ADD_FRIEND_URL as string | undefined) ?? '';
 
-let initialized = false;
 export const isDevMode = !LIFF_ID;
 
-export async function initLiff(): Promise<void> {
-  if (initialized) return;
-  if (isDevMode) {
-    initialized = true;
-    return;
+// ⚠liff.init は1回だけ走らせ、呼び出し側は同じ Promise を待つ。
+//   main.tsx が /book のとき画面部品の読み込みと並行して先に始めるので、
+//   BookEntry / BookingPage から後で呼ばれても二重に初期化しない。
+let initPromise: Promise<void> | null = null;
+
+function initOnce(): Promise<void> {
+  if (isDevMode) return Promise.resolve();
+  if (!initPromise) {
+    initPromise = liff.init({ liffId: LIFF_ID! }).catch((e) => {
+      initPromise = null; // 失敗したら次の呼び出しでやり直せるようにする
+      throw e;
+    });
   }
-  await liff.init({ liffId: LIFF_ID! });
-  if (!liff.isLoggedIn()) {
+  return initPromise;
+}
+
+/** 初期化だけ先に始める（結果は待たない）。main.tsx から使う */
+export function startLiffInit(): void {
+  initOnce().catch(() => {
+    /* 失敗は initLiff / initLiffOptional の呼び出し側で扱う */
+  });
+}
+
+export async function initLiff(): Promise<void> {
+  await initOnce();
+  if (!isDevMode && !liff.isLoggedIn()) {
     liff.login();
   }
-  initialized = true;
 }
 
 /**
@@ -42,15 +58,22 @@ export async function initLiff(): Promise<void> {
  * 開発モードは常にログイン済み扱い（"dev:" トークンで動く）。
  */
 export async function initLiffOptional(): Promise<boolean> {
-  if (isDevMode) {
-    initialized = true;
-    return true;
-  }
-  if (!initialized) {
-    await liff.init({ liffId: LIFF_ID! });
-    initialized = true;
-  }
+  await initOnce();
+  if (isDevMode) return true;
   return liff.isLoggedIn();
+}
+
+/**
+ * 通信せずに分かる LINE の userId（端末に覚えた起動結果の持ち主確認に使う）。
+ * LIFF ブラウザでは getContext に入っている。取れない環境では null（＝覚え書きを使わない）。
+ */
+export function getLocalUserId(): string | null {
+  if (isDevMode) return DEV_USER_ID;
+  try {
+    return liff.getContext()?.userId ?? liff.getDecodedIDToken()?.sub ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
