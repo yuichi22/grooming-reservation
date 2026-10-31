@@ -2,16 +2,17 @@ import { applyStoreAccent } from '../lib/storeColors';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, ChevronUp, PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { ADD_FRIEND_URL, buildLiffDeepLink, closeLiff, getAccessToken, getLocalUserId, initLiff, initLiffOptional, isDevMode, loginForBooking, openAddFriend } from './liff';
+import { ADD_FRIEND_URL, buildLiffDeepLink, closeLiff, getAccessToken, getLocalUserId, initLiff, isLineAuthError, reloginOnce, initLiffOptional, isDevMode, loginForBooking, openAddFriend } from './liff';
 import { clearBootSnapshot, loadBootSnapshot, saveBootSnapshot } from './bootCache';
 import {
   createGroupBooking,
   customerSession,
+  customerSessionAtBoot,
   getBookingOptions,
   getClosedDates,
   getGroupAvailability,
   getMonthAvailability,
-  getMyTenants,
+  getMyTenantsAtBoot,
   getPublicBookingOptions,
   hideDog,
   registerDog,
@@ -289,7 +290,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       // A方式: 友だち必須化はサーバ判定を正とする（クライアントの getFriendship は
       // チャネル-OAリンク状況で友だちでも false を返すことがあり誤ブロックの原因になる）。
       // 未追加ならサーバが 'line-friend-required' を返し、下の catch で needFriend に分岐。
-      const res = await customerSession({ tenantId, accessToken: getAccessToken() });
+      const res = await customerSessionAtBoot({ tenantId, accessToken: getAccessToken() }, optimistic);
       setCustomerId(res.data.customerId);
       setStoreInfo(res.data.store);
       if (res.data.needsPhone) {
@@ -305,6 +306,8 @@ function BookingPage({ tenantId }: { tenantId: string }) {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
+      // 前回のセッションの失効したLINEトークンだった → 1回だけ取り直して読み直す
+      if (isLineAuthError(e) && reloginOnce()) return;
       // サーバ側の友だち必須化に弾かれた場合も案内画面へ
       if (/line-friend-required/.test(msg)) {
         clearBootSnapshot();
@@ -326,7 +329,8 @@ function BookingPage({ tenantId }: { tenantId: string }) {
         console.warn('[BookingPage] background customerSession failed', e);
         return;
       }
-      setError(msg || '初期化に失敗しました');
+      const timedOut = (e as { code?: string })?.code === 'functions/deadline-exceeded';
+      setError(timedOut ? '通信に時間がかかっています。もう一度読み込んでください。' : msg || '初期化に失敗しました');
       setPhase('error');
     }
   }
@@ -857,6 +861,7 @@ function BookingPage({ tenantId }: { tenantId: string }) {
     return (
       <Center>
         <p className="error">{error}</p>
+        <ReloadButton />
       </Center>
     );
 
@@ -1600,6 +1605,15 @@ function StoreLogo({ store }: { store: { name: string; logoUrl: string | null } 
   );
 }
 
+// 通信の宙吊り・タイムアウトで止まったときの出口（閉じて開き直さなくてよいように）
+function ReloadButton() {
+  return (
+    <button type="button" className="primary" style={{ marginTop: 16 }} onClick={() => window.location.reload()}>
+      もう一度読み込む
+    </button>
+  );
+}
+
 function Center({ children }: { children: React.ReactNode }) {
   return <div className="liff-shell">{children}</div>;
 }
@@ -1621,7 +1635,7 @@ export default function BookEntry() {
   async function resolve() {
     try {
       await initLiff();
-      const res = await getMyTenants({ accessToken: getAccessToken() });
+      const res = await getMyTenantsAtBoot({ accessToken: getAccessToken() });
       const list = res.data.tenants;
       if (list.length === 0) {
         setPhase('empty');
@@ -1633,6 +1647,7 @@ export default function BookEntry() {
         setPhase('choose');
       }
     } catch (e) {
+      if (isLineAuthError(e) && reloginOnce()) return;
       setError(e instanceof Error ? e.message : '読み込みに失敗しました');
       setPhase('error');
     }
@@ -1667,6 +1682,7 @@ export default function BookEntry() {
     return (
       <Center>
         <p className="error">{error}</p>
+        <ReloadButton />
       </Center>
     );
   if (phase === 'empty')

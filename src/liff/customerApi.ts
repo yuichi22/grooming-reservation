@@ -34,17 +34,34 @@ export interface BookingOptions {
   pricing: PriceCell[];
 }
 
-export const customerSession = httpsCallable<
-  { tenantId: string; accessToken: string; ownerName?: string; phone?: string },
-  // options は電話登録済みのとき同梱（起動時の getBookingOptions 呼び出しを省く B）
-  {
-    customerId: string;
-    lineUserId: string;
-    needsPhone: boolean;
-    options: BookingOptions | null;
-    store: { name: string; logoUrl: string | null; accentColor?: string | null; addFriendUrl?: string };
+type CustomerSessionReq = { tenantId: string; accessToken: string; ownerName?: string; phone?: string };
+// options は電話登録済みのとき同梱（起動時の getBookingOptions 呼び出しを省く B）
+type CustomerSessionRes = {
+  customerId: string;
+  lineUserId: string;
+  needsPhone: boolean;
+  options: BookingOptions | null;
+  store: { name: string; logoUrl: string | null; accentColor?: string | null; addFriendUrl?: string };
+};
+
+export const customerSession = httpsCallable<CustomerSessionReq, CustomerSessionRes>(functions, 'customerSession');
+
+/**
+ * 起動時の customerSession。
+ * ⚠LINE から開き直した直後の webview では、通信が送られずに宙吊りになることがある
+ *   （Core の会員証で実測。既定の 70 秒待ちだと「読み込み中のまま開かない」に見える）。
+ *   時間を区切り、retry=true（既存顧客＝新規作成が走らない）のときだけ1回だけ送り直す。
+ *   初回のお客様は送り直すと顧客が二重に作られうるので、長めに1回だけ待つ。
+ */
+export async function customerSessionAtBoot(data: CustomerSessionReq, retry: boolean) {
+  if (!retry) return httpsCallable<CustomerSessionReq, CustomerSessionRes>(functions, 'customerSession', { timeout: 20000 })(data);
+  try {
+    return await httpsCallable<CustomerSessionReq, CustomerSessionRes>(functions, 'customerSession', { timeout: 8000 })(data);
+  } catch (e) {
+    if ((e as { code?: string })?.code !== 'functions/deadline-exceeded') throw e;
+    return httpsCallable<CustomerSessionReq, CustomerSessionRes>(functions, 'customerSession', { timeout: 12000 })(data);
   }
->(functions, 'customerSession');
+}
 
 /** このLINEユーザーが利用した店の1件 */
 export interface MyTenant {
@@ -57,6 +74,16 @@ export const getMyTenants = httpsCallable<{ accessToken: string }, { tenants: My
   functions,
   'getMyTenants',
 );
+
+/** 起動時の getMyTenants（読むだけなので、宙吊りに備えて時間を区切って1回だけ送り直す） */
+export async function getMyTenantsAtBoot(data: { accessToken: string }) {
+  try {
+    return await httpsCallable<{ accessToken: string }, { tenants: MyTenant[] }>(functions, 'getMyTenants', { timeout: 5000 })(data);
+  } catch (e) {
+    if ((e as { code?: string })?.code !== 'functions/deadline-exceeded') throw e;
+    return httpsCallable<{ accessToken: string }, { tenants: MyTenant[] }>(functions, 'getMyTenants', { timeout: 10000 })(data);
+  }
+}
 
 export const removeMyTenant = httpsCallable<{ accessToken: string; tenantId: string }, { ok: boolean }>(
   functions,
