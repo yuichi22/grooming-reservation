@@ -47,9 +47,12 @@ export function startLiffInit(): void {
 
 export async function initLiff(): Promise<void> {
   await initOnce();
-  if (!isDevMode && !liff.isLoggedIn()) {
-    liff.login();
-  }
+  if (isDevMode || liff.isLoggedIn()) return;
+  // ⚠LINE アプリ内（LIFF ブラウザ）で liff.login() を呼ぶのは LINE 公式の禁止パターンで、
+  //   リダイレクトが宙吊りになり読み込み表示のまま止まる（Core の会員証で実機確認済み）。
+  //   アプリ内で未ログインになるのは異常系なので、止めずにエラーとして案内する。
+  if (liff.isInClient()) throw new Error('LINE との接続を確認できませんでした。お手数ですが、閉じて開き直してください。');
+  liff.login();
 }
 
 /**
@@ -70,7 +73,10 @@ export async function initLiffOptional(): Promise<boolean> {
 export function getLocalUserId(): string | null {
   if (isDevMode) return DEV_USER_ID;
   try {
-    return liff.getContext()?.userId ?? liff.getDecodedIDToken()?.sub ?? null;
+    const id = liff.getContext()?.userId ?? liff.getDecodedIDToken()?.sub;
+    if (id) return id;
+    // LINE アプリ内は端末のLINEアカウント1つに紐づくので、userId が取れなくても「この端末のLINE」として扱う
+    return liff.isInClient() ? 'liff-client' : null;
   } catch {
     return null;
   }
@@ -145,6 +151,49 @@ export function closeLiff(): boolean {
   } catch {
     return false;
   }
+}
+
+/** サーバが LINE トークンを受け付けなかった（期限切れ等）エラーか */
+export function isLineAuthError(e: unknown): boolean {
+  return (e as { code?: string } | null)?.code === 'functions/unauthenticated';
+}
+
+/**
+ * 期限切れの LINE アクセストークン対策（Core の会員証 liffQuery.js と同じ）。
+ * LIFF を閉じるとトークンは失効するが、SDK は次に開いたとき失効済みのトークンを返すことがある。
+ * 1セッション1回だけ logout → 読み直しで、init の自動ログインに新しいトークンを発行させる。
+ * @returns true = 読み直し/ログインへ遷移した（呼び出し側は処理を打ち切る）
+ */
+export function reloginOnce(): boolean {
+  if (isDevMode) return false;
+  const key = 'groom-liff-relogin';
+  try {
+    if (sessionStorage.getItem(key)) return false;
+    sessionStorage.setItem(key, '1');
+  } catch {
+    return false; // 回数を数えられない環境では無限読み直しを避けて何もしない
+  }
+  try {
+    liff.logout();
+  } catch {
+    /* noop */
+  }
+  // ⚠LIFF ブラウザ内では liff.login() を使わない（initLiff の説明）。読み直せば init が再発行する。
+  if (liff.isInClient()) {
+    // ログイン戻りの認可コードを残したまま読み直すと、同じコードの二重使用で init が落ちる
+    try {
+      const p = new URLSearchParams(window.location.search);
+      for (const k of ['code', 'state', 'liffClientId', 'liffRedirectUri', 'error', 'errorCode', 'error_description']) p.delete(k);
+      const q = p.toString();
+      window.history.replaceState(window.history.state, '', window.location.pathname + (q ? `?${q}` : ''));
+    } catch {
+      /* noop */
+    }
+    window.location.reload();
+  } else {
+    liff.login({ redirectUri: window.location.href });
+  }
+  return true;
 }
 
 /** Cloud Functions に渡すアクセストークン。開発モードでは "dev:<userId>"。 */
