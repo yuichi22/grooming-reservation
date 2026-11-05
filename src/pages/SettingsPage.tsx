@@ -10,6 +10,7 @@ import { useDocument } from '../lib/useDocument';
 import type { BusinessHours, Tenant, TenantSettings } from '../lib/types';
 import { PageHead } from '../components/PageHead';
 import { CalendarOff, MessageCircle, SlidersHorizontal } from 'lucide-react';
+import { TimeField } from '../components/akuto/DateField';
 
 export default function SettingsPage() {
   const { claims } = useAuth();
@@ -88,9 +89,9 @@ function SettingsInner({ tenantId }: { tenantId: string }) {
           <legend>営業時間（空き計算の基準）</legend>
           {settings.businessHours.map((h, i) => (
             <div className="row-form" key={i}>
-              <input type="time" value={h.start} onChange={(e) => setHours(i, 'start', e.target.value)} />
+              <TimeField value={h.start} onChange={(v) => setHours(i, 'start', v)} label="開店" width={160} step={15} />
               〜
-              <input type="time" value={h.end} onChange={(e) => setHours(i, 'end', e.target.value)} />
+              <TimeField value={h.end} onChange={(v) => setHours(i, 'end', v)} label="閉店" width={160} step={15} />
               <button type="button" onClick={() => removeHours(i)}>
                 削除
               </button>

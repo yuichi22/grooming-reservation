@@ -20,6 +20,7 @@ import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import { hasKanji } from '../lib/kana';
 import type { Booking, Breed, Customer, Dog, Option, PriceEntry, Service, ServiceRecord } from '../lib/types';
+import { DateField } from '../components/akuto/DateField';
 
 /** 順序非依存で number マップを比較。 */
 function sameMap(a: Record<string, number>, b: Record<string, number>): boolean {
@@ -733,7 +734,7 @@ function RecordForm({ tenantId, dogId, services }: { tenantId: string; dogId: st
 
   return (
     <form className="row-form" onSubmit={onAdd}>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <DateField value={date} onChange={setDate} label="施術日" width={220} />
       <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
         <option value="">サービス</option>
         {services.filter((s) => s.active).map((s) => (

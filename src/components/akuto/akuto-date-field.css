@@ -1,0 +1,274 @@
+/*
+ * AKUTO 共通：日付・時刻・月の選び方（BRANDBOOK「日付・時刻の選び方」）。
+ * 原本は akuto-staff-app の src/components/DateField.tsx と src/index.css。
+ * トークン（design/tokens.css）が無いアプリでも同じ色になるよう、変数に既定値を持たせている。
+ */
+.ak-picker-wrap,
+.ak-picker {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+.ak-picker *,
+.ak-picker-wrap * {
+  box-sizing: border-box;
+}
+.ak-picker-field {
+  width: 100%;
+  min-height: var(--akuto-tap, 44px);
+  padding: 9px 12px;
+  border: 2px solid var(--akuto-field-border, #e5e7eb);
+  border-radius: var(--akuto-radius-sm, 12px);
+  background: #fff;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--akuto-ink, #111827);
+}
+.ak-picker-field:hover {
+  border-color: var(--akuto-field-border-hover, #d1d5db);
+}
+.ak-picker-field:focus-visible {
+  outline: 2px solid var(--akuto-ui, #3b6e8f);
+  outline-offset: 2px;
+}
+.ak-picker-field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ak-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--akuto-tap, 44px);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--akuto-radius-sm, 12px);
+  font-size: 15px;
+  font-weight: var(--akuto-weight-heavy, 900);
+  cursor: pointer;
+}
+.ak-picker-btn-sub {
+  background: #f3f4f6;
+  color: #374151;
+}
+.ak-picker-btn-sub:hover {
+  background: #e5e7eb;
+}
+.ak-picker-btn-quiet {
+  background: transparent;
+  color: var(--akuto-sub, #6b7280);
+}
+.ak-picker-btn-quiet:hover:not(:disabled) {
+  color: var(--akuto-ink, #111827);
+}
+.ak-picker-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ak-picker-wrap {
+  position: relative;
+}
+.ak-picker-wrap.ak-picker-mt {
+  margin-top: 6px;
+}
+.ak-picker-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  font-weight: var(--akuto-weight-heavy, 900);
+  cursor: pointer;
+}
+.ak-picker-field svg {
+  flex: none;
+  color: var(--akuto-sub, #6b7280);
+}
+.ak-picker-field[data-open='true'] {
+  border-color: var(--akuto-ink, #111827);
+}
+.ak-picker-field[data-open='true'] svg {
+  color: var(--akuto-ink, #111827);
+}
+.ak-picker-placeholder {
+  font-weight: var(--akuto-weight-bold, 700);
+  color: var(--akuto-sub, #6b7280);
+}
+.ak-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  width: 312px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  border: 1px solid var(--akuto-line, #f3f4f6);
+  border-radius: var(--akuto-radius-lg, 24px);
+  background: var(--akuto-surface, #ffffff);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  color: var(--akuto-ink, #111827);
+  animation: ak-picker-in var(--akuto-motion-place, 150ms) ease-out;
+}
+.ak-picker-inline {
+  position: static;
+  width: 100%;
+  max-width: none;
+  margin-top: 8px;
+  box-shadow: var(--akuto-shadow, 0 1px 2px rgba(16, 24, 40, 0.05));
+}
+@keyframes ak-picker-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.ak-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.ak-picker-title {
+  display: flex;
+  gap: 4px;
+}
+.ak-picker-nav {
+  display: grid;
+  place-items: center;
+  width: var(--akuto-tap, 44px);
+  height: var(--akuto-tap, 44px);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--akuto-ink, #111827);
+  cursor: pointer;
+}
+.ak-picker-nav:hover {
+  background: #f3f4f6;
+}
+.ak-picker-ym {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--akuto-radius-sm, 12px);
+  background: transparent;
+  font-size: 16px;
+  font-weight: var(--akuto-weight-heavy, 900);
+  color: var(--akuto-ink, #111827);
+  cursor: pointer;
+}
+.ak-picker-ym:hover {
+  background: #f3f4f6;
+}
+.ak-picker-ym[aria-pressed='true'] {
+  background: var(--akuto-ui-50, #eef3f6);
+  color: var(--akuto-ui, #3b6e8f);
+}
+.ak-picker-week,
+.ak-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.ak-picker-week {
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--akuto-line, #f3f4f6);
+  text-align: center;
+  font-size: 12px;
+  color: var(--akuto-sub, #6b7280);
+}
+/* 日曜＝赤・土曜＝青は慣習の例外（BRANDBOOK「状態の表示」） */
+.ak-picker-week [data-dow='0'],
+.ak-picker-day[data-dow='0'] {
+  color: var(--akuto-danger, #d92d20);
+}
+.ak-picker-week [data-dow='6'],
+.ak-picker-day[data-dow='6'] {
+  color: var(--akuto-ui, #3b6e8f);
+}
+.ak-picker-day {
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 15px;
+  color: var(--akuto-ink, #111827);
+  cursor: pointer;
+}
+.ak-picker-day:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+.ak-picker-day[data-other='true'] {
+  color: var(--akuto-faint, #9ca3af);
+}
+.ak-picker-day[data-today='true'] {
+  box-shadow: inset 0 0 0 2px var(--akuto-ink, #111827);
+  font-weight: var(--akuto-weight-heavy, 900);
+}
+.ak-picker-day[aria-pressed='true'],
+.ak-picker-cell[aria-pressed='true'] {
+  background: var(--akuto-ink, #111827);
+  color: #fff;
+  font-weight: var(--akuto-weight-heavy, 900);
+}
+.ak-picker-day:disabled {
+  color: var(--akuto-field-border-hover, #d1d5db);
+  cursor: not-allowed;
+}
+.ak-picker-cells3,
+.ak-picker-cells5,
+.ak-picker-cells6 {
+  display: grid;
+  gap: 6px;
+}
+.ak-picker-cells3 { grid-template-columns: repeat(3, 1fr); }
+.ak-picker-cells5 { grid-template-columns: repeat(5, 1fr); }
+.ak-picker-cells6 { grid-template-columns: repeat(6, 1fr); }
+.ak-picker-years {
+  max-height: 264px;
+  overflow-y: auto;
+}
+.ak-picker-cell {
+  min-height: 40px;
+  border: 2px solid var(--akuto-field-border, #e5e7eb);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 15px;
+  color: var(--akuto-ink, #111827);
+  cursor: pointer;
+}
+.ak-picker-cell:hover {
+  border-color: var(--akuto-field-border-hover, #d1d5db);
+}
+.ak-picker-cell[aria-pressed='true'] {
+  border-color: var(--akuto-ink, #111827);
+}
+.ak-picker-sub {
+  margin: 8px 0 6px;
+  font-size: 13px;
+  color: var(--akuto-sub, #6b7280);
+}
+.ak-picker-sub:first-child {
+  margin-top: 0;
+}
+.ak-picker-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ak-picker-now {
+  margin-right: auto;
+  font-size: 20px;
+  font-weight: var(--akuto-weight-heavy, 900);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ak-picker { animation: none; }
+}
+/* 期間（開始〜終了）の間の日 */
+.ak-picker-day[data-inrange='true'] {
+  background: #f3f4f6;
+}

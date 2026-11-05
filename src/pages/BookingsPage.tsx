@@ -28,6 +28,7 @@ import { isWithinHours, staffHoursFor, subtractIntervals } from '../lib/shifts';
 import { kanaGroups, kanaKey } from '../lib/kana';
 import type { Booking, Breed, Closure, Customer, Dog, Option, PriceEntry, Service, ServiceRecord, ShiftDayDoc, Staff, Tenant } from '../lib/types';
 import { appConfirm } from '../components/SaveControls';
+import { TimeField } from '../components/akuto/DateField';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 const PX_PER_MIN = 1; // 時間軸の縮尺
@@ -676,7 +677,7 @@ function CreateModal({
         <form onSubmit={submit}>
           <label className="inline">
             開始時刻
-            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+            <TimeField value={start} onChange={setStart} label="開始時刻" inline />
           </label>
           <label>
             ワンちゃん
