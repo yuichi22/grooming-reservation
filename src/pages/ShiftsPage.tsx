@@ -14,6 +14,7 @@ import { useCollection } from '../lib/useCollection';
 import { useDocument } from '../lib/useDocument';
 import { staffHoursFor, type TimeInterval } from '../lib/shifts';
 import type { Closure, ShiftDayDoc, Staff, Tenant } from '../lib/types';
+import { TimeField } from '../components/akuto/DateField';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -418,19 +419,22 @@ export default function ShiftsPage() {
                 {timeModal.staffName} ・ {timeModal.date.slice(5).replace('-', '/')} の勤務時間
               </h2>
             </div>
-            <div className="row-form" style={{ alignItems: 'center' }}>
-              <input
-                type="time"
+            <div style={{ display: 'grid', gap: 6, margin: '14px 0' }}>
+              <div className="muted">開始</div>
+              <TimeField
                 value={timeModal.start}
-                step={900}
-                onChange={(e) => setTimeModal((tm) => (tm ? { ...tm, start: e.target.value } : tm))}
+                step={15}
+                inline
+                label="開始"
+                onChange={(v) => setTimeModal((tm) => (tm ? { ...tm, start: v } : tm))}
               />
-              〜
-              <input
-                type="time"
+              <div className="muted">終了</div>
+              <TimeField
                 value={timeModal.end}
-                step={900}
-                onChange={(e) => setTimeModal((tm) => (tm ? { ...tm, end: e.target.value } : tm))}
+                step={15}
+                inline
+                label="終了"
+                onChange={(v) => setTimeModal((tm) => (tm ? { ...tm, end: v } : tm))}
               />
             </div>
             <p className="muted" style={{ marginTop: 6 }}>
